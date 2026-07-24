@@ -1,5 +1,5 @@
 import { Application, Container, Graphics } from 'pixi.js';
-import type { RenderBuffer } from '@engine';
+import type { RenderBuffer, TileGrid } from '@engine';
 
 export interface RendererOptions {
   worldWidth: number;
@@ -7,15 +7,16 @@ export interface RendererOptions {
 }
 
 /**
- * Adapter de renderização (somente leitura). Desenha o `RenderBuffer` da
- * simulação, interpolando entre o passo anterior e o atual para movimento
- * suave a 60fps mesmo com a lógica rodando a 20 Hz.
+ * Adapter de renderização (somente leitura). Desenha o terreno (uma vez) e o
+ * `RenderBuffer` das entidades a cada quadro, interpolando entre o passo
+ * anterior e o atual para movimento suave a 60fps.
  *
  * Cada `mount` cria uma instância própria — seguro contra o duplo-mount do
  * React StrictMode em desenvolvimento.
  */
 export interface Renderer {
   mount(container: HTMLElement): Promise<void>;
+  setTiles(grid: TileGrid, colors: readonly number[]): void;
   render(buffer: RenderBuffer, alpha: number): void;
   destroy(): void;
 }
@@ -26,6 +27,7 @@ const BORDER_COLOR = 0x2a2f42;
 export function createRenderer(options: RendererOptions): Renderer {
   let app: Application | null = null;
   let stage: Container | null = null;
+  let tiles: Graphics | null = null;
   let entities: Graphics | null = null;
   let destroyed = false;
 
@@ -46,18 +48,37 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       const worldLayer = new Container();
+      const tileLayer = new Graphics();
       const border = new Graphics()
         .rect(0, 0, options.worldWidth, options.worldHeight)
         .stroke({ width: 2, color: BORDER_COLOR });
       const entityLayer = new Graphics();
+      worldLayer.addChild(tileLayer);
       worldLayer.addChild(border);
       worldLayer.addChild(entityLayer);
       instance.stage.addChild(worldLayer);
 
       app = instance;
       stage = worldLayer;
+      tiles = tileLayer;
       entities = entityLayer;
       container.appendChild(instance.canvas);
+    },
+
+    setTiles(grid: TileGrid, colors: readonly number[]): void {
+      if (!tiles) return;
+      const graphics = tiles;
+      graphics.clear();
+      const { cols, rows, cellSize, cells } = grid;
+      for (let cellY = 0; cellY < rows; cellY++) {
+        for (let cellX = 0; cellX < cols; cellX++) {
+          const value = cells[cellY * cols + cellX]!;
+          if (value === 0) continue;
+          const color = colors[value];
+          if (color === undefined) continue;
+          graphics.rect(cellX * cellSize, cellY * cellSize, cellSize, cellSize).fill(color);
+        }
+      }
     },
 
     render(buffer: RenderBuffer, alpha: number): void {
@@ -90,6 +111,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         app.destroy(true, { children: true });
         app = null;
         stage = null;
+        tiles = null;
         entities = null;
       }
     },

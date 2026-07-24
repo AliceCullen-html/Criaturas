@@ -21,7 +21,7 @@ export function App({ mountCanvas }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Etapa 1 · Engine</span>
+          <span className="hud__badge">Etapa 2 · Mundo</span>
         </header>
 
         <div className="hud__stats">
@@ -30,7 +30,7 @@ export function App({ mountCanvas }: AppProps) {
             <span className="stat__value">{stats.tick.toLocaleString('pt-BR')}</span>
           </div>
           <div className="stat">
-            <span className="stat__label">População</span>
+            <span className="stat__label">Plantas</span>
             <span className="stat__value">{stats.population}</span>
           </div>
         </div>
@@ -55,8 +55,8 @@ export function App({ mountCanvas }: AppProps) {
         </div>
 
         <p className="hud__hint">
-          Movimento contínuo e determinístico (RNG semeado). As criaturas de verdade chegam na Etapa
-          3.
+          As plantas crescem e se espalham pelo solo (nunca na água), com limite de população. As
+          criaturas chegam na Etapa 3.
         </p>
       </aside>
     </div>

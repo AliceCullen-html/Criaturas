@@ -4,3 +4,4 @@
 export { createRng } from './rng';
 export type { Rng } from './rng';
 export * from './vector2';
+export { SpatialHash } from './spatialHash';

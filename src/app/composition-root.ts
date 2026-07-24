@@ -1,7 +1,7 @@
 import { StrictMode, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { RenderBuffer, SimulationLoop, SystemScheduler } from '@engine';
-import { createDemoWorld, movementSystem, syncRenderBuffer } from '@simulation';
+import { RenderBuffer, SimulationLoop, SystemScheduler, writeRenderBuffer } from '@engine';
+import { createWorld, plantGrowthSystem, plantSpreadSystem, TerrainResource, WATER } from '@world';
 import { createRenderer, type Renderer } from '@rendering';
 import { App } from '@ui';
 import { useUiStore } from '@ui/store/simulationStore';
@@ -11,19 +11,24 @@ export interface AppInstance {
 }
 
 const WORLD_CONFIG = { width: 1000, height: 1000 } as const;
-const DEMO_SEED = 1337;
+const WORLD_SEED = 1337;
 const FIXED_DT = 1 / 20; // 20 Hz lógicos
 const BUFFER_CAPACITY = 1024;
 const STATS_INTERVAL_FRAMES = 12; // ~5 atualizações de HUD por segundo
 
+// Cor por valor de célula do terreno (índice = valor da célula).
+const TILE_COLORS: number[] = [];
+TILE_COLORS[WATER] = 0x2c4a63;
+
 /**
  * Composition root: o ÚNICO lugar que conhece todas as camadas e as conecta.
- * Cria o mundo/loop/render, liga os controles da HUD (Zustand) ao loop e
- * devolve estatísticas agregadas para a UI — sem que a simulação conheça React.
+ * Cria mundo/loop/render, liga os controles da HUD (Zustand) ao loop e devolve
+ * estatísticas agregadas para a UI — sem que a simulação conheça React.
  */
 export function createApp(rootElement: HTMLElement): AppInstance {
-  const world = createDemoWorld(WORLD_CONFIG, DEMO_SEED);
-  const scheduler = new SystemScheduler().add(movementSystem);
+  const world = createWorld(WORLD_CONFIG, WORLD_SEED);
+  const terrain = world.getResource(TerrainResource);
+  const scheduler = new SystemScheduler().add(plantGrowthSystem).add(plantSpreadSystem);
   const renderBuffer = new RenderBuffer(BUFFER_CAPACITY);
 
   let activeRenderer: Renderer | null = null;
@@ -35,7 +40,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   };
 
   const render = (alpha: number): void => {
-    syncRenderBuffer(world, renderBuffer);
+    writeRenderBuffer(world, renderBuffer);
     activeRenderer?.render(renderBuffer, alpha);
 
     frameCounter += 1;
@@ -64,7 +69,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     let cancelled = false;
 
     void renderer.mount(container).then(() => {
-      if (!cancelled) activeRenderer = renderer;
+      if (cancelled) return;
+      renderer.setTiles(terrain, TILE_COLORS);
+      activeRenderer = renderer;
     });
 
     if (!loop.isRunning) loop.start();

@@ -2,6 +2,7 @@ import type { Rng } from '@core';
 import { ComponentStore } from './componentStore';
 import type { ComponentType } from './component';
 import { EntityManager, type Entity } from './entity';
+import type { ResourceKey } from './resource';
 
 export interface WorldConfig {
   readonly width: number;
@@ -19,10 +20,23 @@ export class World {
   tick = 0;
 
   private readonly stores = new Map<string, ComponentStore<unknown>>();
+  private readonly resources = new Map<string, unknown>();
 
   constructor(config: WorldConfig, rng: Rng) {
     this.config = config;
     this.rng = rng;
+  }
+
+  setResource<T>(key: ResourceKey<T>, value: T): void {
+    this.resources.set(key.name, value);
+  }
+
+  getResource<T>(key: ResourceKey<T>): T {
+    const value = this.resources.get(key.name);
+    if (value === undefined) {
+      throw new Error(`Recurso não encontrado: ${key.name}`);
+    }
+    return value as T;
   }
 
   register<T>(type: ComponentType<T>): ComponentStore<T> {

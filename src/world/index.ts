@@ -1,4 +1,10 @@
-// Mundo: terreno, recursos, clima, tempo e estações.
-// A ser construído nas Etapas 2 e 6.
+// Mundo: terreno, recursos, plantas e seus processos (crescimento/disseminação).
 
-export {};
+export * from './components';
+export { generateTerrain, isWaterAt, GROUND, WATER } from './terrain';
+export type { Terrain } from './terrain';
+export { TerrainResource } from './terrainResource';
+export { spawnPlant, radiusForBiomass, MAX_PLANTS } from './plant';
+export { plantGrowthSystem } from './systems/plantGrowthSystem';
+export { plantSpreadSystem } from './systems/plantSpreadSystem';
+export { createWorld } from './createWorld';

@@ -1,5 +1,5 @@
-import type { System } from '@engine';
-import { Position, Velocity } from '../components';
+import { Transform, type System } from '@engine';
+import { Velocity } from '../components';
 
 /**
  * Integra a posição a partir da velocidade e envolve nas bordas do mundo
@@ -9,33 +9,33 @@ import { Position, Velocity } from '../components';
 export const movementSystem: System = {
   name: 'movement',
   update(world, dt) {
-    const positions = world.store(Position);
+    const transforms = world.store(Transform);
     const velocities = world.store(Velocity);
     const { width, height } = world.config;
 
-    positions.forEach((position, entity) => {
+    transforms.forEach((transform, entity) => {
       const velocity = velocities.get(entity);
       if (!velocity) return;
 
-      position.prevX = position.x;
-      position.prevY = position.y;
-      position.x += velocity.x * dt;
-      position.y += velocity.y * dt;
+      transform.prevX = transform.x;
+      transform.prevY = transform.y;
+      transform.x += velocity.x * dt;
+      transform.y += velocity.y * dt;
 
-      if (position.x < 0) {
-        position.x += width;
-        position.prevX += width;
-      } else if (position.x >= width) {
-        position.x -= width;
-        position.prevX -= width;
+      if (transform.x < 0) {
+        transform.x += width;
+        transform.prevX += width;
+      } else if (transform.x >= width) {
+        transform.x -= width;
+        transform.prevX -= width;
       }
 
-      if (position.y < 0) {
-        position.y += height;
-        position.prevY += height;
-      } else if (position.y >= height) {
-        position.y -= height;
-        position.prevY -= height;
+      if (transform.y < 0) {
+        transform.y += height;
+        transform.prevY += height;
+      } else if (transform.y >= height) {
+        transform.y -= height;
+        transform.prevY -= height;
       }
     });
   },
