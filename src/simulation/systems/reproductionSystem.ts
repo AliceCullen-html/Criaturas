@@ -1,0 +1,144 @@
+import { clamp, clamp01, subjects } from '@core';
+import { Transform, type System } from '@engine';
+import { breed } from '@genetics';
+import {
+  Bio,
+  Creature,
+  CreatureGenome,
+  Emotions,
+  Identity,
+  Lineage,
+  Memory,
+  Mind,
+  Needs,
+  spawnCreature,
+} from '@creatures';
+import { isBaby } from '../age';
+
+const MATING_COOLDOWN = 90;
+const MATE_REACH = 12;
+/** Fração das lembranças dos pais que o filhote absorve (aprendizado por observação). */
+const CULTURAL_INHERITANCE = 0.45;
+const MAX_POPULATION = 60;
+
+interface Birth {
+  x: number;
+  y: number;
+  genomeA: Float32Array;
+  genomeB: Float32Array;
+  parentA: number;
+  parentB: number;
+  generation: number;
+  nameA: string;
+  nameB: string;
+}
+
+const births: Birth[] = [];
+
+/**
+ * Acasalamento e nascimento. O filhote herda genes dos dois pais (com mutação)
+ * e parte das memórias — é como o medo de um alimento tóxico atravessa
+ * gerações sem ninguém precisar experimentá-lo de novo.
+ */
+export const reproductionSystem: System = {
+  name: 'reproduction',
+  update(world, _dt) {
+    const creatures = world.store(Creature);
+    if (creatures.size >= MAX_POPULATION) return;
+
+    const transforms = world.store(Transform);
+    const bios = world.store(Bio);
+    const minds = world.store(Mind);
+    const genomes = world.store(CreatureGenome);
+    const identities = world.store(Identity);
+    const needsStore = world.store(Needs);
+    const emotionsStore = world.store(Emotions);
+    const memories = world.store(Memory);
+    const lineages = world.store(Lineage);
+
+    births.length = 0;
+
+    creatures.forEach((_tag, entity) => {
+      const mind = minds.get(entity);
+      if (!mind || mind.intent !== 'mate' || mind.targetEntity < 0) return;
+
+      const partner = mind.targetEntity;
+      // Só o de menor id conduz o nascimento, para não gerar filhote duplicado.
+      if (entity > partner) return;
+
+      const bioA = bios.get(entity);
+      const bioB = bios.get(partner);
+      const transformA = transforms.get(entity);
+      const transformB = transforms.get(partner);
+      const genomeA = genomes.get(entity);
+      const genomeB = genomes.get(partner);
+      if (!bioA || !bioB || !transformA || !transformB || !genomeA || !genomeB) return;
+      if (bioA.matingCooldown > 0 || bioB.matingCooldown > 0) return;
+      if (bioA.sex === bioB.sex || isBaby(bioA) || isBaby(bioB)) return;
+
+      const distance = Math.hypot(transformB.x - transformA.x, transformB.y - transformA.y);
+      if (distance > MATE_REACH) return;
+
+      const partnerMind = minds.get(partner);
+      if (!partnerMind || partnerMind.intent !== 'mate') return;
+
+      bioA.matingCooldown = MATING_COOLDOWN;
+      bioB.matingCooldown = MATING_COOLDOWN;
+
+      const lineageA = lineages.get(entity);
+      const lineageB = lineages.get(partner);
+      births.push({
+        x: (transformA.x + transformB.x) / 2,
+        y: (transformA.y + transformB.y) / 2,
+        genomeA,
+        genomeB,
+        parentA: entity,
+        parentB: partner,
+        generation: Math.max(lineageA?.generation ?? 1, lineageB?.generation ?? 1) + 1,
+        nameA: identities.get(entity)?.name ?? '?',
+        nameB: identities.get(partner)?.name ?? '?',
+      });
+
+      for (const parent of [entity, partner]) {
+        const emotions = emotionsStore.get(parent);
+        if (emotions) emotions.happiness = clamp01(emotions.happiness + 0.25);
+        const needs = needsStore.get(parent);
+        if (needs) needs.energy = clamp01(needs.energy - 0.2);
+        minds.get(parent)!.commitment = 0;
+      }
+    });
+
+    for (const birth of births) {
+      const childGenome = breed(birth.genomeA, birth.genomeB, world.rng);
+      const child = spawnCreature(
+        world,
+        clamp(birth.x + world.rng.range(-8, 8), 4, world.config.width - 4),
+        clamp(birth.y + world.rng.range(-8, 8), 4, world.config.height - 4),
+        {
+          genome: childGenome,
+          generation: birth.generation,
+          parentA: birth.nameA,
+          parentB: birth.nameB,
+          ageFraction: 0,
+        },
+      );
+
+      // Herança cultural: o filhote já nasce sabendo o que os pais aprenderam.
+      const childMemory = memories.get(child);
+      if (childMemory) {
+        for (const parent of [birth.parentA, birth.parentB]) {
+          const parentMemory = memories.get(parent);
+          if (parentMemory) childMemory.inheritFrom(parentMemory, CULTURAL_INHERITANCE);
+        }
+        childMemory.addEpisode(`Nasci de ${birth.nameA} e ${birth.nameB}`, 0.6);
+      }
+
+      // Os pais reconhecem e gostam do filhote.
+      for (const parent of [birth.parentA, birth.parentB]) {
+        const parentMemory = memories.get(parent);
+        parentMemory?.record(subjects.creature(child), 1, 1);
+        parentMemory?.addEpisode('Tive um filhote', 1);
+      }
+    }
+  },
+};

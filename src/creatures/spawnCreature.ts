@@ -1,20 +1,32 @@
+import { CreatureMemory } from '@core';
 import { Transform, Velocity, World } from '@engine';
+import { express, randomGenome, type Genome } from '@genetics';
 import {
   Appearance,
   Attributes,
   Bio,
   Creature,
+  CreatureGenome,
+  Emotions,
   Identity,
   Lineage,
+  Memory,
   Mind,
   Needs,
+  Personality,
 } from './components';
 import { CREATURE_NAMES } from './names';
 
-const BODY_COLORS: readonly number[] = [
-  0xd98a8a, 0x8ab0d9, 0x9ed98a, 0xd9c98a, 0xb98ad9, 0x8ad9c4, 0xd9a37a, 0xc9d98a,
-];
 const EYE_COLOR = 0x1c1c28;
+
+export interface SpawnOptions {
+  genome?: Genome;
+  name?: string;
+  generation?: number;
+  parentA?: string | null;
+  parentB?: string | null;
+  ageFraction?: number;
+}
 
 /** Registra os stores dos componentes de criatura (idempotente). */
 export function registerCreatureComponents(world: World): void {
@@ -22,54 +34,93 @@ export function registerCreatureComponents(world: World): void {
   world.register(Velocity);
   world.register(Creature);
   world.register(Needs);
+  world.register(Emotions);
   world.register(Bio);
   world.register(Attributes);
   world.register(Appearance);
+  world.register(Personality);
+  world.register(CreatureGenome);
+  world.register(Memory);
   world.register(Lineage);
   world.register(Identity);
   world.register(Mind);
 }
 
-/** Cria uma criatura em (x, y). Atributos derivados do RNG do mundo. */
-export function spawnCreature(world: World, x: number, y: number): number {
+/** Cria uma criatura em (x, y), expressando o genoma dado (ou um aleatório). */
+export function spawnCreature(
+  world: World,
+  x: number,
+  y: number,
+  options: SpawnOptions = {},
+): number {
   const { rng } = world;
+  const genome = options.genome ?? randomGenome(rng);
+  const phenotype = express(genome);
   const entity = world.createEntity();
 
   world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
   world.store(Velocity).set(entity, { x: 0, y: 0 });
   world.store(Creature).set(entity, true);
+  world.store(CreatureGenome).set(entity, genome);
+  world.store(Personality).set(entity, phenotype.personality);
 
   world.store(Needs).set(entity, {
     hunger: rng.range(0.1, 0.35),
     thirst: rng.range(0.1, 0.35),
-    energy: rng.range(0.6, 1),
+    energy: rng.range(0.7, 1),
     health: 1,
-    happiness: 0.7,
+  });
+
+  world.store(Emotions).set(entity, {
+    happiness: rng.range(0.5, 0.75),
+    fear: rng.range(0.05, 0.2),
+    trust: rng.range(0.1, 0.3),
+    curiosity: phenotype.personality.curiosity,
+    stress: rng.range(0, 0.15),
+    anger: 0,
+    sleepiness: rng.range(0, 0.2),
+    loneliness: rng.range(0.1, 0.4),
   });
 
   world.store(Bio).set(entity, {
     sex: rng.chance(0.5) ? 'M' : 'F',
     species: 'Norn',
-    age: rng.range(0, 40),
-    lifespan: rng.range(900, 1500),
+    age: (options.ageFraction ?? rng.range(0.2, 0.5)) * phenotype.lifespan,
+    lifespan: phenotype.lifespan,
+    metabolism: phenotype.metabolism,
+    matingCooldown: 0,
   });
 
   world.store(Attributes).set(entity, {
-    speed: rng.range(24, 46),
-    vision: rng.range(90, 150),
-    strength: rng.range(0.3, 0.8),
-    fertility: rng.range(0.3, 0.9),
-    size: rng.range(9, 14),
+    speed: phenotype.speed,
+    vision: phenotype.vision,
+    strength: phenotype.strength,
+    fertility: phenotype.fertility,
+    size: phenotype.size,
   });
 
   world.store(Appearance).set(entity, {
-    bodyColor: rng.pick(BODY_COLORS),
+    bodyColor: phenotype.bodyColor,
     eyeColor: EYE_COLOR,
-    dna: rng.int(0xffffff),
+    features: phenotype.features,
   });
-  world.store(Lineage).set(entity, { generation: 1, parentA: null, parentB: null });
-  world.store(Identity).set(entity, { name: rng.pick(CREATURE_NAMES) });
-  world.store(Mind).set(entity, { intent: 'wander', targetX: x, targetY: y, retarget: 0 });
+
+  world.store(Memory).set(entity, new CreatureMemory());
+  world.store(Lineage).set(entity, {
+    generation: options.generation ?? 1,
+    parentA: options.parentA ?? null,
+    parentB: options.parentB ?? null,
+  });
+  world.store(Identity).set(entity, { name: options.name ?? rng.pick(CREATURE_NAMES) });
+  world.store(Mind).set(entity, {
+    intent: 'wander',
+    mood: 'neutral',
+    targetX: x,
+    targetY: y,
+    targetEntity: -1,
+    commitment: 0,
+    actionCooldown: 0,
+  });
 
   return entity;
 }

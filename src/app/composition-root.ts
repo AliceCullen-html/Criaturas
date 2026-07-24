@@ -7,6 +7,7 @@ import {
   SystemScheduler,
   writeRenderBuffer,
 } from '@engine';
+import { createUtilityBrain } from '@ai';
 import {
   createWorld,
   plantGrowthSystem,
@@ -17,16 +18,22 @@ import {
 } from '@world';
 import { Creature } from '@creatures';
 import {
-  eatingSystem,
-  feedCreature,
+  actionSystem,
+  applyPlayerAction,
+  BrainResource,
+  creatureIndexSystem,
+  decisionSystem,
+  emotionSystem,
   foodIndexSystem,
-  instinctSystem,
   metabolismSystem,
   movementSystem,
+  PlayerResource,
   readCreatureSnapshot,
+  reproductionSystem,
   setCreatureName,
   spawnCreatures,
   writeCreatureBuffer,
+  type PlayerAction,
 } from '@simulation';
 import { createRenderer, type Renderer } from '@rendering';
 import { App, type GameActions } from '@ui';
@@ -38,22 +45,28 @@ export interface AppInstance {
 
 const WORLD_CONFIG = { width: 1000, height: 1000 } as const;
 const WORLD_SEED = 1337;
-const INITIAL_CREATURES = 12;
+const INITIAL_CREATURES = 14;
 const FIXED_DT = 1 / 20;
 const PLANT_CAPACITY = 512;
 const CREATURE_CAPACITY = 128;
-const STATS_INTERVAL_FRAMES = 12;
+const STATS_INTERVAL_FRAMES = 10;
 
 export function createApp(rootElement: HTMLElement): AppInstance {
   const world = createWorld(WORLD_CONFIG, WORLD_SEED);
   spawnCreatures(world, INITIAL_CREATURES);
+  world.setResource(BrainResource, createUtilityBrain());
+  world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   const terrain = world.getResource(TerrainResource);
 
+  // Ordem importa: perceber → sentir → decidir → mover → agir → viver.
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
-    .add(instinctSystem)
+    .add(creatureIndexSystem)
+    .add(emotionSystem)
+    .add(decisionSystem)
     .add(movementSystem)
-    .add(eatingSystem)
+    .add(actionSystem)
+    .add(reproductionSystem)
     .add(metabolismSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
@@ -66,15 +79,18 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
   const store = useUiStore;
 
+  const clearSelection = (): void => {
+    store.getState().setSelectedId(null);
+    store.getState().setFollowId(null);
+    store.getState().setSelected(null);
+  };
+
   const pushSelected = (): void => {
     const id = store.getState().selectedId;
     if (id === null) return;
     const snapshot = readCreatureSnapshot(world, id);
     if (!snapshot) {
-      // Criatura morreu/sumiu — limpa a seleção.
-      store.getState().setSelectedId(null);
-      store.getState().setFollowId(null);
-      store.getState().setSelected(null);
+      clearSelection();
       return;
     }
     store.getState().setSelected(snapshot);
@@ -120,30 +136,22 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     },
   );
 
+  const withSelected = (fn: (id: number) => void): void => {
+    const id = store.getState().selectedId;
+    if (id !== null) {
+      fn(id);
+      pushSelected();
+    }
+  };
+
   const actions: GameActions = {
-    feed: () => {
-      const id = store.getState().selectedId;
-      if (id !== null) {
-        feedCreature(world, id);
-        pushSelected();
-      }
-    },
-    rename: (name: string) => {
-      const id = store.getState().selectedId;
-      if (id !== null) {
-        setCreatureName(world, id, name);
-        pushSelected();
-      }
-    },
+    interact: (action: PlayerAction) => withSelected((id) => applyPlayerAction(world, id, action)),
+    rename: (name: string) => withSelected((id) => setCreatureName(world, id, name)),
     toggleFollow: () => {
       const state = store.getState();
       state.setFollowId(state.followId !== null ? null : state.selectedId);
     },
-    deselect: () => {
-      store.getState().setSelectedId(null);
-      store.getState().setFollowId(null);
-      store.getState().setSelected(null);
-    },
+    deselect: clearSelection,
   };
 
   const mountCanvas = (container: HTMLElement): (() => void) => {
@@ -155,15 +163,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
     renderer.setHandlers({
       onSelect: (id) => {
-        store.getState().setSelectedId(id);
         if (id === null) {
-          store.getState().setFollowId(null);
-          store.getState().setSelected(null);
-        } else {
-          pushSelected();
+          clearSelection();
+          return;
         }
+        store.getState().setSelectedId(id);
+        pushSelected();
       },
       onCancelFollow: () => store.getState().setFollowId(null),
+      onPointerWorld: (x, y, inside) => {
+        const presence = world.getResource(PlayerResource);
+        presence.x = x;
+        presence.y = y;
+        presence.present = inside;
+      },
     });
 
     void renderer.mount(container).then(() => {

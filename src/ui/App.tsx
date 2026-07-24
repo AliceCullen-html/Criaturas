@@ -2,8 +2,10 @@ import { SimulationCanvas } from './components/SimulationCanvas';
 import { CreaturePanel } from './components/CreaturePanel';
 import { useUiStore, type SimulationSpeed } from './store/simulationStore';
 
+import type { PlayerAction } from '@simulation';
+
 export interface GameActions {
-  feed: () => void;
+  interact: (action: PlayerAction) => void;
   rename: (name: string) => void;
   toggleFollow: () => void;
   deselect: () => void;
@@ -30,7 +32,7 @@ export function App({ mountCanvas, actions }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Pixel Art</span>
+          <span className="hud__badge">Vida</span>
         </header>
 
         <div className="hud__stats">
@@ -64,8 +66,8 @@ export function App({ mountCanvas, actions }: AppProps) {
         </div>
 
         <p className="hud__hint">
-          Clique numa criatura para selecioná-la. Arraste para mover a câmera e use a roda do mouse
-          para dar zoom.
+          Clique numa criatura para conhecê-la. Cada uma tem personalidade, emoções e memórias
+          próprias — e lembra de como você a trata.
         </p>
       </aside>
 

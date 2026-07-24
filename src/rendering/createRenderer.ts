@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { clamp, createRng, lerp } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { makeCreatureTexture } from './textures/creature';
+import { makeCreatureTextures } from './textures/creature';
 import {
   makeGrassTexture,
   makeLeafTextures,
@@ -28,6 +28,8 @@ export interface FrameInput {
 export interface RendererHandlers {
   onSelect: (id: number | null) => void;
   onCancelFollow: () => void;
+  /** Posição do cursor no mundo — é a "presença" do jogador que as criaturas sentem. */
+  onPointerWorld: (x: number, y: number, inside: boolean) => void;
 }
 
 export interface Renderer {
@@ -49,9 +51,10 @@ const WATER_FRAME_MS = 220;
 
 interface CreatureSlot {
   sprite: Sprite;
-  texture: Texture;
+  textures: Texture[];
   face: number;
   seen: number;
+  mood: number;
 }
 
 interface Leaf {
@@ -139,7 +142,17 @@ export function createRenderer(options: RendererOptions): Renderer {
       canvas.setPointerCapture(event.pointerId);
     });
 
+    canvas.addEventListener('pointerleave', () => handlers?.onPointerWorld(0, 0, false));
+
     canvas.addEventListener('pointermove', (event) => {
+      if (app) {
+        const rect = canvas.getBoundingClientRect();
+        handlers?.onPointerWorld(
+          screenToWorldX(event.clientX - rect.left, app.screen.width),
+          screenToWorldY(event.clientY - rect.top, app.screen.height),
+          true,
+        );
+      }
       if (!pointerDown) return;
       const dx = event.clientX - startClientX;
       const dy = event.clientY - startClientY;
@@ -437,26 +450,46 @@ export function createRenderer(options: RendererOptions): Renderer {
         const dx = creatures.x[i]! - px;
         const moving = Math.abs(dx) + Math.abs(creatures.y[i]! - py) > 0.05;
 
+        const mood = creatures.mood[i]!;
+
         let slot = creatureSlots.get(id);
         if (!slot) {
-          const texture = makeCreatureTexture(
+          const textures = makeCreatureTextures(
             creatures.dna[i]!,
             creatures.bodyColor[i]!,
             creatures.eyeColor[i]!,
           );
-          const sprite = new Sprite(texture);
+          const sprite = new Sprite(textures[0]);
           sprite.anchor.set(0.5, 0.72);
           creatureLayer.addChild(sprite);
-          slot = { sprite, texture, face: 1, seen: frameId };
+          slot = { sprite, textures, face: 1, seen: frameId, mood: -1 };
           creatureSlots.set(id, slot);
+        }
+        if (slot.mood !== mood) {
+          slot.sprite.texture = slot.textures[mood] ?? slot.textures[0]!;
+          slot.mood = mood;
         }
         if (dx > 0.05) slot.face = 1;
         else if (dx < -0.05) slot.face = -1;
 
         const scale = size / 12;
-        const bob = moving ? Math.abs(Math.sin(elapsed * 9 + id)) * size * 0.12 : 0;
-        slot.sprite.scale.set(slot.face * scale, scale);
-        slot.sprite.position.set(cx, cy - bob);
+        // Animação por emoção: pular de alegria, tremer de medo, arrastar-se
+        // quando triste, respirar devagar dormindo.
+        let bob = moving ? Math.abs(Math.sin(elapsed * 9 + id)) * size * 0.12 : 0;
+        let jitter = 0;
+        let squash = 1;
+        if (mood === 1) {
+          bob += Math.abs(Math.sin(elapsed * 6 + id)) * size * 0.22;
+        } else if (mood === 2) {
+          jitter = Math.sin(elapsed * 38 + id) * size * 0.09;
+        } else if (mood === 3) {
+          bob *= 0.35;
+        } else if (mood === 4) {
+          squash = 1 + Math.sin(elapsed * 1.8 + id) * 0.05;
+          bob = 0;
+        }
+        slot.sprite.scale.set(slot.face * scale, scale * squash);
+        slot.sprite.position.set(cx + jitter, cy - bob);
         slot.seen = frameId;
 
         // Sombra.
@@ -478,7 +511,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         if (slot.seen !== frameId) {
           creatureLayer.removeChild(slot.sprite);
           slot.sprite.destroy();
-          slot.texture.destroy();
+          for (const texture of slot.textures) texture.destroy();
           creatureSlots.delete(id);
         }
       }

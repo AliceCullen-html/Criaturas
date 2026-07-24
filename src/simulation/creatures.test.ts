@@ -1,28 +1,47 @@
 import { describe, it, expect } from 'vitest';
-import { SystemScheduler, Transform, type Entity } from '@engine';
-import { Bio, Creature, Needs } from '@creatures';
+import { subjects } from '@core';
+import { SystemScheduler, Transform, type Entity, type World } from '@engine';
+import { createUtilityBrain } from '@ai';
+import { Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
 import { createWorld, plantGrowthSystem, plantSpreadSystem } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { foodIndexSystem } from './foodIndex';
-import { instinctSystem } from './systems/instinctSystem';
+import { creatureIndexSystem } from './creatureIndex';
+import { emotionSystem } from './systems/emotionSystem';
+import { decisionSystem } from './systems/decisionSystem';
 import { movementSystem } from './systems/movementSystem';
-import { eatingSystem } from './systems/eatingSystem';
+import { actionSystem } from './systems/actionSystem';
 import { metabolismSystem } from './systems/metabolismSystem';
+import { reproductionSystem } from './systems/reproductionSystem';
+import { BrainResource } from './brainResource';
+import { PlayerResource } from './player';
+import { applyPlayerAction } from './playerActions';
 
 const CONFIG = { width: 1000, height: 1000 };
+
+function makeWorld(seed: number, creatures = 8): World {
+  const world = createWorld(CONFIG, seed);
+  spawnCreatures(world, creatures);
+  world.setResource(BrainResource, createUtilityBrain());
+  world.setResource(PlayerResource, { x: 0, y: 0, present: false });
+  return world;
+}
 
 function fullScheduler(): SystemScheduler {
   return new SystemScheduler()
     .add(foodIndexSystem)
-    .add(instinctSystem)
+    .add(creatureIndexSystem)
+    .add(emotionSystem)
+    .add(decisionSystem)
     .add(movementSystem)
-    .add(eatingSystem)
+    .add(actionSystem)
+    .add(reproductionSystem)
     .add(metabolismSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 }
 
-function firstCreature(world: ReturnType<typeof createWorld>): Entity {
+function firstCreature(world: World): Entity {
   let found = -1;
   world.store(Creature).forEach((_tag, entity) => {
     if (found < 0) found = entity;
@@ -30,30 +49,114 @@ function firstCreature(world: ReturnType<typeof createWorld>): Entity {
   return found;
 }
 
-describe('metabolismSystem', () => {
+function run(world: World, steps: number): void {
+  const scheduler = fullScheduler();
+  for (let i = 0; i < steps; i++) scheduler.update(world, 1 / 20);
+}
+
+describe('metabolismo', () => {
   it('envelhece a criatura e aumenta a fome com o tempo', () => {
-    const world = createWorld(CONFIG, 3);
-    spawnCreatures(world, 5);
+    const world = makeWorld(3);
     const id = firstCreature(world);
-    const before = { ...world.store(Needs).get(id)! };
+    const hungerBefore = world.store(Needs).get(id)!.hunger;
     const ageBefore = world.store(Bio).get(id)!.age;
 
-    const scheduler = new SystemScheduler().add(metabolismSystem);
-    for (let i = 0; i < 200; i++) scheduler.update(world, 1 / 20);
+    run(world, 200);
 
     expect(world.store(Bio).get(id)!.age).toBeGreaterThan(ageBefore);
-    expect(world.store(Needs).get(id)!.hunger).toBeGreaterThan(before.hunger);
+    expect(world.store(Needs).get(id)!.hunger).toBeGreaterThan(hungerBefore);
   });
 });
 
-describe('determinismo das criaturas', () => {
-  it('a mesma seed produz as mesmas posições após N ticks', () => {
-    const run = (): number[] => {
-      const world = createWorld(CONFIG, 99);
-      spawnCreatures(world, 8);
-      const scheduler = fullScheduler();
-      for (let i = 0; i < 300; i++) scheduler.update(world, 1 / 20);
+describe('vínculo com o jogador', () => {
+  it('carinho aumenta a confiança e deixa uma memória boa', () => {
+    const world = makeWorld(11);
+    const id = firstCreature(world);
+    const memory = world.store(Memory).get(id)!;
+    const trustBefore = world.store(Emotions).get(id)!.trust;
 
+    applyPlayerAction(world, id, 'pet');
+
+    expect(world.store(Emotions).get(id)!.trust).toBeGreaterThan(trustBefore);
+    expect(memory.valenceOf(subjects.player())).toBeGreaterThan(0);
+    expect(memory.episodes[0]!.text).toContain('carinho');
+  });
+
+  it('bater causa medo e uma lembrança negativa duradoura', () => {
+    const world = makeWorld(12);
+    const id = firstCreature(world);
+    const memory = world.store(Memory).get(id)!;
+
+    applyPlayerAction(world, id, 'hit');
+
+    expect(world.store(Emotions).get(id)!.fear).toBeGreaterThan(0.5);
+    expect(memory.valenceOf(subjects.player())).toBeLessThan(0);
+
+    // A confiança não volta sozinha rápido: um carinho não apaga a agressão.
+    applyPlayerAction(world, id, 'pet');
+    expect(memory.valenceOf(subjects.player())).toBeLessThan(0);
+  });
+});
+
+describe('aprendizado por consequência', () => {
+  it('aprende a evitar o alimento que fez mal', () => {
+    const world = makeWorld(21, 1);
+    const id = firstCreature(world);
+    const memory = world.store(Memory).get(id)!;
+
+    // Simula a experiência ruim: comeu um cogumelo (variante tóxica) e passou mal.
+    memory.record(subjects.food(2), -1, 0.6);
+
+    expect(memory.valenceOf(subjects.food(2))).toBeLessThan(0);
+    // Um alimento nunca provado permanece neutro.
+    expect(memory.valenceOf(subjects.food(0))).toBe(0);
+  });
+
+  it('memórias fortes resistem mais ao esquecimento que as fracas', () => {
+    const world = makeWorld(22, 1);
+    const memory = world.store(Memory).get(firstCreature(world))!;
+    memory.record('trauma', -1, 1);
+    memory.record('detalhe', 0.05, 1);
+
+    for (let i = 0; i < 400; i++) memory.decay(1 / 20);
+
+    expect(Math.abs(memory.valenceOf('trauma'))).toBeGreaterThan(
+      Math.abs(memory.valenceOf('detalhe')),
+    );
+  });
+});
+
+describe('individualidade', () => {
+  it('criaturas com genomas distintos tomam decisões distintas', () => {
+    const world = makeWorld(31, 14);
+    run(world, 600);
+
+    const intents = new Set<string>();
+    world.store(Creature).forEach((_tag, entity) => {
+      const mind = world.store(Mind).get(entity);
+      if (mind) intents.add(mind.intent);
+    });
+
+    // Sem scripts fixos, a população se distribui por várias intenções.
+    expect(intents.size).toBeGreaterThan(1);
+  });
+
+  it('a personalidade varia entre indivíduos', () => {
+    const world = makeWorld(32, 12);
+    const curiosities = new Set<number>();
+    world.store(Creature).forEach((_tag, entity) => {
+      const traits = world.store(Personality).get(entity);
+      if (traits) curiosities.add(Math.round(traits.curiosity * 100));
+    });
+    expect(curiosities.size).toBeGreaterThan(4);
+  });
+});
+
+describe('determinismo', () => {
+  it('a mesma seed produz o mesmo estado após N ticks', () => {
+    const snapshot = (): number[] => {
+      const world = makeWorld(99, 8);
+      run(world, 300);
       const positions: number[] = [];
       world.store(Creature).forEach((_tag, entity) => {
         const transform = world.store(Transform).get(entity)!;
@@ -61,7 +164,6 @@ describe('determinismo das criaturas', () => {
       });
       return positions;
     };
-
-    expect(run()).toEqual(run());
+    expect(snapshot()).toEqual(snapshot());
   });
 });

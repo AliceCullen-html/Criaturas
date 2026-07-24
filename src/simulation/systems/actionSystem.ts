@@ -1,0 +1,221 @@
+import { clamp01, subjects } from '@core';
+import { Transform, type System } from '@engine';
+import {
+  Attributes,
+  Bio,
+  Creature,
+  Emotions,
+  Identity,
+  Memory,
+  Mind,
+  Needs,
+  Personality,
+} from '@creatures';
+import { Plant, RESOURCE_NAMES, isToxicVariant, radiusForBiomass } from '@world';
+import { isBaby } from '../age';
+
+const EAT_RATE = 3.2;
+const NUTRITION = 0.13;
+const PLANT_MIN_BIOMASS = 0.4;
+const TOXIN_DAMAGE = 0.22;
+const INTERACT_COOLDOWN = 2.5;
+
+const eaten: number[] = [];
+
+/**
+ * Executa a intenção quando a criatura chega ao alvo, e — o mais importante —
+ * registra a **consequência** na memória. É o elo que transforma experiência
+ * em comportamento futuro.
+ */
+export const actionSystem: System = {
+  name: 'action',
+  update(world, dt) {
+    const creatures = world.store(Creature);
+    const transforms = world.store(Transform);
+    const needsStore = world.store(Needs);
+    const emotionsStore = world.store(Emotions);
+    const attributesStore = world.store(Attributes);
+    const traitsStore = world.store(Personality);
+    const minds = world.store(Mind);
+    const memories = world.store(Memory);
+    const identities = world.store(Identity);
+    const bios = world.store(Bio);
+    const plants = world.store(Plant);
+
+    eaten.length = 0;
+
+    creatures.forEach((_tag, entity) => {
+      const mind = minds.get(entity);
+      const transform = transforms.get(entity);
+      const memory = memories.get(entity);
+      const needs = needsStore.get(entity);
+      const emotions = emotionsStore.get(entity);
+      const attributes = attributesStore.get(entity);
+      if (!mind || !transform || !memory || !needs || !emotions || !attributes) return;
+
+      switch (mind.intent) {
+        case 'seekFood': {
+          const plantId = mind.targetEntity;
+          const plant = plants.get(plantId);
+          const plantTransform = transforms.get(plantId);
+          if (!plant || !plantTransform) break;
+          const distance = Math.hypot(
+            plantTransform.x - transform.x,
+            plantTransform.y - transform.y,
+          );
+          if (distance > attributes.size + radiusForBiomass(plant.biomass) + 2) break;
+
+          const bite = Math.min(EAT_RATE * dt, plant.biomass);
+          plant.biomass -= bite;
+          needs.hunger = clamp01(needs.hunger - bite * NUTRITION);
+
+          if (isToxicVariant(plant.variant)) {
+            // Consequência ruim → memória negativa forte daquele alimento.
+            needs.health = clamp01(needs.health - TOXIN_DAMAGE * bite);
+            emotions.stress = clamp01(emotions.stress + 0.35 * bite);
+            emotions.happiness = clamp01(emotions.happiness - 0.2 * bite);
+            memory.record(subjects.food(plant.variant), -1, 0.5 * bite);
+            if (bite > 0.05) {
+              memory.addEpisode(`Comi ${nameOf(plant.variant)} e passei mal`, -0.8);
+            }
+          } else {
+            memory.record(subjects.food(plant.variant), 0.6, 0.25 * bite);
+            emotions.happiness = clamp01(emotions.happiness + 0.05 * bite);
+          }
+
+          if (plant.biomass <= PLANT_MIN_BIOMASS) {
+            eaten.push(plantId);
+            mind.commitment = 0;
+          }
+          break;
+        }
+
+        case 'attack': {
+          const targetId = mind.targetEntity;
+          if (targetId < 0 || mind.actionCooldown > 0) break;
+          const targetTransform = transforms.get(targetId);
+          const targetNeeds = needsStore.get(targetId);
+          const targetEmotions = emotionsStore.get(targetId);
+          const targetMemory = memories.get(targetId);
+          const targetBio = bios.get(targetId);
+          if (!targetTransform || !targetNeeds || !targetEmotions || !targetMemory || !targetBio)
+            break;
+          const distance = Math.hypot(
+            targetTransform.x - transform.x,
+            targetTransform.y - transform.y,
+          );
+          if (distance > attributes.size + 6) break;
+
+          targetNeeds.health = clamp01(targetNeeds.health - attributes.strength * 0.12);
+          targetEmotions.fear = clamp01(targetEmotions.fear + 0.45);
+          targetEmotions.stress = clamp01(targetEmotions.stress + 0.3);
+          targetEmotions.anger = clamp01(targetEmotions.anger + 0.25);
+          emotions.anger = clamp01(emotions.anger - 0.2);
+
+          // A vítima aprende: aquele indivíduo e aquele lugar são perigosos.
+          targetMemory.record(subjects.creature(entity), -0.9, 0.6);
+          targetMemory.record(subjects.place(targetTransform.x, targetTransform.y), -0.7, 0.4);
+          targetMemory.addEpisode(`${nameFor(identities, entity)} me atacou`, -0.9);
+          memory.record(subjects.creature(targetId), -0.3, 0.2);
+          mind.actionCooldown = INTERACT_COOLDOWN;
+          mind.commitment = 0;
+          break;
+        }
+
+        case 'play': {
+          const targetId = mind.targetEntity;
+          if (targetId < 0 || mind.actionCooldown > 0) break;
+          const targetTransform = transforms.get(targetId);
+          const targetEmotions = emotionsStore.get(targetId);
+          const targetMemory = memories.get(targetId);
+          if (!targetTransform || !targetEmotions || !targetMemory) break;
+          const distance = Math.hypot(
+            targetTransform.x - transform.x,
+            targetTransform.y - transform.y,
+          );
+          if (distance > attributes.size + 10) break;
+
+          const traits = traitsStore.get(entity);
+          const joy = 0.18 * (0.6 + (traits?.playfulness ?? 0.5));
+          emotions.happiness = clamp01(emotions.happiness + joy);
+          emotions.loneliness = clamp01(emotions.loneliness - 0.4);
+          targetEmotions.happiness = clamp01(targetEmotions.happiness + joy * 0.8);
+          targetEmotions.loneliness = clamp01(targetEmotions.loneliness - 0.35);
+
+          // Brincar cria amizade nos dois lados.
+          memory.record(subjects.creature(targetId), 0.7, 0.3);
+          targetMemory.record(subjects.creature(entity), 0.7, 0.3);
+          memory.addEpisode(`Brinquei com ${nameFor(identities, targetId)}`, 0.7);
+          mind.actionCooldown = INTERACT_COOLDOWN;
+          break;
+        }
+
+        case 'socialize': {
+          const targetId = mind.targetEntity;
+          if (targetId < 0) break;
+          const targetTransform = transforms.get(targetId);
+          if (!targetTransform) break;
+          const distance = Math.hypot(
+            targetTransform.x - transform.x,
+            targetTransform.y - transform.y,
+          );
+          if (distance > attributes.size + 14) break;
+          emotions.loneliness = clamp01(emotions.loneliness - 0.25 * dt);
+          memory.record(subjects.creature(targetId), 0.2, 0.05 * dt);
+          break;
+        }
+
+        case 'share': {
+          const targetId = mind.targetEntity;
+          if (targetId < 0 || mind.actionCooldown > 0) break;
+          const targetNeeds = needsStore.get(targetId);
+          const targetTransform = transforms.get(targetId);
+          const targetMemory = memories.get(targetId);
+          if (!targetNeeds || !targetTransform || !targetMemory) break;
+          const distance = Math.hypot(
+            targetTransform.x - transform.x,
+            targetTransform.y - transform.y,
+          );
+          if (distance > attributes.size + 10) break;
+          if (targetNeeds.hunger < 0.3 || needs.hunger > 0.5) break;
+
+          const given = 0.18;
+          needs.hunger = clamp01(needs.hunger + given * 0.6);
+          targetNeeds.hunger = clamp01(targetNeeds.hunger - given);
+          targetMemory.record(subjects.creature(entity), 0.9, 0.5);
+          targetMemory.addEpisode(`${nameFor(identities, entity)} dividiu comida comigo`, 0.9);
+          memory.record(subjects.creature(targetId), 0.4, 0.2);
+          emotions.happiness = clamp01(emotions.happiness + 0.08);
+          mind.actionCooldown = INTERACT_COOLDOWN * 2;
+          break;
+        }
+
+        case 'flee': {
+          // Fugir marca o lugar de onde se fugiu como desagradável.
+          memory.record(subjects.place(transform.x, transform.y), -0.25, 0.05 * dt);
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      // Filhotes ficam perto: sofrem mais solidão longe dos adultos.
+      const bio = bios.get(entity);
+      if (bio && isBaby(bio)) {
+        emotions.fear = clamp01(emotions.fear + 0.01 * dt);
+      }
+    });
+
+    for (let i = 0; i < eaten.length; i++) world.destroyEntity(eaten[i]!);
+  },
+};
+
+const nameOf = (variant: number): string => RESOURCE_NAMES[variant] ?? 'algo';
+
+function nameFor(
+  identities: { get(id: number): { name: string } | undefined },
+  id: number,
+): string {
+  return identities.get(id)?.name ?? 'alguém';
+}

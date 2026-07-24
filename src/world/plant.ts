@@ -30,16 +30,18 @@ export function spawnPlant(world: World, x: number, y: number): number {
   world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
 
   const maxBiomass = rng.range(MIN_MAX_BIOMASS, MAX_MAX_BIOMASS);
+  const variant = rng.int(RESOURCE_VARIANTS);
   world.store(Plant).set(entity, {
     biomass: SEED_BIOMASS,
     maxBiomass,
     growthRate: rng.range(MIN_GROWTH_RATE, MAX_GROWTH_RATE),
+    variant,
   });
 
   world.store(Sprite).set(entity, {
     radius: radiusForBiomass(SEED_BIOMASS),
     color: rng.pick(PLANT_PALETTE),
-    variant: rng.int(RESOURCE_VARIANTS),
+    variant,
   });
 
   return entity;

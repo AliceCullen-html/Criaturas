@@ -1,5 +1,4 @@
-// Cérebros plugáveis via interface `Brain` (percepção -> intenção).
-// MVP: State Machine. Futuro: Behavior Tree, GOAP, redes neurais, GA.
-// A ser construído na Etapa 4.
+// Cérebros plugáveis: percepção -> decisão, por trás de uma interface estável.
 
-export {};
+export type { Brain, Decision, Perception, PerceivedCreature, PerceivedFood } from './brain';
+export { createUtilityBrain } from './utilityBrain';
