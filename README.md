@@ -50,3 +50,11 @@ pnpm typecheck    # checagem de tipos
 ## Requisitos
 
 Node >= 20 e pnpm. A versão de Node recomendada está em [`.nvmrc`](./.nvmrc).
+
+## Deploy (Vercel)
+
+O projeto está configurado para deploy zero-config no Vercel ([`vercel.json`](./vercel.json)):
+framework Vite, build `pnpm build`, saída `dist`, com fallback SPA.
+
+Conectando uma vez o repositório ao Vercel, cada push na `main` publica
+automaticamente e cada branch ganha um _preview deploy_ próprio.
