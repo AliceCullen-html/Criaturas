@@ -57,6 +57,17 @@ export class PixelBuffer {
     }
   }
 
+  /** Elipse preenchida centrada em (cx, cy). */
+  ellipse(cx: number, cy: number, rx: number, ry: number, rgb: number, alpha = 255): void {
+    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) {
+      for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const dx = (x - cx) / rx;
+        const dy = (y - cy) / ry;
+        if (dx * dx + dy * dy <= 1) this.set(x, y, rgb, alpha);
+      }
+    }
+  }
+
   /** Disco preenchido de raio `r` centrado em (cx, cy). */
   disc(cx: number, cy: number, r: number, rgb: number, alpha = 255): void {
     const r2 = r * r;

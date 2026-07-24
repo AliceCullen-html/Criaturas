@@ -1,8 +1,17 @@
 import { Application, Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { clamp, createRng, lerp } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { makeCreatureTextures } from './textures/creature';
 import {
+  clearCreatureTextureCache,
+  decodeFeatures,
+  getBodyTexture,
+  getFaceTexture,
+  type Expression,
+  type Features,
+  type LifeStage,
+} from './textures/creature';
+import {
+  makeDustTexture,
   makeGrassTexture,
   makeLeafTextures,
   makeResourceTextures,
@@ -49,12 +58,40 @@ const DECORATION_COUNT = 70;
 const LEAF_COUNT = 36;
 const WATER_FRAME_MS = 220;
 
+/** Índice do humor (vindo da simulação) → expressão facial. */
+const EXPRESSIONS: readonly Expression[] = [
+  'neutral',
+  'happy',
+  'needy',
+  'sleepy',
+  'surprised',
+  'angry',
+  'sad',
+  'loved',
+  'afraid',
+];
+
+const BLINK_DURATION = 0.11;
+const DUST_INTERVAL = 0.22;
+
+/** Uma criatura na tela: corpo estático + rosto que troca com a emoção. */
 interface CreatureSlot {
-  sprite: Sprite;
-  textures: Texture[];
-  face: number;
+  container: Container;
+  body: Sprite;
+  face: Sprite;
+  features: Features;
+  facing: number;
   seen: number;
-  mood: number;
+  stage: number;
+  blinkIn: number;
+  blinking: number;
+}
+
+interface Dust {
+  sprite: Sprite;
+  life: number;
+  vx: number;
+  vy: number;
 }
 
 interface Leaf {
@@ -94,9 +131,25 @@ export function createRenderer(options: RendererOptions): Renderer {
   const resourceSprites: Sprite[] = [];
   const waterSprites: Sprite[] = [];
   const leaves: Leaf[] = [];
+  const dust: Dust[] = [];
+  const dustPool: Sprite[] = [];
+  let dustTexture: Texture | null = null;
+  let dustTimer = 0;
   let frameId = 0;
   let lastTime = 0;
   let elapsed = 0;
+
+  /** Pequena nuvem de poeira ao pisar. */
+  function spawnDust(x: number, y: number, size: number): void {
+    if (!particleLayer || !dustTexture || dust.length > 60) return;
+    const sprite = dustPool.pop() ?? new Sprite(dustTexture);
+    sprite.anchor.set(0.5);
+    sprite.alpha = 0.5;
+    sprite.scale.set(size / 22);
+    sprite.position.set(x, y);
+    particleLayer.addChild(sprite);
+    dust.push({ sprite, life: 0.45, vx: (Math.random() - 0.5) * 6, vy: -4 - Math.random() * 4 });
+  }
 
   let handlers: RendererHandlers | null = null;
   let lastCreatures: CreatureRenderBuffer | null = null;
@@ -216,6 +269,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       resourceTextures = makeResourceTextures();
       waterFrames = makeWaterTextures();
       leafTextures = makeLeafTextures();
+      dustTexture = makeDustTexture();
       scenery = makeSceneryTextures(createRng(7));
 
       const root = new Container();
@@ -448,54 +502,106 @@ export function createRenderer(options: RendererOptions): Renderer {
         const cy = py + (creatures.y[i]! - py) * input.alpha;
         const size = creatures.size[i]!;
         const dx = creatures.x[i]! - px;
-        const moving = Math.abs(dx) + Math.abs(creatures.y[i]! - py) > 0.05;
-
+        const dy = creatures.y[i]! - py;
+        const moving = creatures.moving[i] === 1;
         const mood = creatures.mood[i]!;
+        const stage = creatures.stage[i]! as LifeStage;
+        const dna = creatures.dna[i]!;
 
         let slot = creatureSlots.get(id);
         if (!slot) {
-          const textures = makeCreatureTextures(
-            creatures.dna[i]!,
-            creatures.bodyColor[i]!,
-            creatures.eyeColor[i]!,
-          );
-          const sprite = new Sprite(textures[0]);
-          sprite.anchor.set(0.5, 0.72);
-          creatureLayer.addChild(sprite);
-          slot = { sprite, textures, face: 1, seen: frameId, mood: -1 };
+          const container = new Container();
+          const body = new Sprite();
+          const face = new Sprite();
+          body.anchor.set(0.5, 0.78);
+          face.anchor.set(0.5, 0.78);
+          container.addChild(body, face);
+          creatureLayer.addChild(container);
+          slot = {
+            container,
+            body,
+            face,
+            features: decodeFeatures(dna),
+            facing: 1,
+            seen: frameId,
+            stage: -1,
+            blinkIn: 1 + (id % 7) * 0.5,
+            blinking: 0,
+          };
           creatureSlots.set(id, slot);
         }
-        if (slot.mood !== mood) {
-          slot.sprite.texture = slot.textures[mood] ?? slot.textures[0]!;
-          slot.mood = mood;
-        }
-        if (dx > 0.05) slot.face = 1;
-        else if (dx < -0.05) slot.face = -1;
 
-        const scale = size / 12;
-        // Animação por emoção: pular de alegria, tremer de medo, arrastar-se
-        // quando triste, respirar devagar dormindo.
-        let bob = moving ? Math.abs(Math.sin(elapsed * 9 + id)) * size * 0.12 : 0;
-        let jitter = 0;
-        let squash = 1;
-        if (mood === 1) {
-          bob += Math.abs(Math.sin(elapsed * 6 + id)) * size * 0.22;
-        } else if (mood === 2) {
-          jitter = Math.sin(elapsed * 38 + id) * size * 0.09;
-        } else if (mood === 3) {
-          bob *= 0.35;
-        } else if (mood === 4) {
-          squash = 1 + Math.sin(elapsed * 1.8 + id) * 0.05;
-          bob = 0;
+        if (slot.stage !== stage) {
+          slot.body.texture = getBodyTexture(dna, creatures.bodyColor[i]!, stage);
+          slot.stage = stage;
         }
-        slot.sprite.scale.set(slot.face * scale, scale * squash);
-        slot.sprite.position.set(cx + jitter, cy - bob);
+
+        // Piscar aleatório — só quando os olhos estão abertos.
+        const eyesOpen = mood !== 3 && mood !== 7;
+        slot.blinkIn -= dt;
+        if (slot.blinking > 0) slot.blinking -= dt;
+        else if (slot.blinkIn <= 0 && eyesOpen) {
+          slot.blinking = BLINK_DURATION;
+          slot.blinkIn = 2.5 + Math.random() * 4;
+        }
+
+        const expression: Expression =
+          slot.blinking > 0 && eyesOpen ? 'blink' : (EXPRESSIONS[mood] ?? 'neutral');
+        // As texturas são cacheadas: buscar todo quadro é só um lookup em Map.
+        const faceTexture = getFaceTexture(
+          expression,
+          creatures.eyeColor[i]!,
+          stage,
+          slot.features,
+        );
+        if (slot.face.texture !== faceTexture) slot.face.texture = faceTexture;
+
+        if (dx > 0.05) slot.facing = 1;
+        else if (dx < -0.05) slot.facing = -1;
+
+        const scale = size / 13;
+        // Respiração constante (1–2 px) + reações por emoção.
+        let squash = 1 + Math.sin(elapsed * 2.4 + id) * 0.035;
+        let bob = 0;
+        let jitter = 0;
+        let tilt = 0;
+
+        if (moving) {
+          // Balanço curto ao andar; filhotes dão passinhos mais rápidos.
+          const cadence = stage === 0 ? 13 : stage === 2 ? 6 : 9;
+          bob = Math.abs(Math.sin(elapsed * cadence + id)) * size * 0.1;
+          tilt = Math.sin(elapsed * cadence + id) * 0.06;
+        }
+        if (mood === 1 || mood === 7) {
+          bob += Math.abs(Math.sin(elapsed * 6 + id)) * size * 0.2; // pulinhos de alegria
+        } else if (mood === 8) {
+          jitter = Math.sin(elapsed * 34 + id) * size * 0.07; // tremendo de medo
+        } else if (mood === 6 || mood === 2) {
+          bob *= 0.3; // triste/carente: arrasta-se
+        } else if (mood === 3) {
+          squash = 1 + Math.sin(elapsed * 1.6 + id) * 0.06; // respirando devagar
+          bob = 0;
+        } else if (mood === 4) {
+          bob += size * 0.12; // sobressalto
+        }
+
+        slot.container.scale.set(slot.facing * scale, scale * squash);
+        slot.container.rotation = tilt * slot.facing;
+        slot.container.position.set(cx + jitter, cy - bob);
+        // O olhar acompanha a direção do movimento.
+        const gaze = Math.hypot(dx, dy) > 0.05 ? 1 : 0;
+        slot.face.position.set(gaze * Math.sign(dx || 1) * slot.facing, gaze * Math.sign(dy) * 0.5);
         slot.seen = frameId;
 
-        // Sombra.
-        shadowG.ellipse(cx, cy + size * 0.35, size * 0.7, size * 0.3).fill({
+        // Poeirinha dos passos.
+        if (moving && dustTimer <= 0) {
+          spawnDust(cx, cy + size * 0.42, size);
+        }
+
+        // Sombra suave.
+        shadowG.ellipse(cx, cy + size * 0.42, size * 0.62, size * 0.26).fill({
           color: SHADOW_COLOR,
-          alpha: 0.22,
+          alpha: 0.24,
         });
 
         if (id === input.selectedId) {
@@ -509,9 +615,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Recicla criaturas que sumiram.
       for (const [id, slot] of creatureSlots) {
         if (slot.seen !== frameId) {
-          creatureLayer.removeChild(slot.sprite);
-          slot.sprite.destroy();
-          for (const texture of slot.textures) texture.destroy();
+          creatureLayer.removeChild(slot.container);
+          slot.container.destroy({ children: true });
           creatureSlots.delete(id);
         }
       }
@@ -523,6 +628,24 @@ export function createRenderer(options: RendererOptions): Renderer {
         selectionG
           .ellipse(selX, selY, selSize * 1.5 * pulse, selSize * 0.7 * pulse)
           .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
+      }
+
+      // Poeirinha dos passos: sobe, desacelera e some.
+      dustTimer -= dt;
+      if (dustTimer <= 0) dustTimer = DUST_INTERVAL;
+      for (let i = dust.length - 1; i >= 0; i--) {
+        const particle = dust[i]!;
+        particle.life -= dt;
+        if (particle.life <= 0) {
+          particleLayer.removeChild(particle.sprite);
+          dustPool.push(particle.sprite);
+          dust.splice(i, 1);
+          continue;
+        }
+        particle.sprite.position.x += particle.vx * dt;
+        particle.sprite.position.y += particle.vy * dt;
+        particle.vy *= 0.92;
+        particle.sprite.alpha = particle.life * 1.1;
       }
 
       // Folhas caindo.
@@ -546,6 +669,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       resourceSprites.length = 0;
       waterSprites.length = 0;
       leaves.length = 0;
+      dust.length = 0;
+      dustPool.length = 0;
+      clearCreatureTextureCache();
       if (app) {
         app.destroy(true, { children: true });
         app = null;

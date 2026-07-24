@@ -18,8 +18,9 @@ export type Intent =
   | 'share'
   | 'mate';
 
-/** Expressão visual dominante, derivada das emoções. */
-export type Mood = 'neutral' | 'happy' | 'afraid' | 'sad' | 'sleeping' | 'angry';
+/** Expressão facial dominante, derivada das emoções. */
+export type Mood =
+  'neutral' | 'happy' | 'needy' | 'sleepy' | 'surprised' | 'angry' | 'sad' | 'loved' | 'afraid';
 
 /** Marca uma entidade como criatura. */
 export const Creature = defineComponent<true>('Creature');
@@ -110,5 +111,9 @@ export interface Mind {
   targetEntity: number;
   commitment: number;
   actionCooldown: number;
+  /** Segundos restantes de "recebendo carinho" — expressão apaixonada. */
+  affection: number;
+  /** Segundos restantes de susto/espanto — expressão surpresa. */
+  surprise: number;
 }
 export const Mind = defineComponent<Mind>('Mind');

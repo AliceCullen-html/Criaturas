@@ -1,17 +1,21 @@
-import { CreatureRenderBuffer, Transform, type World } from '@engine';
+import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
 import { Appearance, Attributes, Bio, Creature, Mind, type Mood } from '@creatures';
-import { growthScale } from './age';
+import { growthScale, lifeStage } from './age';
 
+/** Códigos de expressão consumidos pelo renderer. */
 const MOOD_CODES: Record<Mood, number> = {
   neutral: 0,
   happy: 1,
-  afraid: 2,
-  sad: 3,
-  sleeping: 4,
+  needy: 2,
+  sleepy: 3,
+  surprised: 4,
   angry: 5,
+  sad: 6,
+  loved: 7,
+  afraid: 8,
 };
 
-/** Projeta as criaturas no buffer de render (posição, aparência e humor). */
+/** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
 export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer): void {
   const creatures = world.store(Creature);
   const transforms = world.store(Transform);
@@ -19,6 +23,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const appearances = world.store(Appearance);
   const minds = world.store(Mind);
   const bios = world.store(Bio);
+  const velocities = world.store(Velocity);
 
   buffer.clear();
   creatures.forEach((_tag, entity) => {
@@ -28,6 +33,10 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
     const mind = minds.get(entity);
     const bio = bios.get(entity);
     if (!transform || !attribute || !appearance || !mind || !bio) return;
+
+    const velocity = velocities.get(entity);
+    const moving = velocity ? velocity.x !== 0 || velocity.y !== 0 : false;
+
     buffer.push(
       entity,
       transform.x,
@@ -39,6 +48,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       appearance.eyeColor,
       appearance.features,
       MOOD_CODES[mind.mood],
+      lifeStage(bio),
+      moving ? 1 : 0,
     );
   });
 }

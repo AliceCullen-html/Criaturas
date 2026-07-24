@@ -73,19 +73,31 @@ export const emotionSystem: System = {
       const distress = emotions.fear * 0.5 + emotions.stress * 0.4 + emotions.anger * 0.2;
       emotions.happiness = approach(emotions.happiness, clamp01(comfort - distress), 0.25, dt);
 
+      mind.affection = Math.max(0, mind.affection - dt);
+      mind.surprise = Math.max(0, mind.surprise - dt);
+
       // Expressão dominante, consumida pelo render.
-      mind.mood = pickMood(sleeping, emotions);
+      mind.mood = pickMood(sleeping, emotions, mind);
 
       memories.get(entity)?.decay(dt);
     });
   },
 };
 
-function pickMood(sleeping: boolean, emotions: Emotions): Mood {
-  if (sleeping) return 'sleeping';
+/** Ordem de prioridade: momentos marcantes vencem estados de fundo. */
+function pickMood(
+  sleeping: boolean,
+  emotions: Emotions,
+  mind: { affection: number; surprise: number },
+): Mood {
+  if (mind.affection > 0) return 'loved';
+  if (sleeping) return 'sleepy';
+  if (mind.surprise > 0) return 'surprised';
   if (emotions.fear > 0.45) return 'afraid';
   if (emotions.anger > 0.5) return 'angry';
   if (emotions.happiness > 0.68) return 'happy';
+  if (emotions.loneliness > 0.7 && emotions.happiness < 0.55) return 'needy';
   if (emotions.happiness < 0.3 || emotions.stress > 0.55) return 'sad';
+  if (emotions.sleepiness > 0.7) return 'sleepy';
   return 'neutral';
 }

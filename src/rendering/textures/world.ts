@@ -206,6 +206,14 @@ export function makeSceneryTextures(rng: Rng): SceneryTextures {
   return { tree: tree(), rock: rock(), bush: bush() };
 }
 
+/** Nuvenzinha de poeira dos passos. */
+export function makeDustTexture(): Texture {
+  const b = new PixelBuffer(8, 8);
+  b.disc(4, 4, 2.6, 0xd8cdb4);
+  b.disc(3, 3, 1.4, 0xefe6d2);
+  return b.toTexture();
+}
+
 /** Pequenas folhas para as partículas. */
 export function makeLeafTextures(): Texture[] {
   const colors = [0xd98a4a, 0xe0b048, 0xc86b3c, 0x8fae4a];

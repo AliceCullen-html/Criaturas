@@ -18,11 +18,14 @@ const INTENT_LABELS: Record<CreatureSnapshot['intent'], string> = {
 
 const MOOD_FACES: Record<CreatureSnapshot['mood'], string> = {
   neutral: '🙂',
-  happy: '😄',
-  afraid: '😨',
+  happy: '😊',
+  needy: '🥺',
+  sleepy: '😴',
+  surprised: '😲',
+  angry: '😡',
   sad: '😢',
-  sleeping: '😴',
-  angry: '😠',
+  loved: '😍',
+  afraid: '😨',
 };
 
 const EMOTION_ROWS: Array<{ key: keyof CreatureSnapshot['emotions']; label: string; tone: Tone }> =

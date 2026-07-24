@@ -2,7 +2,7 @@
  * Buffer de projeção das criaturas para o render, em *Structure of Arrays*
  * pré-alocado. Diferente do `RenderBuffer` (plantas em batch), carrega o `id`
  * de cada criatura — necessário para o render manter uma view por criatura
- * (com olhos/animação) e para o *hit-test* de seleção por clique.
+ * (corpo + rosto animados) e para o *hit-test* de seleção por clique.
  */
 export class CreatureRenderBuffer {
   readonly id: Int32Array;
@@ -15,6 +15,8 @@ export class CreatureRenderBuffer {
   readonly eyeColor: Uint32Array;
   readonly dna: Uint32Array;
   readonly mood: Uint8Array;
+  readonly stage: Uint8Array;
+  readonly moving: Uint8Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -28,6 +30,8 @@ export class CreatureRenderBuffer {
     this.eyeColor = new Uint32Array(capacity);
     this.dna = new Uint32Array(capacity);
     this.mood = new Uint8Array(capacity);
+    this.stage = new Uint8Array(capacity);
+    this.moving = new Uint8Array(capacity);
   }
 
   clear(): void {
@@ -45,6 +49,8 @@ export class CreatureRenderBuffer {
     eyeColor: number,
     dna: number,
     mood: number,
+    stage: number,
+    moving: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -58,6 +64,8 @@ export class CreatureRenderBuffer {
     this.eyeColor[i] = eyeColor;
     this.dna[i] = dna;
     this.mood[i] = mood;
+    this.stage[i] = stage;
+    this.moving[i] = moving;
     this.count = i + 1;
   }
 }

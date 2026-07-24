@@ -17,4 +17,4 @@ export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
 export { applyPlayerAction, setCreatureName } from './playerActions';
 export type { PlayerAction } from './playerActions';
-export { isBaby, growthScale } from './age';
+export { isBaby, isElder, lifeStage, growthScale } from './age';

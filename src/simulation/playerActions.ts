@@ -101,8 +101,13 @@ export function applyPlayerAction(world: World, id: number, action: PlayerAction
     if (transform) memory.record(subjects.place(transform.x, transform.y), -0.5, 0.4);
   }
 
-  // Força uma nova decisão: o gesto muda o que ela quer fazer agora.
-  if (mind) mind.commitment = 0;
+  // Reação imediata no rosto: derreter-se de carinho ou levar um susto.
+  if (mind) {
+    if (action === 'pet' || action === 'gift' || action === 'play') mind.affection = 3.5;
+    else if (action === 'scare' || action === 'push' || action === 'hit') mind.surprise = 2;
+    // Força uma nova decisão: o gesto muda o que ela quer fazer agora.
+    mind.commitment = 0;
+  }
 }
 
 /** Faz nascer um alimento maduro (e seguro) ao lado da criatura. */

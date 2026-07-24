@@ -120,6 +120,8 @@ export function spawnCreature(
     targetEntity: -1,
     commitment: 0,
     actionCooldown: 0,
+    affection: 0,
+    surprise: 0,
   });
 
   return entity;
