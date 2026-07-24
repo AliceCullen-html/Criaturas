@@ -1,0 +1,111 @@
+# Arquitetura — Criaturas
+
+Documento vivo de arquitetura. Descreve as decisões estruturais do projeto, o
+racional por trás delas e o roadmap do MVP até a v1.0.
+
+---
+
+## 1. Princípios
+
+O desenho se apoia em três ideias que se reforçam:
+
+1. **Clean Architecture (regra de dependência).** O núcleo da simulação (as
+   "regras do jogo") não conhece React, PixiJS nem o navegador. Frameworks são
+   _detalhes_ nas bordas. Ganhos: testabilidade, longevidade e liberdade de
+   trocar qualquer camada externa.
+2. **ECS (Entity-Component-System).** Criaturas e mundo são modelados como
+   dados (componentes) + sistemas (regras), em vez de objetos monolíticos.
+   Atende performance (dados contíguos, _cache-friendly_, _object pooling_) e
+   modularidade (arquivos pequenos, sistemas desacoplados, composição sobre
+   herança).
+3. **Loop com timestep fixo e determinístico.** A simulação avança em passos
+   fixos (ex.: 20 Hz lógicos); o render interpola para 60fps. Com um **RNG
+   semeado** (nunca `Math.random`), o mundo é reproduzível — base para
+   save/load confiável, replays e depuração da evolução genética.
+
+## 2. Decisões-chave e trade-offs
+
+- **Estado da simulação fora do Zustand.** Zustand guarda só estado de UI
+  (seleção, câmera, painéis, velocidade, estatísticas agregadas). Os dados
+  quentes das criaturas vivem em estruturas puras, evitando re-renders do React
+  e pressão de GC a cada tick.
+- **ECS em vez de OOP clássico.** Evita o "God object" `Creature` e engessamento
+  por herança; escala melhor para centenas de entidades.
+- **Movimento contínuo.** Posições em ponto flutuante (criaturas deslizam
+  suavemente), com uma grade apenas para terreno/recursos e um _spatial hash_
+  para consultas de vizinhança eficientes.
+- **Web Worker: arquitetar agora, ativar depois.** A fronteira "simulação ↔
+  mundo externo" é desenhada como interface limpa (UI/render só leem
+  _snapshots_) desde o início; mover a simulação para uma Worker depois não
+  exige reescrever a lógica.
+
+## 3. Camadas (a dependência aponta sempre para dentro)
+
+```
+DRIVERS/FRAMEWORKS   React · PixiJS · IndexedDB · Vite
+ADAPTERS             rendering/ · ui/ · save/
+APLICAÇÃO            simulation/
+DOMÍNIO              creatures/ · genetics/ · ai/ · world/
+KERNEL               core/  (sem dependências)
+```
+
+Regra de ouro: `rendering/` e `ui/` **leem** o estado da simulação, mas
+**nunca escrevem** nele — toda mutação ocorre dentro dos sistemas. Essa regra é
+verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
+
+## 4. Módulos e responsabilidades
+
+| Módulo         | Responsabilidade                                                                 | Depende de                         |
+| -------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| **core**       | Math (vetores 2D), RNG semeado, object pool, event bus, spatial hash, tipos base | nada                               |
+| **engine**     | ECS (entidades/componentes/sistemas), loop de timestep fixo, snapshots           | core                               |
+| **world**      | Terreno, recursos, plantas, clima, temperatura, dia/noite, estações              | core, engine                       |
+| **creatures**  | Componentes de criatura e blueprint de montagem                                  | core, engine                       |
+| **genetics**   | Genoma, genótipo→fenótipo, cruzamento, mutação                                   | core                               |
+| **ai**         | Interface `Brain` (percepção→intenção) e implementações plugáveis                | core, engine, creatures            |
+| **simulation** | Sistemas que aplicam as regras a cada tick; define o snapshot                    | core, engine, world, creatures, genetics, ai |
+| **rendering**  | Adapter PixiJS: desenha o snapshot, câmera, interpolação, pooling de sprites     | core, engine                       |
+| **ui**         | React + Zustand: HUD, inspetor, painéis, controles                               | core, engine, simulation           |
+| **save**       | Serialização e persistência em IndexedDB (inclui a seed)                          | core, engine, world                |
+| **app**        | Composition root: instancia e conecta tudo                                        | todas                              |
+| **assets**     | Sprites, paletas, dados estáticos                                                 | nada                               |
+
+### Destaques de design
+
+- **Interface `Brain`.** Todo cérebro recebe uma _percepção_ e devolve uma
+  _intenção_. O sistema de decisão não sabe se por trás há FSM, Behavior Tree ou
+  rede neural — o que permite evoluir a IA (FSM → BT → GOAP → NN → GA) sem
+  reescrever a simulação (princípio Aberto/Fechado).
+- **Genótipo vs. fenótipo.** O DNA cru (herdado e mutado) é separado dos
+  atributos resultantes, mantendo a evolução limpa e flexível.
+
+## 5. Roadmap
+
+### MVP
+
+| Etapa | Entrega                                                                    |
+| ----- | ------------------------------------------------------------------------- |
+| 0     | Scaffold: build, lint/format, estrutura de camadas, canvas Pixi vazio     |
+| 1     | Núcleo ECS + loop de timestep fixo + RNG semeado (uma entidade se move)   |
+| 2     | Mundo: grade de terreno, recursos, spatial hash; plantas crescem          |
+| 3     | Criaturas + componentes + metabolismo/necessidades + movimento básico     |
+| 4     | Percepção + cérebro State Machine (buscar comida/água, vagar, dormir, fugir) |
+| 5     | Genética: genoma, cruzamento, mutação; filhotes com diversidade           |
+| 6     | Ciclo natural: dia/noite, clima, temperatura, estações                    |
+| 7     | Save/Load em IndexedDB com seed (mundo reproduzível)                       |
+| 8     | HUD e inspetor: painéis, estatísticas, controles de velocidade            |
+
+### Rumo à v1.0
+
+- IA — Behavior Tree substituindo a FSM (mesma interface `Brain`).
+- Aprendizado por experiência (memória associativa: "comi X → passei mal → evito").
+- GOAP (planejamento orientado a objetivos).
+- Redes neurais simples + Algoritmo Genético (o cérebro passa a evoluir no DNA).
+- Performance: simulação em Web Worker, pooling e spatial partitioning endurecidos.
+- Riqueza do mundo: biomas, mais interações sociais, cadeia alimentar.
+- Direção de arte: polimento visual minimalista, animações, som ambiente.
+
+## 6. Forma de trabalho
+
+Desenvolvimento por etapas. Cada etapa passa por: planejamento → explicação →
+código → revisão → refatoração, e só avança após aprovação.
