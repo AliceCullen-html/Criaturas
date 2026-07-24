@@ -1,13 +1,22 @@
 import { SimulationCanvas } from './components/SimulationCanvas';
+import { CreaturePanel } from './components/CreaturePanel';
 import { useUiStore, type SimulationSpeed } from './store/simulationStore';
+
+export interface GameActions {
+  feed: () => void;
+  rename: (name: string) => void;
+  toggleFollow: () => void;
+  deselect: () => void;
+}
 
 export interface AppProps {
   mountCanvas: (container: HTMLElement) => () => void;
+  actions: GameActions;
 }
 
 const SPEEDS: readonly SimulationSpeed[] = [0, 1, 2, 4];
 
-export function App({ mountCanvas }: AppProps) {
+export function App({ mountCanvas, actions }: AppProps) {
   const isRunning = useUiStore((state) => state.isRunning);
   const speed = useUiStore((state) => state.speed);
   const stats = useUiStore((state) => state.stats);
@@ -21,17 +30,17 @@ export function App({ mountCanvas }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Etapa 2 · Mundo</span>
+          <span className="hud__badge">Etapa 3 · Criaturas</span>
         </header>
 
         <div className="hud__stats">
           <div className="stat">
-            <span className="stat__label">Tick</span>
-            <span className="stat__value">{stats.tick.toLocaleString('pt-BR')}</span>
+            <span className="stat__label">Criaturas</span>
+            <span className="stat__value">{stats.population}</span>
           </div>
           <div className="stat">
             <span className="stat__label">Plantas</span>
-            <span className="stat__value">{stats.population}</span>
+            <span className="stat__value">{stats.plants}</span>
           </div>
         </div>
 
@@ -55,10 +64,12 @@ export function App({ mountCanvas }: AppProps) {
         </div>
 
         <p className="hud__hint">
-          As plantas crescem e se espalham pelo solo (nunca na água), com limite de população. As
-          criaturas chegam na Etapa 3.
+          Clique numa criatura para selecioná-la. Arraste para mover a câmera e use a roda do mouse
+          para dar zoom.
         </p>
       </aside>
+
+      <CreaturePanel actions={actions} />
     </div>
   );
 }

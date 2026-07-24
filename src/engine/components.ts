@@ -15,9 +15,16 @@ export interface Transform {
 }
 export const Transform = defineComponent<Transform>('Transform');
 
-/** Aparência mínima para o render (círculo). */
+/** Aparência mínima para o render em batch (círculo) — usada por plantas. */
 export interface Sprite {
   radius: number;
   color: number;
 }
 export const Sprite = defineComponent<Sprite>('Sprite');
+
+/** Velocidade em unidades de mundo por segundo. Usada por entidades que se movem. */
+export interface Velocity {
+  x: number;
+  y: number;
+}
+export const Velocity = defineComponent<Velocity>('Velocity');

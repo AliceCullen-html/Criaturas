@@ -51,3 +51,40 @@ export function isWaterAt(terrain: Terrain, x: number, y: number): boolean {
   }
   return terrain.cells[cellY * terrain.cols + cellX] === WATER;
 }
+
+/** Centro da célula de água mais próxima dentro do raio, ou null. */
+export function findNearestWater(
+  terrain: Terrain,
+  x: number,
+  y: number,
+  radius: number,
+): { x: number; y: number } | null {
+  const { cols, rows, cellSize, cells } = terrain;
+  const centerX = Math.floor(x / cellSize);
+  const centerY = Math.floor(y / cellSize);
+  const range = Math.ceil(radius / cellSize);
+
+  let bestX = 0;
+  let bestY = 0;
+  let bestDist = Infinity;
+  let found = false;
+
+  for (let cellY = centerY - range; cellY <= centerY + range; cellY++) {
+    if (cellY < 0 || cellY >= rows) continue;
+    for (let cellX = centerX - range; cellX <= centerX + range; cellX++) {
+      if (cellX < 0 || cellX >= cols) continue;
+      if (cells[cellY * cols + cellX] !== WATER) continue;
+      const wx = (cellX + 0.5) * cellSize;
+      const wy = (cellY + 0.5) * cellSize;
+      const dist = (wx - x) * (wx - x) + (wy - y) * (wy - y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestX = wx;
+        bestY = wy;
+        found = true;
+      }
+    }
+  }
+
+  return found ? { x: bestX, y: bestY } : null;
+}

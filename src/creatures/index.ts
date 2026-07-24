@@ -1,4 +1,5 @@
 // Componentes e blueprint das criaturas.
-// A ser construído na Etapa 3.
 
-export {};
+export * from './components';
+export { CREATURE_NAMES } from './names';
+export { spawnCreature, registerCreatureComponents } from './spawnCreature';

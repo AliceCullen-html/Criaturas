@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Transform, World } from '@engine';
+import { Transform, Velocity, World } from '@engine';
 import { createRng } from '@core';
 import { movementSystem } from './systems/movementSystem';
-import { Velocity } from './components';
 
 function makeWorld() {
   const world = new World({ width: 100, height: 100 }, createRng(1));

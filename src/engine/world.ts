@@ -39,6 +39,10 @@ export class World {
     return value as T;
   }
 
+  hasResource<T>(key: ResourceKey<T>): boolean {
+    return this.resources.has(key.name);
+  }
+
   register<T>(type: ComponentType<T>): ComponentStore<T> {
     let store = this.stores.get(type.name);
     if (!store) {

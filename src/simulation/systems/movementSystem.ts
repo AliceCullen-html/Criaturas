@@ -1,5 +1,4 @@
-import { Transform, type System } from '@engine';
-import { Velocity } from '../components';
+import { Transform, Velocity, type System } from '@engine';
 
 /**
  * Integra a posição a partir da velocidade e envolve nas bordas do mundo

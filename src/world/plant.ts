@@ -20,7 +20,7 @@ export function radiusForBiomass(biomass: number): number {
  * Cria uma planta no mundo em (x, y). Atributos derivados do RNG do mundo,
  * portanto reprodutíveis.
  */
-export function spawnPlant(world: World, x: number, y: number): void {
+export function spawnPlant(world: World, x: number, y: number): number {
   const { rng } = world;
   const entity = world.createEntity();
 
@@ -37,4 +37,6 @@ export function spawnPlant(world: World, x: number, y: number): void {
     radius: radiusForBiomass(SEED_BIOMASS),
     color: rng.pick(PLANT_PALETTE),
   });
+
+  return entity;
 }

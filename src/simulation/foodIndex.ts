@@ -1,0 +1,28 @@
+import { SpatialHash } from '@core';
+import { Transform, defineResource, type System } from '@engine';
+import { Plant } from '@world';
+
+const FOOD_CELL_SIZE = 50;
+
+/** Índice espacial das plantas, reconstruído a cada tick para buscas rápidas. */
+export const FoodIndexResource = defineResource<SpatialHash>('FoodIndex');
+
+export const foodIndexSystem: System = {
+  name: 'food-index',
+  update(world) {
+    if (!world.hasResource(FoodIndexResource)) {
+      world.setResource(
+        FoodIndexResource,
+        new SpatialHash(FOOD_CELL_SIZE, world.config.width, world.config.height),
+      );
+    }
+    const index = world.getResource(FoodIndexResource);
+    const transforms = world.store(Transform);
+
+    index.clear();
+    world.store(Plant).forEach((_plant, entity) => {
+      const transform = transforms.get(entity);
+      if (transform) index.insert(entity, transform.x, transform.y);
+    });
+  },
+};

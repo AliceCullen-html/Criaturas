@@ -1,4 +1,4 @@
-// Adapter PixiJS: desenha o snapshot da simulação (somente leitura).
+// Adapter PixiJS: desenha o mundo e as criaturas (somente leitura).
 
 export { createRenderer } from './createRenderer';
-export type { Renderer, RendererOptions } from './createRenderer';
+export type { Renderer, RendererOptions, FrameInput, RendererHandlers } from './createRenderer';

@@ -1,0 +1,23 @@
+/** Nomes iniciais aleatórios (o jogador pode renomear). */
+export const CREATURE_NAMES: readonly string[] = [
+  'Bibo',
+  'Nina',
+  'Tato',
+  'Lumi',
+  'Fofo',
+  'Kiko',
+  'Mel',
+  'Pip',
+  'Zuzu',
+  'Bento',
+  'Cacau',
+  'Dora',
+  'Enzo',
+  'Gigi',
+  'Ivo',
+  'Juju',
+  'Lila',
+  'Miro',
+  'Noa',
+  'Teca',
+];
