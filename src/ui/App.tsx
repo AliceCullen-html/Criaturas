@@ -10,6 +10,7 @@ const SPEEDS: readonly SimulationSpeed[] = [0, 1, 2, 4];
 export function App({ mountCanvas }: AppProps) {
   const isRunning = useUiStore((state) => state.isRunning);
   const speed = useUiStore((state) => state.speed);
+  const stats = useUiStore((state) => state.stats);
   const toggleRunning = useUiStore((state) => state.toggleRunning);
   const setSpeed = useUiStore((state) => state.setSpeed);
 
@@ -20,8 +21,19 @@ export function App({ mountCanvas }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Etapa 0 · Scaffold</span>
+          <span className="hud__badge">Etapa 1 · Engine</span>
         </header>
+
+        <div className="hud__stats">
+          <div className="stat">
+            <span className="stat__label">Tick</span>
+            <span className="stat__value">{stats.tick.toLocaleString('pt-BR')}</span>
+          </div>
+          <div className="stat">
+            <span className="stat__label">População</span>
+            <span className="stat__value">{stats.population}</span>
+          </div>
+        </div>
 
         <div className="hud__controls">
           <button className="btn btn--primary" onClick={toggleRunning}>
@@ -43,7 +55,8 @@ export function App({ mountCanvas }: AppProps) {
         </div>
 
         <p className="hud__hint">
-          Fundação pronta. O motor de simulação (ECS + loop) chega na Etapa 1.
+          Movimento contínuo e determinístico (RNG semeado). As criaturas de verdade chegam na Etapa
+          3.
         </p>
       </aside>
     </div>

@@ -1,4 +1,14 @@
 // Núcleo ECS + loop de simulação com timestep fixo.
-// A ser construído na Etapa 1.
 
-export {};
+export type { Entity } from './entity';
+export { EntityManager } from './entity';
+export { ComponentStore } from './componentStore';
+export { defineComponent } from './component';
+export type { ComponentType } from './component';
+export { World } from './world';
+export type { WorldConfig } from './world';
+export type { System } from './system';
+export { SystemScheduler } from './system';
+export { SimulationLoop } from './loop';
+export type { LoopCallbacks, LoopControls } from './loop';
+export { RenderBuffer } from './renderBuffer';

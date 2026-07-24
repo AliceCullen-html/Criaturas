@@ -1,5 +1,6 @@
-// Sistemas (use cases) que aplicam as regras a cada tick:
-// percepção, metabolismo, decisão, movimento, alimentação, reprodução, morte.
-// A ser construído a partir da Etapa 3.
+// Sistemas (use cases) que aplicam as regras a cada tick, e a projeção de leitura.
 
-export {};
+export * from './components';
+export { movementSystem } from './systems/movementSystem';
+export { createDemoWorld } from './world/createDemoWorld';
+export { syncRenderBuffer } from './render/syncRenderBuffer';
