@@ -130,14 +130,41 @@ export const reproductionSystem: System = {
           const parentMemory = memories.get(parent);
           if (parentMemory) childMemory.inheritFrom(parentMemory, CULTURAL_INHERITANCE);
         }
-        childMemory.addEpisode(`Nasci de ${birth.nameA} e ${birth.nameB}`, 0.6);
+        childMemory.addEpisode({
+          text: `Nasci de ${birth.nameA} e ${birth.nameB}`,
+          valence: 0.6,
+          intensity: 1,
+          emotion: 'nascimento',
+          tick: world.tick,
+          x: birth.x,
+          y: birth.y,
+        });
+      }
+
+      // Insegurança se transmite: filhote de pais traumatizados já nasce arisco.
+      const childEmotions = emotionsStore.get(child);
+      if (childEmotions) {
+        let inherited = 0;
+        for (const parent of [birth.parentA, birth.parentB]) {
+          inherited = Math.max(inherited, emotionsStore.get(parent)?.trauma ?? 0);
+        }
+        childEmotions.trauma = clamp01(inherited * 0.5);
+        childEmotions.fear = clamp01(childEmotions.fear + inherited * 0.3);
       }
 
       // Os pais reconhecem e gostam do filhote.
       for (const parent of [birth.parentA, birth.parentB]) {
         const parentMemory = memories.get(parent);
         parentMemory?.record(subjects.creature(child), 1, 1);
-        parentMemory?.addEpisode('Tive um filhote', 1);
+        parentMemory?.addEpisode({
+          text: 'Tive um filhote',
+          valence: 1,
+          intensity: 1,
+          emotion: 'amor',
+          tick: world.tick,
+          x: birth.x,
+          y: birth.y,
+        });
       }
     }
   },

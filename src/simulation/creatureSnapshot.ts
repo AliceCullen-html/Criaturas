@@ -18,7 +18,7 @@ import {
   type Mood,
   type Sex,
 } from '@creatures';
-import { isBaby } from './age';
+import { isBaby, isElder } from './age';
 
 /** Retrato de leitura de uma criatura para a UI (dados planos, sem o ECS). */
 export interface CreatureSnapshot {
@@ -48,9 +48,13 @@ export interface CreatureSnapshot {
   parentA: string | null;
   parentB: string | null;
 
+  isElder: boolean;
+  trauma: number;
   /** Vínculo com o jogador: -1 (teme) … +1 (confia plenamente). */
   bond: number;
   memories: Episode[];
+  children: string[];
+  friends: Array<{ name: string; affinity: number }>;
 }
 
 export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot | null {
@@ -105,9 +109,44 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     generation: lineage.generation,
     parentA: lineage.parentA,
     parentB: lineage.parentB,
+    isElder: isElder(bio),
+    trauma: emotions.trauma,
     bond: memory.valenceOf(subjects.player()),
-    memories: memory.episodes.slice(0, 6),
+    memories: memory.episodes.slice(0, 8),
+    children: findChildren(world, identity.name),
+    friends: findFriends(world, id, memory),
   };
+}
+
+/** Descendentes vivos, pelo nome dos pais registrado na linhagem. */
+function findChildren(world: World, name: string): string[] {
+  const names: string[] = [];
+  const identities = world.store(Identity);
+  world.store(Lineage).forEach((lineage, entity) => {
+    if (lineage.parentA === name || lineage.parentB === name) {
+      const childName = identities.get(entity)?.name;
+      if (childName) names.push(childName);
+    }
+  });
+  return names;
+}
+
+/** Laços mais fortes (para o bem ou para o mal) com outras criaturas vivas. */
+function findFriends(
+  world: World,
+  id: number,
+  memory: { valenceOf(subject: string): number },
+): Array<{ name: string; affinity: number }> {
+  const identities = world.store(Identity);
+  const found: Array<{ name: string; affinity: number }> = [];
+  world.store(Creature).forEach((_tag, other) => {
+    if (other === id) return;
+    const affinity = memory.valenceOf(subjects.creature(other));
+    if (Math.abs(affinity) < 0.15) return;
+    const name = identities.get(other)?.name;
+    if (name) found.push({ name, affinity });
+  });
+  return found.sort((a, b) => Math.abs(b.affinity) - Math.abs(a.affinity)).slice(0, 4);
 }
 
 /** Assinatura curta e legível do genoma, para exibição. */

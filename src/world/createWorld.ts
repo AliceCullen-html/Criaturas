@@ -4,6 +4,8 @@ import { Plant } from './components';
 import { generateTerrain, isWaterAt } from './terrain';
 import { TerrainResource } from './terrainResource';
 import { spawnPlant } from './plant';
+import { registerItems, spawnFruit } from './items';
+import { SceneryResource, generateScenery } from './scenery';
 
 const TERRAIN_CELL_SIZE = 25;
 const INITIAL_PLANTS = 80;
@@ -18,8 +20,20 @@ export function createWorld(config: WorldConfig, seed: number): World {
   world.register(Sprite);
   world.register(Plant);
 
+  registerItems(world);
+
   const terrain = generateTerrain(config.width, config.height, TERRAIN_CELL_SIZE, world.rng);
   world.setResource(TerrainResource, terrain);
+
+  const scenery = generateScenery(terrain, config.width, config.height, seed);
+  world.setResource(SceneryResource, scenery);
+
+  // Algumas frutas já caídas, para o mundo não começar vazio.
+  for (const piece of scenery) {
+    if (piece.kind === 'tree' && world.rng.chance(0.45)) {
+      spawnFruit(world, piece.x + world.rng.range(-14, 14), piece.y + world.rng.range(4, 16));
+    }
+  }
 
   let placed = 0;
   let attempts = 0;

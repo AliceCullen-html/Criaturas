@@ -2,7 +2,7 @@ import { clamp, subjects } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Attributes, Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
 import type { PerceivedCreature, PerceivedFood, Perception } from '@ai';
-import { Plant, TerrainResource, findNearestWater } from '@world';
+import { Item, Plant, TerrainResource, findNearestWater } from '@world';
 import { FoodIndexResource } from '../foodIndex';
 import { CreatureIndexResource } from '../creatureIndex';
 import { BrainResource } from '../brainResource';
@@ -32,6 +32,7 @@ export const decisionSystem: System = {
     const minds = world.store(Mind);
     const memories = world.store(Memory);
     const plants = world.store(Plant);
+    const items = world.store(Item);
 
     const terrain = world.getResource(TerrainResource);
     const foodIndex = world.getResource(FoodIndexResource);
@@ -104,17 +105,24 @@ export const decisionSystem: System = {
         for (let i = 0; i < candidates.length; i++) {
           const foodId = candidates[i]!;
           const foodTransform = transforms.get(foodId);
-          const plant = plants.get(foodId);
-          if (!foodTransform || !plant) continue;
+          if (!foodTransform) continue;
           const distance = Math.hypot(foodTransform.x - transform.x, foodTransform.y - transform.y);
           if (distance > attributes.vision) continue;
+
+          // Comida pode ser uma planta do chão ou uma fruta caída da árvore.
+          const plant = plants.get(foodId);
+          const item = items.get(foodId);
+          if (!plant && !item) continue;
+          if (item && item.held) continue; // na mão do jogador, não é "achável"
+          const variant = plant ? plant.variant : item!.variant;
+
           perceivedFood.push({
             id: foodId,
             x: foodTransform.x,
             y: foodTransform.y,
             distance,
-            variant: plant.variant,
-            opinion: memory.valenceOf(subjects.food(plant.variant)),
+            variant,
+            opinion: memory.valenceOf(subjects.food(variant)),
           });
         }
 
@@ -146,6 +154,7 @@ export const decisionSystem: System = {
             present: player.present && playerDistance < attributes.vision * 1.5,
           },
           placeDanger: Math.max(0, -memory.valenceOf(subjects.place(transform.x, transform.y))),
+          attention: mind.attention,
         };
 
         const decision = brain.decide(perception);

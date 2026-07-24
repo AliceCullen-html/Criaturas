@@ -1,11 +1,10 @@
 import type { CreatureSnapshot } from '@simulation';
 import { useUiStore } from '../store/simulationStore';
-import type { GameActions } from '../App';
 
 const INTENT_LABELS: Record<CreatureSnapshot['intent'], string> = {
   wander: 'Explorando',
   seekFood: 'Procurando comida',
-  seekWater: 'Procurando água',
+  seekWater: 'Indo beber água',
   sleep: 'Dormindo',
   flee: 'Fugindo!',
   approachPlayer: 'Vindo até você',
@@ -28,6 +27,8 @@ const MOOD_FACES: Record<CreatureSnapshot['mood'], string> = {
   afraid: '😨',
 };
 
+type Tone = 'good' | 'warn' | 'bad' | 'info';
+
 const EMOTION_ROWS: Array<{ key: keyof CreatureSnapshot['emotions']; label: string; tone: Tone }> =
   [
     { key: 'happiness', label: 'Felicidade', tone: 'good' },
@@ -39,8 +40,6 @@ const EMOTION_ROWS: Array<{ key: keyof CreatureSnapshot['emotions']; label: stri
     { key: 'sleepiness', label: 'Sono', tone: 'info' },
     { key: 'loneliness', label: 'Solidão', tone: 'info' },
   ];
-
-type Tone = 'good' | 'warn' | 'bad' | 'info';
 
 function Bar({ label, value, tone }: { label: string; value: number; tone: Tone }) {
   const pct = Math.round(value * 100);
@@ -57,6 +56,15 @@ function Bar({ label, value, tone }: { label: string; value: number; tone: Tone 
   );
 }
 
+function Attr({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="attr">
+      <span className="attr__label">{label}</span>
+      <span className="attr__value">{value}</span>
+    </div>
+  );
+}
+
 function bondLabel(bond: number): { text: string; tone: Tone } {
   if (bond > 0.6) return { text: 'Devotada a você', tone: 'good' };
   if (bond > 0.25) return { text: 'Confia em você', tone: 'good' };
@@ -66,20 +74,28 @@ function bondLabel(bond: number): { text: string; tone: Tone } {
   return { text: 'Tem medo de você', tone: 'bad' };
 }
 
-export function CreaturePanel({ actions }: { actions: GameActions }) {
+/** Tempo de simulação relativo, em linguagem natural. */
+function timeAgo(tick: number, now: number): string {
+  const seconds = Math.max(0, (now - tick) / 20);
+  if (seconds < 60) return 'agora há pouco';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `há ${minutes} min`;
+  return `há ${Math.floor(minutes / 60)} h`;
+}
+
+/**
+ * Painel de OBSERVAÇÃO. Não há nenhuma ação aqui — tudo o que o jogador faz
+ * acontece no mundo, com a mão. Isto é uma janela para a vida interior da
+ * criatura, não um controle remoto.
+ */
+export function CreaturePanel() {
   const creature = useUiStore((state) => state.selected);
-  const followId = useUiStore((state) => state.followId);
+  const tick = useUiStore((state) => state.stats.tick);
 
   if (!creature) return null;
 
-  const following = followId === creature.id;
   const bond = bondLabel(creature.bond);
   const bondPct = Math.round(((creature.bond + 1) / 2) * 100);
-
-  const onRename = (): void => {
-    const name = window.prompt('Novo nome da criatura:', creature.name);
-    if (name && name.trim()) actions.rename(name.trim());
-  };
 
   return (
     <aside className="panel">
@@ -87,15 +103,13 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
         <div>
           <h2 className="panel__name">
             {creature.name} {creature.isBaby && <span className="tag tag--baby">filhote</span>}
+            {creature.isElder && <span className="tag tag--elder">idosa</span>}
           </h2>
           <p className="panel__sub">
             {MOOD_FACES[creature.mood]} {INTENT_LABELS[creature.intent]} ·{' '}
             {creature.sex === 'M' ? '♂' : '♀'} · Ger. {creature.generation}
           </p>
         </div>
-        <button className="icon-btn" onClick={actions.deselect} aria-label="Fechar">
-          ✕
-        </button>
       </header>
 
       {creature.personality.length > 0 && (
@@ -116,6 +130,12 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
         <div className="bond__track">
           <div className="bond__fill" style={{ width: `${bondPct}%` }} />
         </div>
+        {creature.trauma > 0.1 && (
+          <p className="bond__trauma">
+            Carrega um trauma ({Math.round(creature.trauma * 100)}). Vai levar muito tempo e muitas
+            experiências boas para voltar a confiar.
+          </p>
+        )}
       </div>
 
       <section className="panel__section">
@@ -143,7 +163,50 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
       </section>
 
       <section className="panel__section">
-        <h3 className="panel__label">Memórias recentes</h3>
+        <h3 className="panel__label">Família</h3>
+        <div className="family">
+          <div className="family__row">
+            <span className="family__label">Pais</span>
+            <span className="family__value">
+              {creature.parentA && creature.parentB
+                ? `${creature.parentA} × ${creature.parentB}`
+                : 'Ancestral'}
+            </span>
+          </div>
+          <div className="family__row">
+            <span className="family__label">Filhotes</span>
+            <span className="family__value">
+              {creature.children.length > 0 ? creature.children.join(', ') : '—'}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {creature.friends.length > 0 && (
+        <section className="panel__section">
+          <h3 className="panel__label">Amizades</h3>
+          <ul className="friends">
+            {creature.friends.map((friend) => (
+              <li
+                key={friend.name}
+                className={`friend friend--${friend.affinity >= 0 ? 'good' : 'bad'}`}
+              >
+                <span>{friend.name}</span>
+                <span className="friend__note">
+                  {friend.affinity >= 0.5
+                    ? 'melhor amiga'
+                    : friend.affinity >= 0
+                      ? 'conhecida'
+                      : 'evita'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="panel__section">
+        <h3 className="panel__label">História de vida</h3>
         {creature.memories.length === 0 ? (
           <p className="empty">Ainda não viveu nada marcante.</p>
         ) : (
@@ -153,40 +216,15 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
                 key={`${episode.text}-${index}`}
                 className={`memory memory--${episode.valence >= 0 ? 'good' : 'bad'}`}
               >
-                {episode.text}
+                <span className="memory__text">{episode.text}</span>
+                <span className="memory__meta">
+                  {timeAgo(episode.tick, tick)} · {episode.emotion}
+                  {episode.intensity > 0.7 ? ' · marcante' : ''}
+                </span>
               </li>
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="panel__section">
-        <h3 className="panel__label">Interagir</h3>
-        <div className="panel__actions">
-          <button className="btn btn--primary" onClick={() => actions.interact('pet')}>
-            Carinho
-          </button>
-          <button className="btn btn--primary" onClick={() => actions.interact('feed')}>
-            Alimentar
-          </button>
-          <button className="btn btn--primary" onClick={() => actions.interact('play')}>
-            Brincar
-          </button>
-          <button className="btn btn--primary" onClick={() => actions.interact('gift')}>
-            Presente
-          </button>
-        </div>
-        <div className="panel__actions panel__actions--rough">
-          <button className="btn btn--rough" onClick={() => actions.interact('push')}>
-            Empurrar
-          </button>
-          <button className="btn btn--rough" onClick={() => actions.interact('scare')}>
-            Assustar
-          </button>
-          <button className="btn btn--rough" onClick={() => actions.interact('hit')}>
-            Bater
-          </button>
-        </div>
       </section>
 
       <div className="panel__attrs">
@@ -203,37 +241,7 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
           <span className="lineage__label">DNA</span>
           <code className="lineage__dna">{creature.dna}</code>
         </div>
-        <div className="lineage__row">
-          <span className="lineage__label">Pais</span>
-          <span className="lineage__value">
-            {creature.parentA && creature.parentB
-              ? `${creature.parentA} × ${creature.parentB}`
-              : 'Ancestral'}
-          </span>
-        </div>
-      </div>
-
-      <div className="panel__actions">
-        <button className="btn" onClick={onRename}>
-          Renomear
-        </button>
-        <button
-          className={`btn${following ? ' btn--active' : ''}`}
-          onClick={actions.toggleFollow}
-          aria-pressed={following}
-        >
-          {following ? 'Seguindo' : 'Seguir'}
-        </button>
       </div>
     </aside>
-  );
-}
-
-function Attr({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="attr">
-      <span className="attr__label">{label}</span>
-      <span className="attr__value">{value}</span>
-    </div>
   );
 }

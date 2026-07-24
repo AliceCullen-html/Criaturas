@@ -5,38 +5,51 @@ import {
   RenderBuffer,
   SimulationLoop,
   SystemScheduler,
+  Transform,
   writeRenderBuffer,
 } from '@engine';
 import { createUtilityBrain } from '@ai';
 import {
   createWorld,
+  Item,
+  itemSystem,
   plantGrowthSystem,
   plantSpreadSystem,
   Plant,
+  SceneryResource,
   TerrainResource,
   WATER,
 } from '@world';
-import { Creature } from '@creatures';
+import { Creature, Emotions, Mind } from '@creatures';
 import {
   actionSystem,
-  applyPlayerAction,
   BrainResource,
+  callAttention,
   creatureIndexSystem,
   decisionSystem,
   emotionSystem,
   foodIndexSystem,
+  grabItem,
+  handReactionSystem,
   metabolismSystem,
+  moveHeldItem,
   movementSystem,
+  observeCreature,
+  offerItem,
+  petCreature,
   PlayerResource,
   readCreatureSnapshot,
+  releaseItem,
+  rememberPetting,
   reproductionSystem,
-  setCreatureName,
+  roughGesture,
+  setHandPresence,
   spawnCreatures,
   writeCreatureBuffer,
-  type PlayerAction,
+  writeItemBuffer,
 } from '@simulation';
-import { createRenderer, type Renderer } from '@rendering';
-import { App, type GameActions } from '@ui';
+import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
+import { App } from '@ui';
 import { useUiStore } from '@ui/store/simulationStore';
 
 export interface AppInstance {
@@ -48,6 +61,7 @@ const WORLD_SEED = 1337;
 const INITIAL_CREATURES = 14;
 const FIXED_DT = 1 / 20;
 const PLANT_CAPACITY = 512;
+const ITEM_CAPACITY = 256;
 const CREATURE_CAPACITY = 128;
 const STATS_INTERVAL_FRAMES = 10;
 
@@ -57,31 +71,39 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   const terrain = world.getResource(TerrainResource);
+  const scenery = world.getResource(SceneryResource);
 
-  // Ordem importa: perceber → sentir → decidir → mover → agir → viver.
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
     .add(emotionSystem)
+    .add(handReactionSystem)
     .add(decisionSystem)
     .add(movementSystem)
     .add(actionSystem)
     .add(reproductionSystem)
     .add(metabolismSystem)
+    .add(itemSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 
   const plantBuffer = new RenderBuffer(PLANT_CAPACITY);
+  const itemBuffer = new RenderBuffer(ITEM_CAPACITY);
+  const itemIds = new Int32Array(ITEM_CAPACITY);
   const creatureBuffer = new CreatureRenderBuffer(CREATURE_CAPACITY);
 
   let activeRenderer: Renderer | null = null;
   let frameCounter = 0;
-
   const store = useUiStore;
+
+  /** Sinal visual sobre uma criatura (coração, gota, estrela). */
+  const signal = (kind: FeedbackKind, id: number): void => {
+    const transform = world.store(Transform).get(id);
+    if (transform) activeRenderer?.emit(kind, transform.x, transform.y - 18);
+  };
 
   const clearSelection = (): void => {
     store.getState().setSelectedId(null);
-    store.getState().setFollowId(null);
     store.getState().setSelected(null);
   };
 
@@ -103,10 +125,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
   const render = (alpha: number): void => {
     writeRenderBuffer(world, plantBuffer);
+    writeItemBuffer(world, itemBuffer);
     writeCreatureBuffer(world, creatureBuffer);
+
+    // Ids dos itens na mesma ordem do buffer, para o hit-test da mão.
+    let index = 0;
+    world.store(Item).forEach((_item, entity) => {
+      if (index < ITEM_CAPACITY) itemIds[index++] = entity;
+    });
+
     const state = store.getState();
     activeRenderer?.frame({
       plants: plantBuffer,
+      items: itemBuffer,
+      itemIds,
       creatures: creatureBuffer,
       alpha,
       selectedId: state.selectedId,
@@ -120,9 +152,38 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         tick: world.tick,
         population: world.store(Creature).size,
         plants: world.store(Plant).size,
+        items: world.store(Item).size,
       });
       pushSelected();
+      emitAmbientSignals();
     }
+  };
+
+  /** Balões espontâneos: o mundo se explica sem texto. */
+  let ambientCursor = 0;
+  const emitAmbientSignals = (): void => {
+    const creatures = world.store(Creature);
+    if (creatures.size === 0) return;
+    const minds = world.store(Mind);
+    const emotions = world.store(Emotions);
+    let i = 0;
+    let picked = -1;
+    creatures.forEach((_tag, entity) => {
+      if (i++ === ambientCursor % creatures.size) picked = entity;
+    });
+    ambientCursor += 1;
+    if (picked < 0) return;
+
+    const mind = minds.get(picked);
+    const feel = emotions.get(picked);
+    if (!mind || !feel) return;
+
+    if (mind.intent === 'seekWater') signal('drop', picked);
+    else if (mind.intent === 'sleep') signal('sleep', picked);
+    else if (mind.affection > 0) signal('heart', picked);
+    else if (feel.anger > 0.5) signal('anger', picked);
+    else if (mind.attention > 0) signal('question', picked);
+    else if (feel.happiness > 0.75) signal('heart', picked);
   };
 
   const loop = new SimulationLoop(
@@ -136,24 +197,6 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     },
   );
 
-  const withSelected = (fn: (id: number) => void): void => {
-    const id = store.getState().selectedId;
-    if (id !== null) {
-      fn(id);
-      pushSelected();
-    }
-  };
-
-  const actions: GameActions = {
-    interact: (action: PlayerAction) => withSelected((id) => applyPlayerAction(world, id, action)),
-    rename: (name: string) => withSelected((id) => setCreatureName(world, id, name)),
-    toggleFollow: () => {
-      const state = store.getState();
-      state.setFollowId(state.followId !== null ? null : state.selectedId);
-    },
-    deselect: clearSelection,
-  };
-
   const mountCanvas = (container: HTMLElement): (() => void) => {
     const renderer = createRenderer({
       worldWidth: WORLD_CONFIG.width,
@@ -161,6 +204,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     });
     let cancelled = false;
 
+    // Os gestos da mão viram ações no mundo. Nenhum botão envolvido.
     renderer.setHandlers({
       onSelect: (id) => {
         if (id === null) {
@@ -170,18 +214,42 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         store.getState().setSelectedId(id);
         pushSelected();
       },
-      onCancelFollow: () => store.getState().setFollowId(null),
-      onPointerWorld: (x, y, inside) => {
-        const presence = world.getResource(PlayerResource);
-        presence.x = x;
-        presence.y = y;
-        presence.present = inside;
+      onGrab: (itemId) => grabItem(world, itemId),
+      onDragHeld: (itemId, x, y) => moveHeldItem(world, itemId, x, y),
+      onRelease: (itemId, _x, _y, vx, vy) => releaseItem(world, itemId, vx, vy),
+      onPet: (creatureId, dt) => {
+        if (petCreature(world, creatureId, dt) === 'accepted') {
+          if (Math.random() < dt * 1.5) signal('heart', creatureId);
+        }
       },
+      onPetRemembered: (creatureId) => {
+        rememberPetting(world, creatureId);
+        signal('star', creatureId);
+        pushSelected();
+      },
+      onRough: (creatureId, speed, dirX, dirY) => {
+        roughGesture(world, creatureId, speed, dirX, dirY);
+        signal('anger', creatureId);
+        pushSelected();
+      },
+      onCall: (creatureId) => {
+        callAttention(world, creatureId);
+        signal('question', creatureId);
+      },
+      onObserve: (creatureId) => observeCreature(world, creatureId),
+      onOffer: (itemId, creatureId) => {
+        if (offerItem(world, itemId, creatureId)) {
+          signal('heart', creatureId);
+          pushSelected();
+        }
+      },
+      onHandMove: (x, y, inside) => setHandPresence(world, x, y, inside),
     });
 
     void renderer.mount(container).then(() => {
       if (cancelled) return;
       renderer.setTerrain(terrain, WATER, WORLD_SEED);
+      renderer.setScenery(scenery);
       activeRenderer = renderer;
     });
 
@@ -195,7 +263,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   };
 
   const root = createRoot(rootElement);
-  root.render(createElement(StrictMode, null, createElement(App, { mountCanvas, actions })));
+  root.render(createElement(StrictMode, null, createElement(App, { mountCanvas })));
 
   return {
     dispose(): void {

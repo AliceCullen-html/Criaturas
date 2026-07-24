@@ -47,6 +47,8 @@ export interface Perception {
   water: { x: number; y: number } | null;
   player: { x: number; y: number; present: boolean } | null;
   placeDanger: number;
+  /** Segundos restantes de atenção voltada à mão do jogador. */
+  attention: number;
 }
 
 /** O que a criatura decidiu fazer. */

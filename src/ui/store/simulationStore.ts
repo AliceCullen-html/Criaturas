@@ -12,6 +12,7 @@ export interface SimulationStats {
   tick: number;
   population: number;
   plants: number;
+  items: number;
 }
 
 interface UiState {
@@ -32,7 +33,7 @@ interface UiState {
 export const useUiStore = create<UiState>((set) => ({
   isRunning: true,
   speed: 1,
-  stats: { tick: 0, population: 0, plants: 0 },
+  stats: { tick: 0, population: 0, plants: 0, items: 0 },
   selectedId: null,
   followId: null,
   selected: null,

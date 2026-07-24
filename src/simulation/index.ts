@@ -15,6 +15,19 @@ export { spawnCreatures } from './spawnCreatures';
 export { writeCreatureBuffer } from './creatureRender';
 export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
-export { applyPlayerAction, setCreatureName } from './playerActions';
-export type { PlayerAction } from './playerActions';
+export { handReactionSystem } from './systems/handReactionSystem';
+export {
+  grabItem,
+  moveHeldItem,
+  releaseItem,
+  petCreature,
+  rememberPetting,
+  roughGesture,
+  callAttention,
+  observeCreature,
+  offerItem,
+  setCreatureName,
+  setHandPresence,
+} from './handActions';
+export { writeItemBuffer } from './itemRender';
 export { isBaby, isElder, lifeStage, growthScale } from './age';

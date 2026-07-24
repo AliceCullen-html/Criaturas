@@ -80,6 +80,7 @@ export function spawnCreature(
     anger: 0,
     sleepiness: rng.range(0, 0.2),
     loneliness: rng.range(0.1, 0.4),
+    trauma: 0,
   });
 
   world.store(Bio).set(entity, {
@@ -122,6 +123,7 @@ export function spawnCreature(
     actionCooldown: 0,
     affection: 0,
     surprise: 0,
+    attention: 0,
   });
 
   return entity;

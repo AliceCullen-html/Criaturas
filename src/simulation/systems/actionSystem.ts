@@ -11,7 +11,7 @@ import {
   Needs,
   Personality,
 } from '@creatures';
-import { Plant, RESOURCE_NAMES, isToxicVariant, radiusForBiomass } from '@world';
+import { Item, Plant, RESOURCE_NAMES, isToxicVariant, itemRadius, radiusForBiomass } from '@world';
 import { isBaby } from '../age';
 
 const EAT_RATE = 3.2;
@@ -41,6 +41,7 @@ export const actionSystem: System = {
     const identities = world.store(Identity);
     const bios = world.store(Bio);
     const plants = world.store(Plant);
+    const items = world.store(Item);
 
     eaten.length = 0;
 
@@ -55,36 +56,52 @@ export const actionSystem: System = {
 
       switch (mind.intent) {
         case 'seekFood': {
-          const plantId = mind.targetEntity;
-          const plant = plants.get(plantId);
-          const plantTransform = transforms.get(plantId);
-          if (!plant || !plantTransform) break;
-          const distance = Math.hypot(
-            plantTransform.x - transform.x,
-            plantTransform.y - transform.y,
-          );
-          if (distance > attributes.size + radiusForBiomass(plant.biomass) + 2) break;
+          const foodId = mind.targetEntity;
+          const foodTransform = transforms.get(foodId);
+          if (!foodTransform) break;
+          const plant = plants.get(foodId);
+          const item = items.get(foodId);
+          if (!plant && !item) break;
+          if (item?.held) {
+            mind.commitment = 0;
+            break;
+          }
 
-          const bite = Math.min(EAT_RATE * dt, plant.biomass);
-          plant.biomass -= bite;
+          const foodRadius = plant ? radiusForBiomass(plant.biomass) : itemRadius(item!);
+          const distance = Math.hypot(foodTransform.x - transform.x, foodTransform.y - transform.y);
+          if (distance > attributes.size + foodRadius + 2) break;
+
+          const variant = plant ? plant.variant : item!.variant;
+          const toxic = plant ? isToxicVariant(variant) : item!.toxic;
+          const bite = Math.min(EAT_RATE * dt, plant ? plant.biomass : 5 * item!.freshness);
+          if (plant) plant.biomass -= bite;
           needs.hunger = clamp01(needs.hunger - bite * NUTRITION);
 
-          if (isToxicVariant(plant.variant)) {
+          if (toxic) {
             // Consequência ruim → memória negativa forte daquele alimento.
             needs.health = clamp01(needs.health - TOXIN_DAMAGE * bite);
             emotions.stress = clamp01(emotions.stress + 0.35 * bite);
             emotions.happiness = clamp01(emotions.happiness - 0.2 * bite);
-            memory.record(subjects.food(plant.variant), -1, 0.5 * bite);
+            memory.record(subjects.food(variant), -1, 0.5 * bite);
             if (bite > 0.05) {
-              memory.addEpisode(`Comi ${nameOf(plant.variant)} e passei mal`, -0.8);
+              memory.addEpisode({
+                text: `Comi ${nameOf(variant)} e passei mal`,
+                valence: -0.8,
+                intensity: 0.75,
+                emotion: 'mal-estar',
+                tick: world.tick,
+                x: transform.x,
+                y: transform.y,
+              });
             }
           } else {
-            memory.record(subjects.food(plant.variant), 0.6, 0.25 * bite);
+            memory.record(subjects.food(variant), 0.6, 0.25 * bite);
             emotions.happiness = clamp01(emotions.happiness + 0.05 * bite);
           }
 
-          if (plant.biomass <= PLANT_MIN_BIOMASS) {
-            eaten.push(plantId);
+          // Uma fruta é consumida de uma vez; uma planta, aos poucos.
+          if (item || (plant && plant.biomass <= PLANT_MIN_BIOMASS)) {
+            eaten.push(foodId);
             mind.commitment = 0;
           }
           break;
@@ -115,7 +132,17 @@ export const actionSystem: System = {
           // A vítima aprende: aquele indivíduo e aquele lugar são perigosos.
           targetMemory.record(subjects.creature(entity), -0.9, 0.6);
           targetMemory.record(subjects.place(targetTransform.x, targetTransform.y), -0.7, 0.4);
-          targetMemory.addEpisode(`${nameFor(identities, entity)} me atacou`, -0.9);
+          targetEmotions.trauma = clamp01(targetEmotions.trauma + 0.08);
+          targetMemory.addEpisode({
+            text: `${nameFor(identities, entity)} me atacou`,
+            valence: -0.9,
+            intensity: 0.85,
+            emotion: 'pânico',
+            tick: world.tick,
+            x: targetTransform.x,
+            y: targetTransform.y,
+            actor: nameFor(identities, entity),
+          });
           memory.record(subjects.creature(targetId), -0.3, 0.2);
           mind.actionCooldown = INTERACT_COOLDOWN;
           mind.commitment = 0;
@@ -145,7 +172,16 @@ export const actionSystem: System = {
           // Brincar cria amizade nos dois lados.
           memory.record(subjects.creature(targetId), 0.7, 0.3);
           targetMemory.record(subjects.creature(entity), 0.7, 0.3);
-          memory.addEpisode(`Brinquei com ${nameFor(identities, targetId)}`, 0.7);
+          memory.addEpisode({
+            text: `Brinquei com ${nameFor(identities, targetId)}`,
+            valence: 0.7,
+            intensity: 0.5,
+            emotion: 'alegria',
+            tick: world.tick,
+            x: transform.x,
+            y: transform.y,
+            actor: nameFor(identities, targetId),
+          });
           mind.actionCooldown = INTERACT_COOLDOWN;
           break;
         }
@@ -183,7 +219,16 @@ export const actionSystem: System = {
           needs.hunger = clamp01(needs.hunger + given * 0.6);
           targetNeeds.hunger = clamp01(targetNeeds.hunger - given);
           targetMemory.record(subjects.creature(entity), 0.9, 0.5);
-          targetMemory.addEpisode(`${nameFor(identities, entity)} dividiu comida comigo`, 0.9);
+          targetMemory.addEpisode({
+            text: `${nameFor(identities, entity)} dividiu comida comigo`,
+            valence: 0.9,
+            intensity: 0.7,
+            emotion: 'gratidão',
+            tick: world.tick,
+            x: targetTransform.x,
+            y: targetTransform.y,
+            actor: nameFor(identities, entity),
+          });
           memory.record(subjects.creature(targetId), 0.4, 0.2);
           emotions.happiness = clamp01(emotions.happiness + 0.08);
           mind.actionCooldown = INTERACT_COOLDOWN * 2;

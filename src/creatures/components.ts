@@ -47,6 +47,12 @@ export interface Emotions {
   anger: number;
   sleepiness: number;
   loneliness: number;
+  /**
+   * Marca deixada por agressões repetidas. Sobe rápido e desce quase nada:
+   * eleva o medo de base, atrapalha o sono e deixa a criatura arisca por
+   * muito tempo. Filhotes herdam parte dela por aprendizado social.
+   */
+  trauma: number;
 }
 export const Emotions = defineComponent<Emotions>('Emotions');
 
@@ -115,5 +121,7 @@ export interface Mind {
   affection: number;
   /** Segundos restantes de susto/espanto — expressão surpresa. */
   surprise: number;
+  /** Segundos restantes prestando atenção na mão do jogador (olha para ela). */
+  attention: number;
 }
 export const Mind = defineComponent<Mind>('Mind');

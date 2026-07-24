@@ -1,6 +1,6 @@
 import { SpatialHash } from '@core';
 import { Transform, defineResource, type System } from '@engine';
-import { Plant } from '@world';
+import { Item, Plant } from '@world';
 
 const FOOD_CELL_SIZE = 50;
 
@@ -21,6 +21,12 @@ export const foodIndexSystem: System = {
 
     index.clear();
     world.store(Plant).forEach((_plant, entity) => {
+      const transform = transforms.get(entity);
+      if (transform) index.insert(entity, transform.x, transform.y);
+    });
+    // Frutas caídas também são comida — inclusive as que o jogador largou.
+    world.store(Item).forEach((item, entity) => {
+      if (item.kind !== 'fruit' || item.held) return;
       const transform = transforms.get(entity);
       if (transform) index.insert(entity, transform.x, transform.y);
     });

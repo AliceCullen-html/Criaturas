@@ -27,16 +27,39 @@ export interface MemoryTrace {
   encounters: number;
 }
 
+/** Uma lembrança episódica completa: o que houve, quando, onde, com quem. */
 export interface Episode {
   text: string;
   valence: number;
+  /** Quão marcante foi (0..1) — define se resiste ao esquecimento. */
+  intensity: number;
+  /** Tick da simulação em que aconteceu. */
+  tick: number;
+  x: number;
+  y: number;
+  /** Quem causou (nome da criatura, "você", ou null para o mundo). */
+  actor: string | null;
+  /** Emoção associada, para a UI colorir a lembrança. */
+  emotion: string;
   age: number;
 }
 
-const MAX_EPISODES = 14;
-const DECAY_PER_SECOND = 0.004;
+export interface EpisodeInput {
+  text: string;
+  valence: number;
+  intensity?: number;
+  tick?: number;
+  x?: number;
+  y?: number;
+  actor?: string | null;
+  emotion?: string;
+}
+
+const MAX_EPISODES = 24;
+/** Esquecimento bem lento: memórias precisam durar para gerar vínculo. */
+const DECAY_PER_SECOND = 0.0012;
 /** Lembranças fortes (traumas e afetos) resistem muito mais ao esquecimento. */
-const DECAY_RESISTANCE = 0.55;
+const DECAY_RESISTANCE = 0.85;
 
 export class CreatureMemory {
   private readonly traces = new Map<MemorySubject, MemoryTrace>();
@@ -66,8 +89,18 @@ export class CreatureMemory {
     return this.traces.has(subject);
   }
 
-  addEpisode(text: string, valence: number): void {
-    this.episodes.unshift({ text, valence, age: 0 });
+  addEpisode(input: EpisodeInput): void {
+    this.episodes.unshift({
+      text: input.text,
+      valence: input.valence,
+      intensity: input.intensity ?? Math.abs(input.valence),
+      tick: input.tick ?? 0,
+      x: input.x ?? 0,
+      y: input.y ?? 0,
+      actor: input.actor ?? null,
+      emotion: input.emotion ?? (input.valence >= 0 ? 'alegria' : 'medo'),
+      age: 0,
+    });
     if (this.episodes.length > MAX_EPISODES) this.episodes.length = MAX_EPISODES;
   }
 

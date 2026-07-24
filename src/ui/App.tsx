@@ -2,23 +2,13 @@ import { SimulationCanvas } from './components/SimulationCanvas';
 import { CreaturePanel } from './components/CreaturePanel';
 import { useUiStore, type SimulationSpeed } from './store/simulationStore';
 
-import type { PlayerAction } from '@simulation';
-
-export interface GameActions {
-  interact: (action: PlayerAction) => void;
-  rename: (name: string) => void;
-  toggleFollow: () => void;
-  deselect: () => void;
-}
-
 export interface AppProps {
   mountCanvas: (container: HTMLElement) => () => void;
-  actions: GameActions;
 }
 
 const SPEEDS: readonly SimulationSpeed[] = [0, 1, 2, 4];
 
-export function App({ mountCanvas, actions }: AppProps) {
+export function App({ mountCanvas }: AppProps) {
   const isRunning = useUiStore((state) => state.isRunning);
   const speed = useUiStore((state) => state.speed);
   const stats = useUiStore((state) => state.stats);
@@ -32,7 +22,7 @@ export function App({ mountCanvas, actions }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Vida</span>
+          <span className="hud__badge">Mundo vivo</span>
         </header>
 
         <div className="hud__stats">
@@ -41,8 +31,8 @@ export function App({ mountCanvas, actions }: AppProps) {
             <span className="stat__value">{stats.population}</span>
           </div>
           <div className="stat">
-            <span className="stat__label">Plantas</span>
-            <span className="stat__value">{stats.plants}</span>
+            <span className="stat__label">Frutas</span>
+            <span className="stat__value">{stats.items}</span>
           </div>
         </div>
 
@@ -65,13 +55,26 @@ export function App({ mountCanvas, actions }: AppProps) {
           </div>
         </div>
 
-        <p className="hud__hint">
-          Clique numa criatura para conhecê-la. Cada uma tem personalidade, emoções e memórias
-          próprias — e lembra de como você a trata.
-        </p>
+        <ul className="hud__gestures">
+          <li>
+            <b>Arraste</b> uma fruta até uma criatura para oferecer
+          </li>
+          <li>
+            <b>Segure e deslize devagar</b> sobre ela para fazer carinho
+          </li>
+          <li>
+            <b>Gesto brusco</b> a assusta — e ela lembra disso
+          </li>
+          <li>
+            <b>Duplo clique</b> chama a atenção · <b>clique</b> observa
+          </li>
+          <li>
+            <b>Roda</b> dá zoom · <b>botão do meio</b> move a câmera
+          </li>
+        </ul>
       </aside>
 
-      <CreaturePanel actions={actions} />
+      <CreaturePanel />
     </div>
   );
 }

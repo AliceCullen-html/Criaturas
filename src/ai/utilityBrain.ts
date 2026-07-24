@@ -132,18 +132,39 @@ export function createUtilityBrain(): Brain {
         );
       }
 
-      // ---- Procurar o jogador -------------------------------------------
+      // ---- A mão do jogador ---------------------------------------------
+      // Quem confia se aproxima; filhotes e brincalhonas perseguem a mão como
+      // se fosse um brinquedo; quem teme já está coberto pela opção de fugir.
       if (perception.player?.present) {
         const bond = self.memory.valenceOf('player');
+        const noticing = perception.attention > 0 ? 1.6 : 1;
         if (bond > 0) {
           options.push(
             option(
               'approachPlayer',
-              bond * (emotions.trust * 1.4 + emotions.loneliness * 0.6 + traits.sociability * 0.4),
+              bond *
+                (emotions.trust * 1.4 + emotions.loneliness * 0.6 + traits.sociability * 0.4) *
+                noticing,
               perception.player.x,
               perception.player.y,
               NO_TARGET,
               2,
+            ),
+          );
+        }
+        if (bond > -0.1) {
+          options.push(
+            option(
+              'play',
+              (traits.playfulness * 0.8 + (self.isBaby ? 0.7 : 0.15)) *
+                emotions.curiosity *
+                noticing *
+                (1 - emotions.fear) *
+                0.9,
+              perception.player.x,
+              perception.player.y,
+              NO_TARGET,
+              1.8,
             ),
           );
         }

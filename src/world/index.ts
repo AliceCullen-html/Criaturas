@@ -2,6 +2,19 @@
 
 export * from './components';
 export { RESOURCE_NAMES } from './resourceNames';
+export {
+  Item,
+  registerItems,
+  spawnFruit,
+  spawnToy,
+  dropFruitNear,
+  itemRadius,
+  MAX_ITEMS,
+  TOXIC_FRUIT_VARIANT,
+} from './items';
+export { SceneryResource, generateScenery } from './scenery';
+export type { SceneryPiece, SceneryKind } from './scenery';
+export { itemSystem } from './systems/itemSystem';
 export { generateTerrain, isWaterAt, findNearestWater, GROUND, WATER } from './terrain';
 export type { Terrain } from './terrain';
 export { TerrainResource } from './terrainResource';

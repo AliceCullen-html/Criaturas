@@ -20,6 +20,9 @@ import {
   makeWaterTextures,
   type SceneryTextures,
 } from './textures/world';
+import { makeFeedbackTextures, type FeedbackKind } from './textures/feedback';
+import { makeHandTextures, type HandState } from './textures/hand';
+import { GestureRecognizer, type GestureHandlers } from './gestures';
 
 export interface RendererOptions {
   worldWidth: number;
@@ -28,33 +31,36 @@ export interface RendererOptions {
 
 export interface FrameInput {
   plants: RenderBuffer;
+  items: RenderBuffer;
   creatures: CreatureRenderBuffer;
   alpha: number;
   selectedId: number | null;
   followId: number | null;
-}
-
-export interface RendererHandlers {
-  onSelect: (id: number | null) => void;
-  onCancelFollow: () => void;
-  /** Posição do cursor no mundo — é a "presença" do jogador que as criaturas sentem. */
-  onPointerWorld: (x: number, y: number, inside: boolean) => void;
+  /** Ids dos itens, na mesma ordem do buffer `items` (para o hit-test). */
+  itemIds: Int32Array;
 }
 
 export interface Renderer {
   mount(container: HTMLElement): Promise<void>;
   setTerrain(grid: TileGrid, waterValue: number, seed: number): void;
-  setHandlers(handlers: RendererHandlers): void;
+  setScenery(pieces: readonly ScenerySpot[]): void;
+  setHandlers(handlers: GestureHandlers): void;
+  /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
+  emit(kind: FeedbackKind, worldX: number, worldY: number): void;
   frame(input: FrameInput): void;
   destroy(): void;
+}
+
+export interface ScenerySpot {
+  kind: 'tree' | 'rock' | 'bush';
+  x: number;
+  y: number;
 }
 
 const BACKGROUND_COLOR = 0x2b4a3a;
 const SELECTION_COLOR = 0x9be0b4;
 const SHADOW_COLOR = 0x101408;
-const DRAG_THRESHOLD = 5;
 const PIXEL_SCALE = 0.8;
-const DECORATION_COUNT = 70;
 const LEAF_COUNT = 36;
 const WATER_FRAME_MS = 220;
 
@@ -94,6 +100,13 @@ interface Dust {
   vy: number;
 }
 
+/** Sinal visual efêmero (coração, gota, estrela) subindo sobre uma criatura. */
+interface Feedback {
+  sprite: Sprite;
+  life: number;
+  maxLife: number;
+}
+
 interface Leaf {
   sprite: Sprite;
   x: number;
@@ -111,6 +124,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   let waterLayer: Container | null = null;
   let decorationLayer: Container | null = null;
   let resourceLayer: Container | null = null;
+  let itemLayer: Container | null = null;
   let shadowG: Graphics | null = null;
   let selectionG: Graphics | null = null;
   let creatureLayer: Container | null = null;
@@ -133,7 +147,12 @@ export function createRenderer(options: RendererOptions): Renderer {
   const leaves: Leaf[] = [];
   const dust: Dust[] = [];
   const dustPool: Sprite[] = [];
+  const itemSprites: Sprite[] = [];
+  const feedback: Feedback[] = [];
   let dustTexture: Texture | null = null;
+  let feedbackTextures: Record<FeedbackKind, Texture> | null = null;
+  let handTextures: Record<HandState, Texture> | null = null;
+  let handSprite: Sprite | null = null;
   let dustTimer = 0;
   let frameId = 0;
   let lastTime = 0;
@@ -151,15 +170,11 @@ export function createRenderer(options: RendererOptions): Renderer {
     dust.push({ sprite, life: 0.45, vx: (Math.random() - 0.5) * 6, vy: -4 - Math.random() * 4 });
   }
 
-  let handlers: RendererHandlers | null = null;
+  let gestures: GestureRecognizer | null = null;
   let lastCreatures: CreatureRenderBuffer | null = null;
-
-  let pointerDown = false;
-  let dragging = false;
-  let startClientX = 0;
-  let startClientY = 0;
-  let downCamX = 0;
-  let downCamY = 0;
+  let lastItems: RenderBuffer | null = null;
+  let lastItemIds: Int32Array | null = null;
+  const handWorld = { x: 0, y: 0, inside: false };
 
   const screenToWorldX = (sx: number, sw: number): number => (sx - sw / 2) / camera.zoom + camera.x;
   const screenToWorldY = (sy: number, sh: number): number => (sy - sh / 2) / camera.zoom + camera.y;
@@ -173,7 +188,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const dx = buffer.x[i]! - worldX;
       const dy = buffer.y[i]! - worldY;
       const dist = dx * dx + dy * dy;
-      const reach = Math.max(buffer.size[i]! * 1.8, 16);
+      const reach = Math.max(buffer.size[i]! * 1.7, 16);
       if (dist <= reach * reach && dist < bestDist) {
         bestDist = dist;
         best = buffer.id[i]!;
@@ -182,55 +197,91 @@ export function createRenderer(options: RendererOptions): Renderer {
     return best;
   }
 
+  function pickItem(worldX: number, worldY: number): number | null {
+    const buffer = lastItems;
+    const ids = lastItemIds;
+    if (!buffer || !ids) return null;
+    let best: number | null = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < buffer.count; i++) {
+      const dx = buffer.x[i]! - worldX;
+      const dy = buffer.y[i]! - worldY;
+      const dist = dx * dx + dy * dy;
+      const reach = Math.max(buffer.radius[i]! * 2.2, 12);
+      if (dist <= reach * reach && dist < bestDist) {
+        bestDist = dist;
+        best = ids[i]!;
+      }
+    }
+    return best;
+  }
+
   function attachInput(canvas: HTMLCanvasElement): void {
     canvas.style.touchAction = 'none';
+    // A seta do sistema some: quem representa o jogador é a mão desenhada.
+    canvas.style.cursor = 'none';
+
+    // Câmera: botão do meio arrasta.
+    let panning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panCamX = 0;
+    let panCamY = 0;
+
+    const toWorld = (event: PointerEvent): { x: number; y: number } => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: screenToWorldX(event.clientX - rect.left, app?.screen.width ?? 0),
+        y: screenToWorldY(event.clientY - rect.top, app?.screen.height ?? 0),
+      };
+    };
+
+    canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
     canvas.addEventListener('pointerdown', (event) => {
-      pointerDown = true;
-      dragging = false;
-      startClientX = event.clientX;
-      startClientY = event.clientY;
-      downCamX = camera.x;
-      downCamY = camera.y;
       canvas.setPointerCapture(event.pointerId);
+      if (event.button === 1) {
+        event.preventDefault();
+        panning = true;
+        panStartX = event.clientX;
+        panStartY = event.clientY;
+        panCamX = camera.x;
+        panCamY = camera.y;
+        return;
+      }
+      const { x, y } = toWorld(event);
+      gestures?.pointerDown(x, y, event.timeStamp, event.button);
     });
 
-    canvas.addEventListener('pointerleave', () => handlers?.onPointerWorld(0, 0, false));
-
     canvas.addEventListener('pointermove', (event) => {
-      if (app) {
-        const rect = canvas.getBoundingClientRect();
-        handlers?.onPointerWorld(
-          screenToWorldX(event.clientX - rect.left, app.screen.width),
-          screenToWorldY(event.clientY - rect.top, app.screen.height),
-          true,
-        );
+      if (panning) {
+        camera.x = panCamX - (event.clientX - panStartX) / camera.zoom;
+        camera.y = panCamY - (event.clientY - panStartY) / camera.zoom;
+        return;
       }
-      if (!pointerDown) return;
-      const dx = event.clientX - startClientX;
-      const dy = event.clientY - startClientY;
-      if (!dragging && dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) {
-        dragging = true;
-        handlers?.onCancelFollow();
-      }
-      if (dragging) {
-        camera.x = downCamX - dx / camera.zoom;
-        camera.y = downCamY - dy / camera.zoom;
-      }
+      const { x, y } = toWorld(event);
+      handWorld.x = x;
+      handWorld.y = y;
+      handWorld.inside = true;
+      gestures?.pointerMove(x, y, event.timeStamp);
     });
 
     const endPointer = (event: PointerEvent): void => {
-      if (!pointerDown) return;
-      pointerDown = false;
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      if (dragging || !app) return;
-      const rect = canvas.getBoundingClientRect();
-      const worldX = screenToWorldX(event.clientX - rect.left, app.screen.width);
-      const worldY = screenToWorldY(event.clientY - rect.top, app.screen.height);
-      handlers?.onSelect(pickCreature(worldX, worldY));
+      if (event.button === 1 || panning) {
+        panning = false;
+        return;
+      }
+      const { x, y } = toWorld(event);
+      gestures?.pointerUp(x, y, event.timeStamp, event.button);
     };
     canvas.addEventListener('pointerup', endPointer);
     canvas.addEventListener('pointercancel', endPointer);
+
+    canvas.addEventListener('pointerleave', () => {
+      handWorld.inside = false;
+      gestures?.pointerLeave();
+    });
 
     canvas.addEventListener(
       'wheel',
@@ -270,6 +321,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       waterFrames = makeWaterTextures();
       leafTextures = makeLeafTextures();
       dustTexture = makeDustTexture();
+      feedbackTextures = makeFeedbackTextures();
+      handTextures = makeHandTextures();
       scenery = makeSceneryTextures(createRng(7));
 
       const root = new Container();
@@ -286,10 +339,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       const decorations = new Container();
       decorations.sortableChildren = true;
       const resources = new Container();
+      const itemsLayer = new Container();
       const shadows = new Graphics();
       const selection = new Graphics();
       const creatures = new Container();
       const particles = new Container();
+      const hand = new Sprite(handTextures.open);
+      hand.anchor.set(0.25, 0.15);
       root.addChild(
         grassTile,
         sand,
@@ -299,7 +355,9 @@ export function createRenderer(options: RendererOptions): Renderer {
         shadows,
         selection,
         creatures,
+        itemsLayer,
         particles,
+        hand,
       );
       instance.stage.addChild(root);
 
@@ -324,6 +382,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       app = instance;
+      handSprite = hand;
+      itemLayer = itemsLayer;
       worldLayer = root;
       sandLayer = sand;
       waterLayer = water;
@@ -377,36 +437,36 @@ export function createRenderer(options: RendererOptions): Renderer {
           }
         }
       }
+    },
 
-      // Cenário decorativo em solo.
-      const rng = createRng(seed ^ 0x9e3779b1);
-      const kinds: Array<keyof SceneryTextures> = ['tree', 'tree', 'rock', 'bush'];
-      for (let i = 0; i < DECORATION_COUNT; i++) {
-        const cx = rng.int(cols);
-        const cy = rng.int(rows);
-        if (
-          isWater(cx, cy) ||
-          isWater(cx - 1, cy) ||
-          isWater(cx + 1, cy) ||
-          isWater(cx, cy - 1) ||
-          isWater(cx, cy + 1)
-        ) {
-          continue;
-        }
-        const kind = kinds[rng.int(kinds.length)]!;
-        const sprite = new Sprite(scenery[kind]);
+    /** Desenha o cenário que o MUNDO possui (as árvores que dão frutas). */
+    setScenery(pieces: readonly ScenerySpot[]): void {
+      if (!decorationLayer || !scenery) return;
+      decorationLayer.removeChildren();
+      for (const piece of pieces) {
+        const sprite = new Sprite(scenery[piece.kind]);
         sprite.anchor.set(0.5, 0.9);
         sprite.scale.set(PIXEL_SCALE);
-        const x = (cx + rng.next()) * cellSize;
-        const y = (cy + rng.next()) * cellSize;
-        sprite.position.set(x, y);
-        sprite.zIndex = y;
+        sprite.position.set(piece.x, piece.y);
+        sprite.zIndex = piece.y;
         decorationLayer.addChild(sprite);
       }
     },
 
-    setHandlers(next: RendererHandlers): void {
-      handlers = next;
+    setHandlers(next: GestureHandlers): void {
+      gestures = new GestureRecognizer(next, {
+        creatureAt: pickCreature,
+        itemAt: pickItem,
+      });
+    },
+
+    emit(kind: FeedbackKind, worldX: number, worldY: number): void {
+      if (!particleLayer || !feedbackTextures || feedback.length > 40) return;
+      const sprite = new Sprite(feedbackTextures[kind]);
+      sprite.anchor.set(0.5, 1);
+      sprite.position.set(worldX, worldY);
+      particleLayer.addChild(sprite);
+      feedback.push({ sprite, life: 1.4, maxLife: 1.4 });
     },
 
     frame(input: FrameInput): void {
@@ -422,11 +482,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         return;
       }
       lastCreatures = input.creatures;
+      lastItems = input.items;
+      lastItemIds = input.itemIds;
 
       const now = performance.now();
       const dt = lastTime === 0 ? 0 : Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
       elapsed += dt;
+      gestures?.tick(dt);
 
       const screenWidth = app.screen.width;
       const screenHeight = app.screen.height;
@@ -628,6 +691,63 @@ export function createRenderer(options: RendererOptions): Renderer {
         selectionG
           .ellipse(selX, selY, selSize * 1.5 * pulse, selSize * 0.7 * pulse)
           .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
+      }
+
+      // Objetos físicos (frutas, brinquedos).
+      const items = input.items;
+      if (itemLayer) {
+        for (let i = 0; i < items.count; i++) {
+          let sprite = itemSprites[i];
+          if (!sprite) {
+            sprite = new Sprite(resourceTextures[0]);
+            sprite.anchor.set(0.5, 0.78);
+            itemLayer.addChild(sprite);
+            itemSprites[i] = sprite;
+          }
+          sprite.texture = resourceTextures[items.variant[i]! % resourceTextures.length]!;
+          const px = items.prevX[i]!;
+          const py = items.prevY[i]!;
+          sprite.position.set(
+            px + (items.x[i]! - px) * input.alpha,
+            py + (items.y[i]! - py) * input.alpha,
+          );
+          sprite.scale.set(clamp(items.radius[i]! * 0.14, 0.4, 1.2));
+          // Frutas passadas escurecem: dá para ver que estão apodrecendo.
+          const freshness = items.color[i]! / 255;
+          sprite.tint = freshness > 0.5 ? 0xffffff : 0xa89070;
+          sprite.alpha = 0.5 + freshness * 0.5;
+          sprite.visible = true;
+        }
+        for (let i = items.count; i < itemSprites.length; i++) itemSprites[i]!.visible = false;
+      }
+
+      // A mão do jogador dentro do mundo.
+      if (handSprite && handTextures) {
+        handSprite.visible = handWorld.inside;
+        if (handWorld.inside) {
+          const state = gestures?.handState ?? 'open';
+          handSprite.texture = handTextures[state];
+          // Tamanho constante na tela, independente do zoom.
+          handSprite.scale.set(1 / camera.zoom);
+          const wobble = state === 'petting' ? Math.sin(elapsed * 9) * 1.5 : 0;
+          handSprite.position.set(handWorld.x, handWorld.y + wobble / camera.zoom);
+        }
+      }
+
+      // Sinais visuais (corações, gotas, estrelas) subindo e desaparecendo.
+      for (let i = feedback.length - 1; i >= 0; i--) {
+        const signal = feedback[i]!;
+        signal.life -= dt;
+        if (signal.life <= 0) {
+          particleLayer.removeChild(signal.sprite);
+          signal.sprite.destroy();
+          feedback.splice(i, 1);
+          continue;
+        }
+        const t = 1 - signal.life / signal.maxLife;
+        signal.sprite.position.y -= 14 * dt;
+        signal.sprite.alpha = 1 - t * t;
+        signal.sprite.scale.set(0.8 + t * 0.4);
       }
 
       // Poeirinha dos passos: sobe, desacelera e some.

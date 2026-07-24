@@ -7,4 +7,4 @@ export * from './vector2';
 export * from './math';
 export { SpatialHash } from './spatialHash';
 export { CreatureMemory, subjects } from './memory';
-export type { MemorySubject, MemoryTrace, Episode } from './memory';
+export type { MemorySubject, MemoryTrace, Episode, EpisodeInput } from './memory';

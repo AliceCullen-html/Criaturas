@@ -3,7 +3,7 @@ import { subjects } from '@core';
 import { SystemScheduler, Transform, type Entity, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
 import { Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
-import { createWorld, plantGrowthSystem, plantSpreadSystem } from '@world';
+import { createWorld, itemSystem, plantGrowthSystem, plantSpreadSystem, spawnFruit } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { foodIndexSystem } from './foodIndex';
 import { creatureIndexSystem } from './creatureIndex';
@@ -15,7 +15,7 @@ import { metabolismSystem } from './systems/metabolismSystem';
 import { reproductionSystem } from './systems/reproductionSystem';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
-import { applyPlayerAction } from './playerActions';
+import { offerItem, petCreature, roughGesture } from './handActions';
 
 const CONFIG = { width: 1000, height: 1000 };
 
@@ -37,6 +37,7 @@ function fullScheduler(): SystemScheduler {
     .add(actionSystem)
     .add(reproductionSystem)
     .add(metabolismSystem)
+    .add(itemSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 }
@@ -69,32 +70,77 @@ describe('metabolismo', () => {
 });
 
 describe('vínculo com o jogador', () => {
-  it('carinho aumenta a confiança e deixa uma memória boa', () => {
+  it('carinho lento aumenta a confiança', () => {
     const world = makeWorld(11);
     const id = firstCreature(world);
     const memory = world.store(Memory).get(id)!;
     const trustBefore = world.store(Emotions).get(id)!.trust;
 
-    applyPlayerAction(world, id, 'pet');
+    for (let i = 0; i < 40; i++) petCreature(world, id, 1 / 20);
 
     expect(world.store(Emotions).get(id)!.trust).toBeGreaterThan(trustBefore);
     expect(memory.valenceOf(subjects.player())).toBeGreaterThan(0);
-    expect(memory.episodes[0]!.text).toContain('carinho');
   });
 
-  it('bater causa medo e uma lembrança negativa duradoura', () => {
+  it('gesto violento cria trauma que não passa rápido', () => {
     const world = makeWorld(12);
     const id = firstCreature(world);
     const memory = world.store(Memory).get(id)!;
+    const emotions = world.store(Emotions).get(id)!;
 
-    applyPlayerAction(world, id, 'hit');
+    for (let i = 0; i < 3; i++) roughGesture(world, id, 1200, 1, 0);
 
-    expect(world.store(Emotions).get(id)!.fear).toBeGreaterThan(0.5);
+    expect(emotions.fear).toBeGreaterThan(0.5);
+    expect(emotions.trauma).toBeGreaterThan(0.3);
     expect(memory.valenceOf(subjects.player())).toBeLessThan(0);
+    expect(memory.episodes[0]!.text).toContain('machuc');
+    // A lembrança guarda quem, quando e onde.
+    expect(memory.episodes[0]!.actor).toBe('você');
+    expect(memory.episodes[0]!.intensity).toBeGreaterThan(0.7);
 
-    // A confiança não volta sozinha rápido: um carinho não apaga a agressão.
-    applyPlayerAction(world, id, 'pet');
+    // Muito carinho depois NÃO apaga o trauma nem devolve a confiança na hora.
+    for (let i = 0; i < 200; i++) petCreature(world, id, 1 / 20);
+    expect(emotions.trauma).toBeGreaterThan(0.2);
     expect(memory.valenceOf(subjects.player())).toBeLessThan(0);
+  });
+
+  it('a criatura recusa carinho de quem ela teme', () => {
+    const world = makeWorld(13);
+    const id = firstCreature(world);
+    roughGesture(world, id, 1400, 1, 0);
+    expect(petCreature(world, id, 1 / 20)).toBe('refused');
+  });
+
+  it('a criatura decide se aceita a comida oferecida', () => {
+    const world = makeWorld(14, 1);
+    const id = firstCreature(world);
+    const transform = world.store(Transform).get(id)!;
+    const needs = world.store(Needs).get(id)!;
+
+    // Saciada: recusa.
+    needs.hunger = 0.05;
+    const fruit = spawnFruit(world, transform.x + 6, transform.y, { toxic: false, variant: 0 });
+    expect(offerItem(world, fruit, id)).toBe(false);
+
+    // Com fome: aceita.
+    needs.hunger = 0.8;
+    expect(offerItem(world, fruit, id)).toBe(true);
+    expect(world.store(Needs).get(id)!.hunger).toBeLessThan(0.8);
+  });
+});
+
+describe('inércia emocional', () => {
+  it('o medo demora muito para passar', () => {
+    const world = makeWorld(15, 1);
+    const id = firstCreature(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.fear = 1;
+
+    // 10 segundos de simulação não bastam para acalmar.
+    const scheduler = fullScheduler();
+    for (let i = 0; i < 200; i++) scheduler.update(world, 1 / 20);
+
+    expect(world.store(Emotions).get(id)!.fear).toBeGreaterThan(0.6);
   });
 });
 

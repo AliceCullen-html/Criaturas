@@ -462,6 +462,103 @@ body {
   margin-top: 2px;
 }
 
+.tag--elder {
+  background: rgba(154, 154, 154, 0.16);
+  color: #c2c2cc;
+  border-color: rgba(194, 194, 204, 0.3);
+  vertical-align: middle;
+}
+
+.bond__trauma {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #d99a9a;
+}
+
+.family {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.family__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.family__label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.family__value {
+  text-align: right;
+  font-weight: 600;
+}
+
+.friends {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.friend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid transparent;
+}
+
+.friend--good {
+  border-left-color: var(--accent);
+}
+
+.friend--bad {
+  border-left-color: #d97a7a;
+}
+
+.friend__note {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.memory__text {
+  display: block;
+}
+
+.memory__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.hud__gestures {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.hud__gestures b {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .panel__lineage {
   display: flex;
   flex-direction: column;
