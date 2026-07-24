@@ -313,6 +313,45 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.panel__lineage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+}
+
+.lineage__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.lineage__label {
+  color: var(--text-muted);
+}
+
+.lineage__value {
+  font-weight: 600;
+}
+
+.lineage__dna {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.lineage__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .panel__actions {
   display: flex;
   flex-wrap: wrap;

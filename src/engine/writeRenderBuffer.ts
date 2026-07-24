@@ -21,6 +21,7 @@ export function writeRenderBuffer(world: World, buffer: RenderBuffer): void {
       transform.prevY,
       sprite.radius,
       sprite.color,
+      sprite.variant,
     );
   });
 }

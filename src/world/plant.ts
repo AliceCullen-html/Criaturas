@@ -11,6 +11,9 @@ const SEED_BIOMASS = 1;
 
 const PLANT_PALETTE: readonly number[] = [0x6bbf7b, 0x86c8a8, 0x94c47d, 0x7fbf9a];
 
+/** Número de variantes visuais de recurso (maçã, fruta, cogumelo, flor...). */
+export const RESOURCE_VARIANTS = 6;
+
 /** Raio visual em função da biomassa (plantas maiores desenham maiores). */
 export function radiusForBiomass(biomass: number): number {
   return 1.5 + biomass * 0.4;
@@ -36,6 +39,7 @@ export function spawnPlant(world: World, x: number, y: number): number {
   world.store(Sprite).set(entity, {
     radius: radiusForBiomass(SEED_BIOMASS),
     color: rng.pick(PLANT_PALETTE),
+    variant: rng.int(RESOURCE_VARIANTS),
   });
 
   return entity;

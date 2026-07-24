@@ -23,6 +23,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       attribute.size,
       appearance.bodyColor,
       appearance.eyeColor,
+      appearance.dna,
     );
   });
 }

@@ -44,9 +44,6 @@ const PLANT_CAPACITY = 512;
 const CREATURE_CAPACITY = 128;
 const STATS_INTERVAL_FRAMES = 12;
 
-const TILE_COLORS: number[] = [];
-TILE_COLORS[WATER] = 0x2c4a63;
-
 export function createApp(rootElement: HTMLElement): AppInstance {
   const world = createWorld(WORLD_CONFIG, WORLD_SEED);
   spawnCreatures(world, INITIAL_CREATURES);
@@ -171,7 +168,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
     void renderer.mount(container).then(() => {
       if (cancelled) return;
-      renderer.setTiles(terrain, TILE_COLORS);
+      renderer.setTerrain(terrain, WATER, WORLD_SEED);
       activeRenderer = renderer;
     });
 

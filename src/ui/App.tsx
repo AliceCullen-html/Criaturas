@@ -30,7 +30,7 @@ export function App({ mountCanvas, actions }: AppProps) {
       <aside className="hud">
         <header className="hud__header">
           <h1 className="hud__title">Criaturas</h1>
-          <span className="hud__badge">Etapa 3 · Criaturas</span>
+          <span className="hud__badge">Pixel Art</span>
         </header>
 
         <div className="hud__stats">

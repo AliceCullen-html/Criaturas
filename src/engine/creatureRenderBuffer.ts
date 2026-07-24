@@ -13,6 +13,7 @@ export class CreatureRenderBuffer {
   readonly size: Float32Array;
   readonly bodyColor: Uint32Array;
   readonly eyeColor: Uint32Array;
+  readonly dna: Uint32Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -24,6 +25,7 @@ export class CreatureRenderBuffer {
     this.size = new Float32Array(capacity);
     this.bodyColor = new Uint32Array(capacity);
     this.eyeColor = new Uint32Array(capacity);
+    this.dna = new Uint32Array(capacity);
   }
 
   clear(): void {
@@ -39,6 +41,7 @@ export class CreatureRenderBuffer {
     size: number,
     bodyColor: number,
     eyeColor: number,
+    dna: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -50,6 +53,7 @@ export class CreatureRenderBuffer {
     this.size[i] = size;
     this.bodyColor[i] = bodyColor;
     this.eyeColor[i] = eyeColor;
+    this.dna[i] = dna;
     this.count = i + 1;
   }
 }

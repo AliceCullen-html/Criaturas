@@ -81,6 +81,31 @@ export function CreaturePanel({ actions }: { actions: GameActions }) {
         <Attr label="Tamanho" value={creature.size.toFixed(1)} />
       </div>
 
+      <div className="panel__lineage">
+        <div className="lineage__row">
+          <span className="lineage__label">DNA</span>
+          <span className="lineage__dna">
+            <span
+              className="lineage__swatch"
+              style={{ backgroundColor: `#${creature.dna.toString(16).padStart(6, '0')}` }}
+            />
+            <code>#{creature.dna.toString(16).padStart(6, '0').toUpperCase()}</code>
+          </span>
+        </div>
+        <div className="lineage__row">
+          <span className="lineage__label">Geração</span>
+          <span className="lineage__value">{creature.generation}</span>
+        </div>
+        <div className="lineage__row">
+          <span className="lineage__label">Pais</span>
+          <span className="lineage__value">
+            {creature.parentA && creature.parentB
+              ? `${creature.parentA} × ${creature.parentB}`
+              : 'Ancestral'}
+          </span>
+        </div>
+      </div>
+
       <div className="panel__actions">
         <button className="btn btn--primary" onClick={actions.feed}>
           Alimentar

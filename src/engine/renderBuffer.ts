@@ -13,6 +13,7 @@ export class RenderBuffer {
   readonly prevY: Float32Array;
   readonly radius: Float32Array;
   readonly color: Uint32Array;
+  readonly variant: Uint8Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -22,13 +23,22 @@ export class RenderBuffer {
     this.prevY = new Float32Array(capacity);
     this.radius = new Float32Array(capacity);
     this.color = new Uint32Array(capacity);
+    this.variant = new Uint8Array(capacity);
   }
 
   clear(): void {
     this.count = 0;
   }
 
-  push(x: number, y: number, prevX: number, prevY: number, radius: number, color: number): void {
+  push(
+    x: number,
+    y: number,
+    prevX: number,
+    prevY: number,
+    radius: number,
+    color: number,
+    variant: number,
+  ): void {
     const i = this.count;
     if (i >= this.capacity) return;
     this.x[i] = x;
@@ -37,6 +47,7 @@ export class RenderBuffer {
     this.prevY[i] = prevY;
     this.radius[i] = radius;
     this.color[i] = color;
+    this.variant[i] = variant;
     this.count = i + 1;
   }
 }

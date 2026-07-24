@@ -15,10 +15,12 @@ export interface Transform {
 }
 export const Transform = defineComponent<Transform>('Transform');
 
-/** Aparência mínima para o render em batch (círculo) — usada por plantas. */
+/** Aparência para o render em batch — usada por plantas/recursos.
+ * `variant` seleciona o sprite (maçã, fruta, cogumelo, flor...). */
 export interface Sprite {
   radius: number;
   color: number;
+  variant: number;
 }
 export const Sprite = defineComponent<Sprite>('Sprite');
 

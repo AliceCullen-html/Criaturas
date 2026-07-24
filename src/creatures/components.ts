@@ -37,12 +37,22 @@ export interface Attributes {
 }
 export const Attributes = defineComponent<Attributes>('Attributes');
 
-/** Aparência procedural da criatura. */
+/** Aparência procedural da criatura. `dna` semeia as features do sprite (olhos,
+ * orelhas, antenas, rabo, manchas). */
 export interface Appearance {
   bodyColor: number;
   eyeColor: number;
+  dna: number;
 }
 export const Appearance = defineComponent<Appearance>('Appearance');
+
+/** Linhagem, para o painel. Populada pela reprodução na Etapa 5. */
+export interface Lineage {
+  generation: number;
+  parentA: string | null;
+  parentB: string | null;
+}
+export const Lineage = defineComponent<Lineage>('Lineage');
 
 /** Identidade dada pelo jogador. */
 export interface Identity {

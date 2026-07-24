@@ -1,9 +1,18 @@
 import { Transform, Velocity, World } from '@engine';
-import { Appearance, Attributes, Bio, Creature, Identity, Mind, Needs } from './components';
+import {
+  Appearance,
+  Attributes,
+  Bio,
+  Creature,
+  Identity,
+  Lineage,
+  Mind,
+  Needs,
+} from './components';
 import { CREATURE_NAMES } from './names';
 
 const BODY_COLORS: readonly number[] = [
-  0xe0a3a3, 0xa3c6e0, 0xb9e0a3, 0xe0d3a3, 0xc9a3e0, 0xa3e0d0, 0xe0b8a3,
+  0xd98a8a, 0x8ab0d9, 0x9ed98a, 0xd9c98a, 0xb98ad9, 0x8ad9c4, 0xd9a37a, 0xc9d98a,
 ];
 const EYE_COLOR = 0x1c1c28;
 
@@ -16,6 +25,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Bio);
   world.register(Attributes);
   world.register(Appearance);
+  world.register(Lineage);
   world.register(Identity);
   world.register(Mind);
 }
@@ -52,7 +62,12 @@ export function spawnCreature(world: World, x: number, y: number): number {
     size: rng.range(9, 14),
   });
 
-  world.store(Appearance).set(entity, { bodyColor: rng.pick(BODY_COLORS), eyeColor: EYE_COLOR });
+  world.store(Appearance).set(entity, {
+    bodyColor: rng.pick(BODY_COLORS),
+    eyeColor: EYE_COLOR,
+    dna: rng.int(0xffffff),
+  });
+  world.store(Lineage).set(entity, { generation: 1, parentA: null, parentB: null });
   world.store(Identity).set(entity, { name: rng.pick(CREATURE_NAMES) });
   world.store(Mind).set(entity, { intent: 'wander', targetX: x, targetY: y, retarget: 0 });
 

@@ -1,9 +1,11 @@
 import type { World } from '@engine';
 import {
+  Appearance,
   Attributes,
   Bio,
   Creature,
   Identity,
+  Lineage,
   Mind,
   Needs,
   type Intent,
@@ -29,6 +31,10 @@ export interface CreatureSnapshot {
   strength: number;
   fertility: number;
   size: number;
+  dna: number;
+  generation: number;
+  parentA: string | null;
+  parentB: string | null;
 }
 
 export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot | null {
@@ -38,7 +44,9 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
   const attributes = world.store(Attributes).get(id);
   const identity = world.store(Identity).get(id);
   const mind = world.store(Mind).get(id);
-  if (!needs || !bio || !attributes || !identity || !mind) return null;
+  const appearance = world.store(Appearance).get(id);
+  const lineage = world.store(Lineage).get(id);
+  if (!needs || !bio || !attributes || !identity || !mind || !appearance || !lineage) return null;
 
   return {
     id,
@@ -58,5 +66,9 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     strength: attributes.strength,
     fertility: attributes.fertility,
     size: attributes.size,
+    dna: appearance.dna,
+    generation: lineage.generation,
+    parentA: lineage.parentA,
+    parentB: lineage.parentB,
   };
 }
