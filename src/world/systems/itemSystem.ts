@@ -3,11 +3,11 @@ import { Sprite, Transform, type System } from '@engine';
 import { Item, MAX_ITEMS, dropFruitNear, itemRadius } from '../items';
 import { SceneryResource } from '../scenery';
 
-const ROT_RATE = 0.006; // frutas duram bastante, mas não para sempre
+const ROT_RATE = 0.009; // frutas duram bastante, mas não para sempre
 const FRICTION = 3.2;
 const REST_SPEED = 2;
-const TREE_MIN_INTERVAL = 22;
-const TREE_MAX_INTERVAL = 70;
+const TREE_MIN_INTERVAL = 55;
+const TREE_MAX_INTERVAL = 150;
 
 const rotten: number[] = [];
 

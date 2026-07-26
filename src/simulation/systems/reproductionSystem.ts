@@ -152,8 +152,10 @@ export const reproductionSystem: System = {
         childEmotions.fear = clamp01(childEmotions.fear + inherited * 0.3);
       }
 
-      // Os pais reconhecem e gostam do filhote.
+      // Os pais reconhecem o filhote — e o filhote reconhece os pais, que é o
+      // que faz ele seguir quem ama pelo mapa.
       for (const parent of [birth.parentA, birth.parentB]) {
+        childMemory?.record(subjects.creature(parent), 1, 1);
         const parentMemory = memories.get(parent);
         parentMemory?.record(subjects.creature(child), 1, 1);
         parentMemory?.addEpisode({

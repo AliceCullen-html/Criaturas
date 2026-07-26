@@ -10,6 +10,8 @@ import {
 } from '@engine';
 import { createUtilityBrain } from '@ai';
 import {
+  AmbientResource,
+  ambientSystem,
   createWorld,
   Item,
   itemSystem,
@@ -19,6 +21,8 @@ import {
   SceneryResource,
   TerrainResource,
   WATER,
+  WeatherResource,
+  weatherSystem,
 } from '@world';
 import { Creature, Emotions, Mind } from '@creatures';
 import {
@@ -50,6 +54,7 @@ import {
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
 import { App } from '@ui';
+import { cardAnchor } from '@ui/cardAnchor';
 import { useUiStore } from '@ui/store/simulationStore';
 
 export interface AppInstance {
@@ -72,6 +77,8 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   const terrain = world.getResource(TerrainResource);
   const scenery = world.getResource(SceneryResource);
+  const ambient = world.getResource(AmbientResource);
+  const weather = world.getResource(WeatherResource);
 
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
@@ -84,6 +91,8 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(reproductionSystem)
     .add(metabolismSystem)
     .add(itemSystem)
+    .add(weatherSystem)
+    .add(ambientSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 
@@ -94,7 +103,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
   let activeRenderer: Renderer | null = null;
   let frameCounter = 0;
+  let cardTimer = 0;
   const store = useUiStore;
+  const CARD_SECONDS = 7;
 
   /** Sinal visual sobre uma criatura (coração, gota, estrela). */
   const signal = (kind: FeedbackKind, id: number): void => {
@@ -143,7 +154,16 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       alpha,
       selectedId: state.selectedId,
       followId: state.followId,
+      ambient,
+      rain: weather.intensity,
+      puddles: weather.puddles,
     });
+
+    // O cartão some sozinho depois de alguns segundos.
+    if (state.selectedId !== null) {
+      cardTimer -= 1 / 60;
+      if (cardTimer <= 0) clearSelection();
+    }
 
     frameCounter += 1;
     if (frameCounter >= STATS_INTERVAL_FRAMES) {
@@ -205,6 +225,12 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     let cancelled = false;
 
     // Os gestos da mão viram ações no mundo. Nenhum botão envolvido.
+    renderer.onSelectedScreen((x, y, visible) => {
+      cardAnchor.x = x;
+      cardAnchor.y = y;
+      cardAnchor.visible = visible;
+    });
+
     renderer.setHandlers({
       onSelect: (id) => {
         if (id === null) {
@@ -212,6 +238,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           return;
         }
         store.getState().setSelectedId(id);
+        cardTimer = CARD_SECONDS;
         pushSelected();
       },
       onGrab: (itemId) => grabItem(world, itemId),
@@ -262,11 +289,25 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     };
   };
 
+  // Controles invisíveis: existem para quem procurar, sem ocupar a tela.
+  // Espaço pausa, 1/2/4 mudam a velocidade.
+  const onKeyDown = (event: KeyboardEvent): void => {
+    const state = store.getState();
+    if (event.code === 'Space') {
+      event.preventDefault();
+      state.toggleRunning();
+    } else if (event.key === '1') state.setSpeed(1);
+    else if (event.key === '2') state.setSpeed(2);
+    else if (event.key === '4') state.setSpeed(4);
+  };
+  window.addEventListener('keydown', onKeyDown);
+
   const root = createRoot(rootElement);
   root.render(createElement(StrictMode, null, createElement(App, { mountCanvas })));
 
   return {
     dispose(): void {
+      window.removeEventListener('keydown', onKeyDown);
       loop.stop();
       root.unmount();
     },

@@ -22,6 +22,7 @@ interface UiState {
   selectedId: number | null;
   followId: number | null;
   selected: CreatureSnapshot | null;
+  setRunning: (running: boolean) => void;
   toggleRunning: () => void;
   setSpeed: (speed: SimulationSpeed) => void;
   setStats: (stats: SimulationStats) => void;
@@ -38,6 +39,7 @@ export const useUiStore = create<UiState>((set) => ({
   followId: null,
   selected: null,
   toggleRunning: () => set((state) => ({ isRunning: !state.isRunning })),
+  setRunning: (running) => set({ isRunning: running }),
   setSpeed: (speed) => set({ speed }),
   setStats: (stats) => set({ stats }),
   setSelectedId: (id) => set({ selectedId: id }),

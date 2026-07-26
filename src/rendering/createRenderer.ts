@@ -22,6 +22,7 @@ import {
 } from './textures/world';
 import { makeFeedbackTextures, type FeedbackKind } from './textures/feedback';
 import { makeHandTextures, type HandState } from './textures/hand';
+import { makeAmbientTextures, makeRainTextures } from './textures/ambient';
 import { GestureRecognizer, type GestureHandlers } from './gestures';
 
 export interface RendererOptions {
@@ -38,6 +39,20 @@ export interface FrameInput {
   followId: number | null;
   /** Ids dos itens, na mesma ordem do buffer `items` (para o hit-test). */
   itemIds: Int32Array;
+  /** Bichinhos de ambiente (borboletas, abelhas, pássaros). */
+  ambient: readonly AmbientView[];
+  /** 0 = tempo bom, 1 = chuva forte. */
+  rain: number;
+  puddles: ReadonlyArray<{ x: number; y: number; life: number }>;
+}
+
+/** O mínimo que o renderer precisa saber sobre um bichinho de ambiente. */
+export interface AmbientView {
+  kind: number;
+  x: number;
+  y: number;
+  phase: number;
+  resting: number;
 }
 
 export interface Renderer {
@@ -47,6 +62,8 @@ export interface Renderer {
   setHandlers(handlers: GestureHandlers): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
+  /** Onde a criatura selecionada está NA TELA, para ancorar o cartão. */
+  onSelectedScreen(callback: (x: number, y: number, visible: boolean) => void): void;
   frame(input: FrameInput): void;
   destroy(): void;
 }
@@ -291,6 +308,15 @@ export function createRenderer(options: RendererOptions): Renderer {
   const dustPool: Sprite[] = [];
   const itemSprites: Sprite[] = [];
   const feedback: Feedback[] = [];
+  let ambientTextures: Texture[][] = [];
+  let rainTextures: Texture[] = [];
+  const ambientSprites: Sprite[] = [];
+  const rainDrops: Array<{ sprite: Sprite; x: number; y: number; speed: number }> = [];
+  let ambientLayer: Container | null = null;
+  let rainLayer: Container | null = null;
+  let puddleG: Graphics | null = null;
+  let weatherTint: Graphics | null = null;
+  let selectedScreenCb: ((x: number, y: number, visible: boolean) => void) | null = null;
   let dustTexture: Texture | null = null;
   let feedbackTextures: Record<FeedbackKind, Texture> | null = null;
   let handTextures: Record<HandState, Texture> | null = null;
@@ -465,6 +491,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       dustTexture = makeDustTexture();
       feedbackTextures = makeFeedbackTextures();
       handTextures = makeHandTextures();
+      ambientTextures = makeAmbientTextures();
+      rainTextures = makeRainTextures();
       scenery = makeSceneryTextures(createRng(7));
 
       const root = new Container();
@@ -481,7 +509,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       const decorations = new Container();
       decorations.sortableChildren = true;
       const resources = new Container();
+      const puddles = new Graphics();
       const itemsLayer = new Container();
+      const ambient = new Container();
+      const rain = new Container();
+      const tint = new Graphics();
       const shadows = new Graphics();
       const selection = new Graphics();
       const creatures = new Container();
@@ -492,13 +524,17 @@ export function createRenderer(options: RendererOptions): Renderer {
         grassTile,
         sand,
         water,
+        puddles,
         decorations,
         resources,
         shadows,
         selection,
         creatures,
         itemsLayer,
+        ambient,
         particles,
+        rain,
+        tint,
         hand,
       );
       instance.stage.addChild(root);
@@ -526,6 +562,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       app = instance;
       handSprite = hand;
       itemLayer = itemsLayer;
+      ambientLayer = ambient;
+      rainLayer = rain;
+      puddleG = puddles;
+      weatherTint = tint;
       worldLayer = root;
       sandLayer = sand;
       waterLayer = water;
@@ -593,6 +633,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         sprite.zIndex = piece.y;
         decorationLayer.addChild(sprite);
       }
+    },
+
+    onSelectedScreen(callback: (x: number, y: number, visible: boolean) => void): void {
+      selectedScreenCb = callback;
     },
 
     setHandlers(next: GestureHandlers): void {
@@ -833,6 +877,19 @@ export function createRenderer(options: RendererOptions): Renderer {
         }
       }
 
+      // Posição do selecionado NA TELA, para o cartão flutuante seguir.
+      if (selectedScreenCb) {
+        if (selFound) {
+          selectedScreenCb(
+            selX * camera.zoom + screenWidth / 2 - camera.x * camera.zoom,
+            (selY - selSize * 2.4) * camera.zoom + screenHeight / 2 - camera.y * camera.zoom,
+            true,
+          );
+        } else {
+          selectedScreenCb(0, 0, false);
+        }
+      }
+
       // Anel de seleção animado.
       selectionG.clear();
       if (selFound) {
@@ -899,6 +956,78 @@ export function createRenderer(options: RendererOptions): Renderer {
         signal.sprite.scale.set(0.8 + t * 0.4);
       }
 
+      // Bichinhos de ambiente: borboletas, abelhas, pássaros, bichinhos.
+      if (ambientLayer && ambientTextures.length > 0) {
+        for (let i = 0; i < input.ambient.length; i++) {
+          const being = input.ambient[i]!;
+          let sprite = ambientSprites[i];
+          if (!sprite) {
+            sprite = new Sprite();
+            sprite.anchor.set(0.5);
+            ambientLayer.addChild(sprite);
+            ambientSprites[i] = sprite;
+          }
+          const frames = ambientTextures[being.kind] ?? ambientTextures[0]!;
+          // Pousado = asas fechadas; voando = bate asas.
+          const frame = being.resting > 0 ? 1 : Math.sin(being.phase) > 0 ? 0 : 1;
+          sprite.texture = frames[frame]!;
+          sprite.position.set(being.x, being.y - (being.resting > 0 ? 0 : 3));
+          sprite.visible = true;
+          // Na chuva os insetos somem de cena.
+          sprite.alpha = being.kind <= 1 ? 1 - input.rain : 1;
+        }
+        for (let i = input.ambient.length; i < ambientSprites.length; i++) {
+          ambientSprites[i]!.visible = false;
+        }
+      }
+
+      // Poças no chão depois da chuva.
+      if (puddleG) {
+        puddleG.clear();
+        for (const puddle of input.puddles) {
+          puddleG
+            .ellipse(puddle.x, puddle.y, 11 * puddle.life, 6 * puddle.life)
+            .fill({ color: 0x5b90bd, alpha: 0.4 * puddle.life });
+        }
+      }
+
+      // Chuva: gotas caindo + escurecimento do mundo.
+      if (rainLayer && weatherTint && rainTextures.length > 0) {
+        const wanted = Math.round(input.rain * 170);
+        while (rainDrops.length < wanted) {
+          const sprite = new Sprite(rainTextures[rainDrops.length % rainTextures.length]!);
+          sprite.alpha = 0.65;
+          rainLayer.addChild(sprite);
+          rainDrops.push({
+            sprite,
+            x: Math.random() * options.worldWidth,
+            y: Math.random() * options.worldHeight,
+            speed: 420 + Math.random() * 260,
+          });
+        }
+        while (rainDrops.length > wanted) {
+          const drop = rainDrops.pop()!;
+          rainLayer.removeChild(drop.sprite);
+          drop.sprite.destroy();
+        }
+        for (const drop of rainDrops) {
+          drop.y += drop.speed * dt;
+          drop.x += 40 * dt;
+          if (drop.y > options.worldHeight) {
+            drop.y = -10;
+            drop.x = Math.random() * options.worldWidth;
+          }
+          drop.sprite.position.set(drop.x, drop.y);
+        }
+
+        weatherTint.clear();
+        if (input.rain > 0.01) {
+          weatherTint
+            .rect(0, 0, options.worldWidth, options.worldHeight)
+            .fill({ color: 0x24344f, alpha: input.rain * 0.4 });
+        }
+      }
+
       // Poeirinha dos passos: sobe, desacelera e some.
       dustTimer -= dt;
       if (dustTimer <= 0) dustTimer = DUST_INTERVAL;
@@ -940,6 +1069,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       leaves.length = 0;
       dust.length = 0;
       dustPool.length = 0;
+      ambientSprites.length = 0;
+      rainDrops.length = 0;
       clearCreatureTextureCache();
       if (app) {
         app.destroy(true, { children: true });
@@ -953,6 +1084,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         selectionG = null;
         creatureLayer = null;
         particleLayer = null;
+        ambientLayer = null;
+        rainLayer = null;
+        puddleG = null;
+        weatherTint = null;
       }
     },
   };

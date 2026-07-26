@@ -253,6 +253,87 @@ export function createUtilityBrain(): Brain {
         }
       }
 
+      // ---- Reagir ao tempo ----------------------------------------------
+      if (perception.rain > 0.35) {
+        // Chuva: as caseiras correm para debaixo da árvore...
+        if (perception.shelter) {
+          options.push(
+            option(
+              'shelter',
+              perception.rain * (1.3 - traits.playfulness) * (1.2 - traits.bravery * 0.5),
+              perception.shelter.x,
+              perception.shelter.y,
+              NO_TARGET,
+              6,
+            ),
+          );
+        }
+        // ...e as brincalhonas ficam se divertindo no meio dela.
+        options.push(
+          option(
+            'play',
+            perception.rain * traits.playfulness * 1.2 * emotions.happiness,
+            self.x,
+            self.y,
+            NO_TARGET,
+            4,
+          ),
+        );
+      } else if (needs.hunger < 0.5 && needs.thirst < 0.5 && emotions.fear < 0.2) {
+        // Tempo bom e barriga cheia: hora de tomar sol sem fazer nada.
+        options.push(
+          option(
+            'sunbathe',
+            (0.5 + emotions.happiness * 0.6) * (1.2 - traits.activity) * 0.75,
+            self.x,
+            self.y,
+            NO_TARGET,
+            8,
+          ),
+        );
+      }
+
+      // ---- Observar uma borboleta ---------------------------------------
+      // Curiosas param para acompanhar o que passa voando.
+      if (perception.ambient) {
+        const proximity = 1 - clamp01(perception.ambient.distance / attributes.vision);
+        options.push(
+          option(
+            'watch',
+            (emotions.curiosity * 1.1 + traits.curiosity * 0.5 + (self.isBaby ? 0.5 : 0)) *
+              proximity *
+              (1 - emotions.fear) *
+              (1 - perception.rain) *
+              0.95,
+            perception.ambient.x,
+            perception.ambient.y,
+            NO_TARGET,
+            2.5,
+          ),
+        );
+      }
+
+      // ---- Filhote atrás de quem ele ama --------------------------------
+      if (self.isBaby) {
+        let guardian: (typeof perception.creatures)[number] | null = null;
+        for (const other of perception.creatures) {
+          if (other.isBaby || other.affinity <= 0.2) continue;
+          if (!guardian || other.affinity > guardian.affinity) guardian = other;
+        }
+        if (guardian) {
+          options.push(
+            option(
+              'follow',
+              (0.8 + guardian.affinity) * (1 + emotions.fear) * 1.1,
+              guardian.x,
+              guardian.y,
+              guardian.id,
+              2,
+            ),
+          );
+        }
+      }
+
       // ---- Explorar -----------------------------------------------------
       // Base sempre presente: curiosas exploram longe, medrosas ficam perto e
       // fogem de regiões onde já sofreram.

@@ -6,9 +6,11 @@ import { TerrainResource } from './terrainResource';
 import { spawnPlant } from './plant';
 import { registerItems, spawnFruit } from './items';
 import { SceneryResource, generateScenery } from './scenery';
+import { WeatherResource, createWeather } from './weather';
+import { AmbientResource, createAmbient } from './ambient';
 
 const TERRAIN_CELL_SIZE = 25;
-const INITIAL_PLANTS = 80;
+const INITIAL_PLANTS = 55;
 
 /**
  * Monta um mundo da Etapa 2: terreno com lagos + uma população inicial de
@@ -27,10 +29,12 @@ export function createWorld(config: WorldConfig, seed: number): World {
 
   const scenery = generateScenery(terrain, config.width, config.height, seed);
   world.setResource(SceneryResource, scenery);
+  world.setResource(WeatherResource, createWeather());
+  world.setResource(AmbientResource, createAmbient(config.width, config.height, seed));
 
   // Algumas frutas já caídas, para o mundo não começar vazio.
   for (const piece of scenery) {
-    if (piece.kind === 'tree' && world.rng.chance(0.45)) {
+    if (piece.kind === 'tree' && world.rng.chance(0.3)) {
       spawnFruit(world, piece.x + world.rng.range(-14, 14), piece.y + world.rng.range(4, 16));
     }
   }

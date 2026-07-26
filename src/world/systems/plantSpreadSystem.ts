@@ -6,7 +6,7 @@ import { isWaterAt } from '../terrain';
 
 const TAU = Math.PI * 2;
 const MATURE_FRACTION = 0.8; // só plantas quase maduras semeiam
-const SPREAD_CHANCE_PER_SEC = 0.05; // chance por segundo, por planta madura
+const SPREAD_CHANCE_PER_SEC = 0.02; // chance por segundo, por planta madura
 const SPREAD_MIN_DIST = 15;
 const SPREAD_MAX_DIST = 45;
 

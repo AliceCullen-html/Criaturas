@@ -49,6 +49,12 @@ export interface Perception {
   placeDanger: number;
   /** Segundos restantes de atenção voltada à mão do jogador. */
   attention: number;
+  /** Bichinho de ambiente mais próximo (borboleta, abelha...), se houver. */
+  ambient: { x: number; y: number; distance: number } | null;
+  /** Abrigo mais próximo (árvore), para se proteger da chuva. */
+  shelter: { x: number; y: number; distance: number } | null;
+  /** 0 = tempo bom, 1 = chovendo forte. */
+  rain: number;
 }
 
 /** O que a criatura decidiu fazer. */

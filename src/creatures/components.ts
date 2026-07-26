@@ -16,7 +16,11 @@ export type Intent =
   | 'play'
   | 'attack'
   | 'share'
-  | 'mate';
+  | 'mate'
+  | 'watch'
+  | 'shelter'
+  | 'sunbathe'
+  | 'follow';
 
 /** Expressão facial dominante, derivada das emoções. */
 export type Mood =

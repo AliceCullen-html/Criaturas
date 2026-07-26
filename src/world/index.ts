@@ -15,6 +15,18 @@ export {
 export { SceneryResource, generateScenery } from './scenery';
 export type { SceneryPiece, SceneryKind } from './scenery';
 export { itemSystem } from './systems/itemSystem';
+export { WeatherResource, createWeather, weatherSystem } from './weather';
+export type { Weather, WeatherKind } from './weather';
+export {
+  AmbientResource,
+  createAmbient,
+  ambientSystem,
+  AMBIENT_BUTTERFLY,
+  AMBIENT_BEE,
+  AMBIENT_BIRD,
+  AMBIENT_CRITTER,
+} from './ambient';
+export type { AmbientBeing } from './ambient';
 export { generateTerrain, isWaterAt, findNearestWater, GROUND, WATER } from './terrain';
 export type { Terrain } from './terrain';
 export { TerrainResource } from './terrainResource';

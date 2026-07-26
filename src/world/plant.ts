@@ -1,7 +1,7 @@
 import { Sprite, Transform, type World } from '@engine';
 import { Plant } from './components';
 
-export const MAX_PLANTS = 400;
+export const MAX_PLANTS = 130;
 
 const MIN_MAX_BIOMASS = 6;
 const MAX_MAX_BIOMASS = 14;

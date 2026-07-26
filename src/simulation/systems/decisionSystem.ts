@@ -2,7 +2,15 @@ import { clamp, subjects } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Attributes, Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
 import type { PerceivedCreature, PerceivedFood, Perception } from '@ai';
-import { Item, Plant, TerrainResource, findNearestWater } from '@world';
+import {
+  AmbientResource,
+  Item,
+  Plant,
+  SceneryResource,
+  TerrainResource,
+  WeatherResource,
+  findNearestWater,
+} from '@world';
 import { FoodIndexResource } from '../foodIndex';
 import { CreatureIndexResource } from '../creatureIndex';
 import { BrainResource } from '../brainResource';
@@ -39,6 +47,9 @@ export const decisionSystem: System = {
     const creatureIndex = world.getResource(CreatureIndexResource);
     const brain = world.getResource(BrainResource);
     const player = world.getResource(PlayerResource);
+    const ambient = world.getResource(AmbientResource);
+    const scenery = world.getResource(SceneryResource);
+    const weather = world.getResource(WeatherResource);
     const { rng, config } = world;
 
     creatures.forEach((_tag, entity) => {
@@ -155,6 +166,9 @@ export const decisionSystem: System = {
           },
           placeDanger: Math.max(0, -memory.valenceOf(subjects.place(transform.x, transform.y))),
           attention: mind.attention,
+          ambient: nearestAmbient(ambient, transform.x, transform.y, attributes.vision),
+          shelter: nearestTree(scenery, transform.x, transform.y),
+          rain: weather.intensity,
         };
 
         const decision = brain.decide(perception);
@@ -203,8 +217,15 @@ export const decisionSystem: System = {
       const dx = mind.targetX - transform.x;
       const dy = mind.targetY - transform.y;
       const distance = Math.hypot(dx, dy);
+      // Observar é de longe: ninguém persegue uma borboleta até encostar.
       const stopAt =
-        mind.intent === 'seekFood' || mind.intent === 'seekWater' ? 2 : attributes.size;
+        mind.intent === 'seekFood' || mind.intent === 'seekWater'
+          ? 2
+          : mind.intent === 'watch'
+            ? 34
+            : mind.intent === 'follow'
+              ? attributes.size * 2.2
+              : attributes.size;
 
       if (distance < stopAt) {
         velocity.x = 0;
@@ -225,3 +246,34 @@ export const decisionSystem: System = {
     });
   },
 };
+
+/** Bichinho de ambiente mais próximo dentro do campo de visão. */
+function nearestAmbient(
+  beings: ReadonlyArray<{ x: number; y: number }>,
+  x: number,
+  y: number,
+  vision: number,
+): { x: number; y: number; distance: number } | null {
+  let best: { x: number; y: number; distance: number } | null = null;
+  for (const being of beings) {
+    const distance = Math.hypot(being.x - x, being.y - y);
+    if (distance > vision) continue;
+    if (!best || distance < best.distance) best = { x: being.x, y: being.y, distance };
+  }
+  return best;
+}
+
+/** Árvore mais próxima — abrigo natural contra a chuva. */
+function nearestTree(
+  scenery: ReadonlyArray<{ kind: string; x: number; y: number }>,
+  x: number,
+  y: number,
+): { x: number; y: number; distance: number } | null {
+  let best: { x: number; y: number; distance: number } | null = null;
+  for (const piece of scenery) {
+    if (piece.kind !== 'tree') continue;
+    const distance = Math.hypot(piece.x - x, piece.y - y);
+    if (!best || distance < best.distance) best = { x: piece.x, y: piece.y + 6, distance };
+  }
+  return best;
+}

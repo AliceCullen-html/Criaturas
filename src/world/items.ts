@@ -22,7 +22,7 @@ export const FRUIT_VARIANTS = [0, 1, 5] as const; // maçã, frutinhas, amora
 export const TOXIC_FRUIT_VARIANT = 2; // cogumelo
 const TOY_VARIANT = 3;
 
-export const MAX_ITEMS = 160;
+export const MAX_ITEMS = 70;
 
 /** Raio visual conforme o frescor (frutas murcham ao apodrecer). */
 export const itemRadius = (item: Item): number =>
