@@ -54,6 +54,7 @@ import {
   roughGesture,
   attractBirds,
   searchSystem,
+  idleSystem,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -101,6 +102,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(emotionSystem)
     .add(handReactionSystem)
     .add(decisionSystem)
+    .add(idleSystem)
     .add(movementSystem)
     .add(actionSystem)
     .add(reproductionSystem)

@@ -2,6 +2,7 @@ import { CreatureMemory } from '@core';
 import { Transform, Velocity, World } from '@engine';
 import { express, randomGenome, type Genome } from '@genetics';
 import {
+  Behavior,
   Appearance,
   Attributes,
   Bio,
@@ -42,6 +43,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Lineage);
   world.register(Identity);
   world.register(Mind);
+  world.register(Behavior);
 }
 
 /** Cria uma criatura em (x, y), expressando o genoma dado (ou um aleatório). */
@@ -124,6 +126,14 @@ export function spawnCreature(
     affection: 0,
     surprise: 0,
     attention: 0,
+  });
+
+  world.store(Behavior).set(entity, {
+    pose: 0,
+    elapsed: 0,
+    duration: 0,
+    // Começam escalonadas para o jardim não gesticular tudo ao mesmo tempo.
+    cooldown: rng.range(0, 12),
   });
 
   return entity;

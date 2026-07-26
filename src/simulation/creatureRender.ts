@@ -1,5 +1,5 @@
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
-import { Appearance, Attributes, Bio, Creature, Mind, type Mood } from '@creatures';
+import { Appearance, Attributes, Behavior, Bio, Creature, Mind, type Mood } from '@creatures';
 import { growthScale, lifeStage } from './age';
 
 /** Códigos de expressão consumidos pelo renderer. */
@@ -28,6 +28,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const minds = world.store(Mind);
   const bios = world.store(Bio);
   const velocities = world.store(Velocity);
+  const behaviors = world.store(Behavior);
 
   buffer.clear();
   creatures.forEach((_tag, entity) => {
@@ -40,6 +41,10 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
 
     const velocity = velocities.get(entity);
     const moving = velocity ? velocity.x !== 0 || velocity.y !== 0 : false;
+    const behavior = behaviors.get(entity);
+    const pose = behavior?.pose ?? 0;
+    const poseTime =
+      behavior && behavior.duration > 0 ? Math.min(1, behavior.elapsed / behavior.duration) : 0;
 
     buffer.push(
       entity,
@@ -56,6 +61,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       MOOD_CODES[mind.mood],
       lifeStage(bio),
       moving ? 1 : 0,
+      pose,
+      poseTime,
     );
   });
 }

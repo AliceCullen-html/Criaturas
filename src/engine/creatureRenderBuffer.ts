@@ -19,6 +19,10 @@ export class CreatureRenderBuffer {
   readonly mood: Uint8Array;
   readonly stage: Uint8Array;
   readonly moving: Uint8Array;
+  /** Microcomportamento em curso (índice em POSE, de @core). */
+  readonly pose: Uint8Array;
+  /** Progresso dentro da pose, 0..1 — o renderer anima a partir disto. */
+  readonly poseTime: Float32Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -36,6 +40,8 @@ export class CreatureRenderBuffer {
     this.mood = new Uint8Array(capacity);
     this.stage = new Uint8Array(capacity);
     this.moving = new Uint8Array(capacity);
+    this.pose = new Uint8Array(capacity);
+    this.poseTime = new Float32Array(capacity);
   }
 
   clear(): void {
@@ -57,6 +63,8 @@ export class CreatureRenderBuffer {
     mood: number,
     stage: number,
     moving: number,
+    pose: number,
+    poseTime: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -74,6 +82,8 @@ export class CreatureRenderBuffer {
     this.mood[i] = mood;
     this.stage[i] = stage;
     this.moving[i] = moving;
+    this.pose[i] = pose;
+    this.poseTime[i] = poseTime;
     this.count = i + 1;
   }
 }

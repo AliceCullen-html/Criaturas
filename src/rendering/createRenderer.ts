@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
-import { clamp, createRng, lerp } from '@core';
+import { POSE, clamp, createRng, lerp } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
 import {
   clearCreatureTextureCache,
@@ -267,6 +267,145 @@ function animateBody(
   }
 
   return motion;
+}
+
+/**
+ * Anima o microcomportamento no CORPO.
+ *
+ * O rosto continua contando a emoção (isso é do `mood`); a pose conta a
+ * ocupação. Como só temos translação, rotação e escala, cada gesto é escrito
+ * como linguagem corporal: espreguiçar é esticar e inclinar para trás, cheirar
+ * é abaixar a frente, escutar é congelar com um tremor de orelha.
+ *
+ * `t` é o progresso dentro da pose, de 0 a 1.
+ */
+function animatePose(pose: number, t: number, elapsed: number, size: number, out: BodyMotion): void {
+  // Entra e sai suave: sem isto o bicho "estala" para dentro do gesto.
+  const ease = Math.min(1, Math.min(t, 1 - t) * 6);
+
+  switch (pose) {
+    case POSE.scratch:
+      // Pata coçando atrás da orelha: tremor curto e uma leve inclinação.
+      out.tilt += 0.13 * ease;
+      out.jitter += Math.sin(elapsed * 30) * size * 0.05 * ease;
+      break;
+
+    case POSE.stretch: {
+      // Alonga: estica para cima, depois relaxa.
+      const arc = Math.sin(t * Math.PI);
+      out.squashY *= 1 + 0.22 * arc;
+      out.squashX *= 1 - 0.1 * arc;
+      out.tilt -= 0.18 * arc;
+      out.yOffset -= size * 0.1 * arc;
+      break;
+    }
+
+    case POSE.sit:
+      out.squashY *= 1 - 0.16 * ease;
+      out.squashX *= 1 + 0.1 * ease;
+      out.yOffset += size * 0.16 * ease;
+      out.bob *= 0.2;
+      break;
+
+    case POSE.lie:
+      // Deitada de lado: achata, alarga e tomba.
+      out.squashY *= 1 - 0.3 * ease;
+      out.squashX *= 1 + 0.18 * ease;
+      out.yOffset += size * 0.26 * ease;
+      out.tilt += 0.36 * ease;
+      out.bob = 0;
+      break;
+
+    case POSE.lookUp:
+      out.tilt -= 0.26 * ease;
+      out.yOffset -= size * 0.05 * ease;
+      out.bob *= 0.3;
+      break;
+
+    case POSE.sniff:
+      // Abaixa a frente até o chão e fareja em pulsos curtos.
+      out.tilt += 0.34 * ease;
+      out.yOffset += size * 0.14 * ease;
+      out.jitter += Math.sin(elapsed * 16) * size * 0.025 * ease;
+      break;
+
+    case POSE.listen:
+      // Congela. O corpo mal respira e dá tremores curtos de orelha.
+      out.bob = 0;
+      out.squashY = 1;
+      out.tilt += Math.sin(elapsed * 13) * 0.05 * ease;
+      break;
+
+    case POSE.lookDown:
+      out.tilt += 0.24 * ease;
+      out.yOffset += size * 0.1 * ease;
+      out.bob *= 0.2;
+      break;
+
+    case POSE.shake:
+      // Sacode o corpo inteiro, rápido.
+      out.tilt += Math.sin(elapsed * 34) * 0.3 * ease;
+      out.squashX *= 1 + Math.sin(elapsed * 34) * 0.08 * ease;
+      break;
+
+    case POSE.roll:
+      // Rola no chão: uma volta completa, achatada.
+      out.tilt += t * Math.PI * 2;
+      out.squashY *= 1 - 0.2 * ease;
+      out.yOffset += size * 0.2 * ease;
+      break;
+
+    case POSE.groom:
+      // Se cata: cabeça em circulinhos.
+      out.tilt += Math.sin(elapsed * 6) * 0.16 * ease;
+      out.jitter += Math.cos(elapsed * 6) * size * 0.035 * ease;
+      out.yOffset += size * 0.05 * ease;
+      break;
+
+    case POSE.dig:
+      // Cava: mergulha para a frente em batidas.
+      out.tilt += (0.24 + Math.abs(Math.sin(elapsed * 9)) * 0.16) * ease;
+      out.yOffset += size * (0.1 + Math.abs(Math.sin(elapsed * 9)) * 0.08) * ease;
+      break;
+
+    case POSE.slip: {
+      // Escorrega para um lado e se recupera num susto.
+      const slip = Math.sin(t * Math.PI);
+      out.tilt += 0.75 * slip;
+      out.yOffset += size * 0.22 * slip;
+      out.jitter += Math.sin(elapsed * 26) * size * 0.06 * slip;
+      break;
+    }
+
+    case POSE.ponder:
+      // Olhando o nada: cabeça pendida, respiração muito lenta.
+      out.tilt += 0.16 * ease;
+      out.bob *= 0.15;
+      out.squashY = 1 + Math.sin(elapsed * 1.1) * 0.03;
+      break;
+
+    case POSE.play:
+      // Brinca com uma folha: pulinhos e giros de um lado para o outro.
+      out.bob += Math.abs(Math.sin(elapsed * 7)) * size * 0.16 * ease;
+      out.tilt += Math.sin(elapsed * 5) * 0.3 * ease;
+      break;
+
+    case POSE.perk:
+      // Se anima do nada: um pulo seco e um esticão.
+      out.bob += Math.sin(t * Math.PI) * size * 0.3;
+      out.squashY *= 1 + Math.sin(t * Math.PI) * 0.12;
+      break;
+
+    case POSE.sigh:
+      // Suspiro: enche e esvazia devagar, e afunda um pouco.
+      out.squashY *= 1 + Math.sin(t * Math.PI) * 0.1;
+      out.yOffset += size * 0.05 * Math.sin(t * Math.PI);
+      out.bob *= 0.3;
+      break;
+
+    default:
+      break;
+  }
 }
 
 /**
@@ -1019,6 +1158,12 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         const scale = size / 13;
         const anim = animateBody(mood, elapsed, id, size, moving, stage);
+        // A pose entra por cima do humor: o rosto segue contando a emoção,
+        // o corpo passa a contar a ocupação.
+        const pose = creatures.pose[i]!;
+        if (pose !== POSE.none) {
+          animatePose(pose, creatures.poseTime[i]!, elapsed, size, anim);
+        }
         // Bocejo empurra o corpo um pouco para trás, como um espreguiçar.
         const yawnTilt = slot.yawning > 0 ? -0.12 : 0;
 

@@ -145,3 +145,21 @@ export interface Mind {
   attention: number;
 }
 export const Mind = defineComponent<Mind>('Mind');
+
+/**
+ * O microcomportamento em curso — o que a criatura está fazendo enquanto não
+ * está indo a lugar nenhum. Fica separado de `Mind` de propósito: `Mind` é a
+ * intenção (para onde vou, por quê), isto é o gesto (o que meu corpo faz agora).
+ * O rosto continua contando a emoção; a pose conta a ocupação.
+ */
+export interface Behavior {
+  /** Índice em `POSE` (de @core). 0 = nenhuma. */
+  pose: number;
+  /** Segundos já decorridos dentro da pose. */
+  elapsed: number;
+  /** Duração sorteada para esta pose. */
+  duration: number;
+  /** Segundos até cogitar a próxima — evita gesticular sem parar. */
+  cooldown: number;
+}
+export const Behavior = defineComponent<Behavior>('Behavior');

@@ -17,6 +17,7 @@ export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
+export { idleSystem } from './systems/idleSystem';
 export {
   grabItem,
   moveHeldItem,
