@@ -6,7 +6,7 @@ import {
   AMBIENT_BUTTERFLY,
   AmbientResource,
   Item,
-  MAX_ITEMS,
+  maxItems,
   PropsResource,
   SceneryResource,
   dropFruitNear,
@@ -74,7 +74,8 @@ export function shakeTree(world: World, index: number): PokeResult {
 
   const items = world.store(Item);
   const drops = 1 + world.rng.int(2);
-  for (let i = 0; i < drops && items.size < MAX_ITEMS; i++) {
+  const cap = maxItems(world.config);
+  for (let i = 0; i < drops && items.size < cap; i++) {
     dropFruitNear(world, piece.x, piece.y + 10, world.rng);
   }
 

@@ -5,6 +5,7 @@ import { TerrainResource } from './terrainResource';
 import { isWaterAt } from './terrain';
 import { WeatherResource } from './weather';
 import { DayNightResource } from './dayNight';
+import { countFor } from './density';
 
 export const AMBIENT_BUTTERFLY = 0;
 export const AMBIENT_BEE = 1;
@@ -38,7 +39,8 @@ export interface AmbientBeing {
 export const AmbientResource = defineResource<AmbientBeing[]>('Ambient');
 
 // borboletas, abelhas, pássaros, bichinhos, peixes, libélulas, rãs, vaga-lumes
-const COUNTS = [14, 8, 5, 4, 10, 6, 5, 22];
+/** Quantos de cada tipo num mundo 1000×1000. */
+const COUNTS_BASE = [14, 8, 5, 4, 10, 6, 5, 22];
 const SPEEDS = [16, 26, 34, 30, 22, 40, 20, 14];
 
 export function createAmbient(
@@ -49,8 +51,9 @@ export function createAmbient(
 ): AmbientBeing[] {
   const rng = createRng(seed ^ 0xa11b1e);
   const beings: AmbientBeing[] = [];
-  for (let kind = 0; kind < COUNTS.length; kind++) {
-    for (let i = 0; i < COUNTS[kind]!; i++) {
+  for (let kind = 0; kind < COUNTS_BASE.length; kind++) {
+    const howMany = countFor(COUNTS_BASE[kind]!, width, height, 2);
+    for (let i = 0; i < howMany; i++) {
       let x = rng.range(0, width);
       let y = rng.range(0, height);
       // Peixes e libélulas pertencem à água: procuram o lago para nascer.

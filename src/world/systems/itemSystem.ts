@@ -1,6 +1,6 @@
 import { clamp, clamp01 } from '@core';
 import { Sprite, Transform, type System } from '@engine';
-import { Item, MAX_ITEMS, dropFruitNear, itemRadius } from '../items';
+import { Item, maxItems, dropFruitNear, itemRadius } from '../items';
 import { SceneryResource } from '../scenery';
 
 const ROT_RATE = 0.009; // frutas duram bastante, mas não para sempre
@@ -25,13 +25,14 @@ export const itemSystem: System = {
     const { rng, config } = world;
 
     // Árvores frutificando.
-    if (items.size < MAX_ITEMS) {
+    const cap = maxItems(config);
+    if (items.size < cap) {
       for (const piece of scenery) {
         if (piece.kind !== 'tree') continue;
         piece.fruitTimer -= dt;
         if (piece.fruitTimer <= 0) {
           piece.fruitTimer = rng.range(TREE_MIN_INTERVAL, TREE_MAX_INTERVAL);
-          if (items.size < MAX_ITEMS) dropFruitNear(world, piece.x, piece.y + 8, rng);
+          if (items.size < cap) dropFruitNear(world, piece.x, piece.y + 8, rng);
         }
       }
     }

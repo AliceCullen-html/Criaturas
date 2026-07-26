@@ -74,9 +74,9 @@ export interface AppInstance {
   dispose(): void;
 }
 
-const WORLD_CONFIG = { width: 1000, height: 1000 } as const;
+const WORLD_CONFIG = { width: 600, height: 600 } as const;
 const WORLD_SEED = 1337;
-const INITIAL_CREATURES = 14;
+const INITIAL_CREATURES = 18;
 const FIXED_DT = 1 / 20;
 const PLANT_CAPACITY = 512;
 const ITEM_CAPACITY = 256;

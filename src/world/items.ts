@@ -1,7 +1,8 @@
 import { TAU, clamp, type Rng } from '@core';
-import { Sprite, Transform, defineComponent, type World } from '@engine';
+import { Sprite, Transform, defineComponent, type World, type WorldConfig } from '@engine';
 import { isWaterAt } from './terrain';
 import { TerrainResource } from './terrainResource';
+import { countIn } from './density';
 
 /**
  * Objeto físico do mundo: pode ser pego, arrastado, arremessado e — no caso
@@ -56,7 +57,10 @@ export const isRare = (variant: number): boolean =>
   variant === VARIANT.glowMushroom ||
   variant === VARIANT.shinyStone;
 
-export const MAX_ITEMS = 70;
+/** Teto de objetos soltos num mundo 1000×1000. */
+const MAX_ITEMS_BASE = 70;
+
+export const maxItems = (config: WorldConfig): number => countIn(MAX_ITEMS_BASE, config, 14);
 
 /** Altura máxima de uma pilha e o quanto cada nível sobe na tela. */
 export const MAX_STACK = 3;

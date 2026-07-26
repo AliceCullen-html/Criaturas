@@ -95,15 +95,31 @@ verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
 | 7     | Save/Load em IndexedDB com seed (mundo reproduzível)                       |
 | 8     | HUD e inspetor: painéis, estatísticas, controles de velocidade            |
 
+### Dar vida (fase atual)
+
+A partir daqui a régua deixou de ser "quantos sistemas existem" e passou a ser
+**acreditar**: observar uma criatura por cinco minutos e sentir que ela tem
+personalidade própria. Nada entra se não servir a isso.
+
+| Etapa | Entrega                                                                   |
+| ----- | ------------------------------------------------------------------------- |
+| A ✅  | Mundo compacto: densidades proporcionais à área, jardim que se sustenta   |
+| B     | Microcomportamentos: canal de **pose** separado do humor, ~20 ações ociosas |
+| C     | Pequenas histórias: o cérebro escolhe **rotinas** encadeadas; carregar objetos |
+| D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
+| E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
+| F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
+
+Critério de aceitação da fase, verificado por teste: `garden.test.ts` roda o
+mundo por 30 minutos simulados em três seeds e cobra população viva e
+**ninguém sozinho**. Sem isso nenhuma história social tem como acontecer.
+
 ### Rumo à v1.0
 
-- IA — Behavior Tree substituindo a FSM (mesma interface `Brain`).
-- Aprendizado por experiência (memória associativa: "comi X → passei mal → evito").
-- GOAP (planejamento orientado a objetivos).
+- GOAP (planejamento orientado a objetivos) sobre a camada de rotinas.
 - Redes neurais simples + Algoritmo Genético (o cérebro passa a evoluir no DNA).
 - Performance: simulação em Web Worker, pooling e spatial partitioning endurecidos.
-- Riqueza do mundo: biomas, mais interações sociais, cadeia alimentar.
-- Direção de arte: polimento visual minimalista, animações, som ambiente.
+- Save/Load em IndexedDB (`src/save/` ainda vazio).
 
 ## 6. Forma de trabalho
 

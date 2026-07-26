@@ -2,6 +2,7 @@ import { clamp01 } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Bio, Creature, Emotions, Mind, Needs } from '@creatures';
 import { TerrainResource, findNearestWater } from '@world';
+import { growthScale } from '../age';
 
 const HUNGER_RATE = 0.011;
 const THIRST_RATE = 0.015;
@@ -40,8 +41,12 @@ export const metabolismSystem: System = {
       const mind = minds.get(entity);
       if (!needs || !bio || !emotions || !mind) return;
 
-      needs.hunger = clamp01(needs.hunger + HUNGER_RATE * bio.metabolism * dt);
-      needs.thirst = clamp01(needs.thirst + THIRST_RATE * bio.metabolism * dt);
+      // Corpo pequeno gasta menos. Sem isto o filhote consome como um adulto
+      // feito, e como ele ainda não sabe onde ficam a comida e a água, morria
+      // de fome antes de crescer — nenhuma geração chegava à idade adulta.
+      const body = growthScale(bio);
+      needs.hunger = clamp01(needs.hunger + HUNGER_RATE * bio.metabolism * body * dt);
+      needs.thirst = clamp01(needs.thirst + THIRST_RATE * bio.metabolism * body * dt);
 
       const transform = transforms.get(entity);
       if (transform && findNearestWater(terrain, transform.x, transform.y, DRINK_REACH)) {

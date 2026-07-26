@@ -1,6 +1,7 @@
 import { TAU, clamp, createRng } from '@core';
 import { defineResource, type System } from '@engine';
 import { isWaterAt, type Terrain } from './terrain';
+import { countFor } from './density';
 import type { SceneryPiece } from './scenery';
 
 /** Tipos de detalhe do chão. */
@@ -75,6 +76,13 @@ export function generateProps(
   const rng: Rng = createRng(seed ^ 0x9a2d1c);
   const props: Prop[] = [];
 
+  // Quantidades escritas como densidade: o jardim tem a mesma cara por tela
+  // em qualquer tamanho de mundo.
+  const clearings = countFor(9, width, height, 3);
+  const grassTufts = countFor(420, width, height, 90);
+  const paths = countFor(4, width, height, 2);
+  const logs = countFor(7, width, height, 3);
+
   const add = (kind: number, x: number, y: number, variant = 0): void => {
     if (x < 2 || y < 2 || x > width - 2 || y > height - 2) return;
     props.push({ kind, x, y, variant, sway: 0, phase: rng.range(0, TAU) });
@@ -84,7 +92,7 @@ export function generateProps(
 
   // ---- Clareiras floridas ---------------------------------------------
   // Manchas densas de flores e grama alta: os cantinhos que convidam a olhar.
-  for (let m = 0; m < 9; m++) {
+  for (let m = 0; m < clearings; m++) {
     const cx = rng.range(60, width - 60);
     const cy = rng.range(60, height - 60);
     if (!onLand(cx, cy)) continue;
@@ -104,7 +112,7 @@ export function generateProps(
   }
 
   // ---- Tapete de grama baixa ------------------------------------------
-  for (let i = 0; i < 420; i++) {
+  for (let i = 0; i < grassTufts; i++) {
     const x = rng.range(0, width);
     const y = rng.range(0, height);
     if (!onLand(x, y)) continue;
@@ -113,7 +121,7 @@ export function generateProps(
 
   // ---- Trilhas naturais -----------------------------------------------
   // Caminhos de pedrinhas serpenteando, como se algo passasse sempre ali.
-  for (let t = 0; t < 4; t++) {
+  for (let t = 0; t < paths; t++) {
     let x = rng.range(80, width - 80);
     let y = rng.range(80, height - 80);
     let angle = rng.range(0, TAU);
@@ -155,7 +163,7 @@ export function generateProps(
   }
 
   // ---- Troncos caídos --------------------------------------------------
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < logs; i++) {
     const x = rng.range(50, width - 50);
     const y = rng.range(50, height - 50);
     if (!onLand(x, y)) continue;

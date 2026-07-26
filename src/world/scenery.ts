@@ -1,6 +1,7 @@
 import { createRng, type Rng } from '@core';
 import { defineResource } from '@engine';
 import { isWaterAt, type Terrain } from './terrain';
+import { countFor } from './density';
 
 export type SceneryKind = 'tree' | 'rock' | 'bush';
 
@@ -20,7 +21,8 @@ export interface SceneryPiece {
  */
 export const SceneryResource = defineResource<SceneryPiece[]>('Scenery');
 
-const COUNT = 78;
+/** Peças de cenário num mundo 1000×1000. */
+const COUNT_BASE = 78;
 
 export function generateScenery(
   terrain: Terrain,
@@ -32,8 +34,9 @@ export function generateScenery(
   const pieces: SceneryPiece[] = [];
   const kinds: SceneryKind[] = ['tree', 'tree', 'tree', 'rock', 'bush'];
 
+  const count = countFor(COUNT_BASE, width, height, 12);
   let attempts = 0;
-  while (pieces.length < COUNT && attempts < COUNT * 30) {
+  while (pieces.length < count && attempts < count * 30) {
     attempts++;
     const x = rng.range(20, width - 20);
     const y = rng.range(20, height - 20);
@@ -49,8 +52,8 @@ export function generateScenery(
   return pieces;
 }
 
-/** Quantas árvores e moitas debruçam sobre a água. */
-const SHORE_COUNT = 12;
+/** Árvores e moitas debruçadas sobre a água, num mundo 1000×1000. */
+const SHORE_COUNT_BASE = 12;
 /** A que distância à frente do pé a água precisa estar para valer o reflexo. */
 const SHORE_REACH = 18;
 
@@ -66,9 +69,10 @@ function plantShore(
   height: number,
   rng: Rng,
 ): void {
+  const shoreCount = countFor(SHORE_COUNT_BASE, width, height, 5);
   let planted = 0;
   let attempts = 0;
-  while (planted < SHORE_COUNT && attempts < SHORE_COUNT * 200) {
+  while (planted < shoreCount && attempts < shoreCount * 200) {
     attempts++;
     const x = rng.range(20, width - 20);
     const y = rng.range(20, height - 20);

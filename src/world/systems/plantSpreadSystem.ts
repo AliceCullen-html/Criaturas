@@ -1,6 +1,6 @@
 import { Transform, type System } from '@engine';
 import { Plant } from '../components';
-import { MAX_PLANTS, spawnPlant } from '../plant';
+import { maxPlants, spawnPlant } from '../plant';
 import { TerrainResource } from '../terrainResource';
 import { isWaterAt } from '../terrain';
 
@@ -9,6 +9,10 @@ const MATURE_FRACTION = 0.8; // só plantas quase maduras semeiam
 const SPREAD_CHANCE_PER_SEC = 0.02; // chance por segundo, por planta madura
 const SPREAD_MIN_DIST = 15;
 const SPREAD_MAX_DIST = 45;
+/** Abaixo desta fração do teto, o jardim recebe semente vinda de fora. */
+const BARREN_FRACTION = 0.35;
+/** Brotos por segundo quando o jardim está pelado. */
+const RESEED_PER_SEC = 0.9;
 
 // Buffers reutilizados entre ticks para não alocar no hot path.
 const seedX: number[] = [];
@@ -23,7 +27,8 @@ export const plantSpreadSystem: System = {
   name: 'plant-spread',
   update(world, dt) {
     const plants = world.store(Plant);
-    if (plants.size >= MAX_PLANTS) return;
+    const cap = maxPlants(world.config);
+    if (plants.size >= cap) return;
 
     const transforms = world.store(Transform);
     const terrain = world.getResource(TerrainResource);
@@ -53,8 +58,25 @@ export const plantSpreadSystem: System = {
     });
 
     for (let i = 0; i < seedX.length; i++) {
-      if (plants.size >= MAX_PLANTS) break;
+      if (plants.size >= cap) break;
       spawnPlant(world, seedX[i]!, seedY[i]!);
+    }
+
+    // Semente de fora.
+    //
+    // Sem isto o jardim tem um ponto sem volta: as plantas só nascem de plantas
+    // maduras, então se as criaturas comerem tudo não sobra semeadeira nenhuma e
+    // o chão fica estéril para sempre — a população inteira morre junto e não
+    // volta. O vento traz semente de fora, e é isso que dá fundo ao ecossistema.
+    if (plants.size < cap * BARREN_FRACTION) {
+      let sprouts = Math.floor(RESEED_PER_SEC * dt);
+      if (rng.chance(RESEED_PER_SEC * dt - sprouts)) sprouts += 1;
+      for (let i = 0; i < sprouts && plants.size < cap; i++) {
+        const x = rng.range(0, width);
+        const y = rng.range(0, height);
+        if (isWaterAt(terrain, x, y)) continue;
+        spawnPlant(world, x, y);
+      }
     }
   },
 };

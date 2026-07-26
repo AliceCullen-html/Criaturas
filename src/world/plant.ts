@@ -1,12 +1,19 @@
-import { Sprite, Transform, type World } from '@engine';
+import { Sprite, Transform, type World, type WorldConfig } from '@engine';
 import { Plant } from './components';
+import { countIn } from './density';
 
-export const MAX_PLANTS = 130;
+/** Teto de plantas num mundo 1000×1000; mundos menores têm proporcionalmente menos. */
+const MAX_PLANTS_BASE = 130;
+
+export const maxPlants = (config: WorldConfig): number => countIn(MAX_PLANTS_BASE, config, 12);
 
 const MIN_MAX_BIOMASS = 6;
 const MAX_MAX_BIOMASS = 14;
-const MIN_GROWTH_RATE = 0.4;
-const MAX_GROWTH_RATE = 1.2;
+// Solo fértil. O jardim é pequeno e a população é densa de propósito: a mesma
+// quantidade de plantas por tela precisa rebrotar bem mais rápido para dar
+// conta. Mexer aqui, e não na quantidade, mantém o chão sem virar mato.
+const MIN_GROWTH_RATE = 1.1;
+const MAX_GROWTH_RATE = 3;
 const SEED_BIOMASS = 1;
 
 const PLANT_PALETTE: readonly number[] = [0x6bbf7b, 0x86c8a8, 0x94c47d, 0x7fbf9a];

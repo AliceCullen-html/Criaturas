@@ -9,7 +9,7 @@ export {
   spawnToy,
   dropFruitNear,
   itemRadius,
-  MAX_ITEMS,
+  maxItems,
   MAX_STACK,
   STACK_STEP,
   TOXIC_FRUIT_VARIANT,
@@ -44,7 +44,8 @@ export type { AmbientBeing } from './ambient';
 export { generateTerrain, isWaterAt, findNearestWater, GROUND, WATER } from './terrain';
 export type { Terrain } from './terrain';
 export { TerrainResource } from './terrainResource';
-export { spawnPlant, radiusForBiomass, MAX_PLANTS, RESOURCE_VARIANTS } from './plant';
+export { spawnPlant, radiusForBiomass, maxPlants, RESOURCE_VARIANTS } from './plant';
+export { areaScale, countFor, countIn } from './density';
 export { plantGrowthSystem } from './systems/plantGrowthSystem';
 export { plantSpreadSystem } from './systems/plantSpreadSystem';
 export { createWorld } from './createWorld';

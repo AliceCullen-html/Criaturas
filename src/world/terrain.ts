@@ -1,5 +1,6 @@
 import type { Rng } from '@core';
 import type { TileGrid } from '@engine';
+import { countFor } from './density';
 
 export const GROUND = 0;
 export const WATER = 1;
@@ -9,8 +10,10 @@ export interface Terrain extends TileGrid {
   readonly cells: Uint8Array;
 }
 
-const MIN_PONDS = 3;
-const MAX_PONDS = 6;
+/** Lagos num mundo 1000×1000. O raio é em células, então escalar a quantidade
+ *  pela área mantém constante a fração de água do jardim. */
+const MIN_PONDS_BASE = 3;
+const MAX_PONDS_BASE = 6;
 
 /** Gera um terreno com alguns lagos circulares, de forma determinística (via RNG). */
 export function generateTerrain(
@@ -23,7 +26,9 @@ export function generateTerrain(
   const rows = Math.max(1, Math.ceil(height / cellSize));
   const cells = new Uint8Array(cols * rows); // GROUND por padrão
 
-  const ponds = MIN_PONDS + rng.int(MAX_PONDS - MIN_PONDS + 1);
+  const minPonds = countFor(MIN_PONDS_BASE, width, height, 2);
+  const maxPonds = countFor(MAX_PONDS_BASE, width, height, 3);
+  const ponds = minPonds + rng.int(maxPonds - minPonds + 1);
   for (let p = 0; p < ponds; p++) {
     const centerX = rng.int(cols);
     const centerY = rng.int(rows);

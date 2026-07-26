@@ -13,13 +13,15 @@ import {
   Needs,
   spawnCreature,
 } from '@creatures';
+import { countIn } from '@world';
 import { isBaby } from '../age';
 
 const MATING_COOLDOWN = 90;
 const MATE_REACH = 16;
 /** Fração das lembranças dos pais que o filhote absorve (aprendizado por observação). */
 const CULTURAL_INHERITANCE = 0.45;
-const MAX_POPULATION = 60;
+/** Teto de população num mundo 1000×1000 — o jardim tem limite de espaço. */
+const MAX_POPULATION_BASE = 60;
 
 interface Birth {
   x: number;
@@ -34,6 +36,8 @@ interface Birth {
 }
 
 const births: Birth[] = [];
+/** Quem já acasalou neste tick — evita filhote duplicado do mesmo casal. */
+const mated = new Set<number>();
 
 /**
  * Acasalamento e nascimento. O filhote herda genes dos dois pais (com mutação)
@@ -44,7 +48,7 @@ export const reproductionSystem: System = {
   name: 'reproduction',
   update(world, _dt) {
     const creatures = world.store(Creature);
-    if (creatures.size >= MAX_POPULATION) return;
+    if (creatures.size >= countIn(MAX_POPULATION_BASE, world.config, 24)) return;
 
     const transforms = world.store(Transform);
     const bios = world.store(Bio);
@@ -58,13 +62,17 @@ export const reproductionSystem: System = {
 
     births.length = 0;
 
+    mated.clear();
+
     creatures.forEach((_tag, entity) => {
       const mind = minds.get(entity);
       if (!mind || mind.intent !== 'mate' || mind.targetEntity < 0) return;
 
       const partner = mind.targetEntity;
-      // Só o de menor id conduz o nascimento, para não gerar filhote duplicado.
-      if (entity > partner) return;
+      // Um casal por tick, uma vez só. (Antes o desempate era "só o de menor id
+      // conduz", o que exigia que os DOIS estivessem se mirando — quando só a
+      // de id maior queria, não nascia nada.)
+      if (mated.has(entity) || mated.has(partner)) return;
 
       const bioA = bios.get(entity);
       const bioB = bios.get(partner);
@@ -79,9 +87,19 @@ export const reproductionSystem: System = {
       const distance = Math.hypot(transformB.x - transformA.x, transformB.y - transformA.y);
       if (distance > MATE_REACH) return;
 
+      // O consentimento continua sendo dos dois — mas não precisa ser no mesmo
+      // quadro. Exigir que ambos escolhessem `mate` no mesmo tick era uma
+      // coincidência raríssima: quem recebe a investida só precisa estar
+      // disposto, e quem está com medo ou fugindo recusa.
       const partnerMind = minds.get(partner);
-      if (!partnerMind || partnerMind.intent !== 'mate') return;
+      const partnerFeel = emotionsStore.get(partner);
+      const partnerWilling =
+        partnerMind?.intent === 'mate' ||
+        (partnerMind?.intent !== 'flee' && (partnerFeel?.fear ?? 1) < 0.4);
+      if (!partnerWilling) return;
 
+      mated.add(entity);
+      mated.add(partner);
       bioA.matingCooldown = MATING_COOLDOWN;
       bioB.matingCooldown = MATING_COOLDOWN;
 
