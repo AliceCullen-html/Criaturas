@@ -18,6 +18,8 @@ export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { idleSystem } from './systems/idleSystem';
+export { confinementSystem } from './systems/confinementSystem';
+export { solids } from './solids';
 export {
   grabItem,
   moveHeldItem,

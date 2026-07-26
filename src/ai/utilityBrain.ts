@@ -255,7 +255,7 @@ export function createUtilityBrain(): Brain {
                 (0.55 + other.affinity * 0.6) *
                 (0.4 + proximity * 0.8) *
                 (0.5 + emotions.happiness * 0.8) *
-                2.6,
+                4.2,
               other.x,
               other.y,
               other.id,

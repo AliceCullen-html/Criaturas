@@ -143,6 +143,14 @@ export interface Mind {
   surprise: number;
   /** Segundos restantes prestando atenção na mão do jogador (olha para ela). */
   attention: number;
+  /**
+   * Há quantos segundos o corpo está sendo barrado por algo sólido.
+   *
+   * Ninguém aqui calcula rota: a criatura anda reto e desliza no obstáculo. Sem
+   * este contador ela insiste para sempre contra a mesma pedra e morre de fome
+   * encostada nela. Passado um tempo, desiste e tenta por outro lado.
+   */
+  blocked: number;
 }
 export const Mind = defineComponent<Mind>('Mind');
 

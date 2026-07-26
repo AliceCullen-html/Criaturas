@@ -66,21 +66,24 @@ export function releaseItem(world: World, id: number, vx: number, vy: number): D
   const item = world.store(Item).get(id);
   if (!item) return LOOSE_DROP;
   item.held = false;
-  item.vx = vx;
-  item.vy = vy;
+  // Pedra grande é pesada: cai onde foi largada, ninguém a arremessa.
+  const heavy = item.kind === 'boulder';
+  item.vx = heavy ? 0 : vx;
+  item.vy = heavy ? 0 : vy;
   item.hidden = false;
   item.stack = 0;
 
   const transform = world.store(Transform).get(id);
   if (!transform) return LOOSE_DROP;
 
-  const speed = Math.hypot(vx, vy);
+  const speed = heavy ? 0 : Math.hypot(vx, vy);
   if (speed >= THROW_SPEED) {
     // Um objeto arremessado com força assusta quem estiver por perto.
     if (speed >= 220) scareNear(world, transform.x, transform.y, 60, 0.25);
     return LOOSE_DROP;
   }
 
+  if (heavy) return LOOSE_DROP;
   if (hideBehindScenery(world, item, transform)) return { stacked: 0, hidden: true };
 
   const level = stackOnNeighbour(world, id, item, transform);

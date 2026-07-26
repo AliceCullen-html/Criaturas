@@ -10,12 +10,15 @@ export {
   dropFruitNear,
   itemRadius,
   maxItems,
+  loose,
   MAX_STACK,
   STACK_STEP,
   TOXIC_FRUIT_VARIANT,
   VARIANT,
   isRare,
   spawnTrinket,
+  spawnBoulder,
+  BOULDER_RADIUS,
 } from './items';
 export type { ItemKind } from './items';
 export { SceneryResource, generateScenery } from './scenery';
@@ -46,6 +49,8 @@ export type { Terrain } from './terrain';
 export { TerrainResource } from './terrainResource';
 export { spawnPlant, radiusForBiomass, maxPlants, RESOURCE_VARIANTS } from './plant';
 export { areaScale, countFor, countIn } from './density';
+export { largestOpenRegion, makeMainlandTest } from './connectivity';
+export type { Blocker } from './connectivity';
 export { plantGrowthSystem } from './systems/plantGrowthSystem';
 export { plantSpreadSystem } from './systems/plantSpreadSystem';
 export { createWorld } from './createWorld';

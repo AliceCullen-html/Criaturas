@@ -55,6 +55,7 @@ import {
   attractBirds,
   searchSystem,
   idleSystem,
+  confinementSystem,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -107,6 +108,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(actionSystem)
     .add(reproductionSystem)
     .add(metabolismSystem)
+    .add(confinementSystem)
     .add(itemSystem)
     .add(searchSystem)
     .add(weatherSystem)

@@ -15,7 +15,7 @@ import { Item, Plant, RESOURCE_NAMES, isToxicVariant, itemRadius, radiusForBioma
 import { isBaby } from '../age';
 
 const EAT_RATE = 3.2;
-const NUTRITION = 0.13;
+const NUTRITION = 0.21;
 const PLANT_MIN_BIOMASS = 0.4;
 const TOXIN_DAMAGE = 0.22;
 const INTERACT_COOLDOWN = 2.5;

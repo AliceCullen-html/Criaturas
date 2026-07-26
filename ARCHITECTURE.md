@@ -105,6 +105,7 @@ personalidade própria. Nada entra se não servir a isso.
 | ----- | ------------------------------------------------------------------------- |
 | A ✅  | Mundo compacto: densidades proporcionais à área, jardim que se sustenta   |
 | B ✅  | Microcomportamentos: canal de **pose** separado do humor, 17 gestos ociosos |
+| — ✅  | Celular: toque, dois dedos para câmera, layout responsivo; pedras que prendem |
 | C     | Pequenas histórias: o cérebro escolhe **rotinas** encadeadas; carregar objetos |
 | D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
@@ -119,6 +120,18 @@ Critérios de aceitação da fase, verificados por teste:
   criatura por cinco minutos, escreve a vida dela em frases e cobra variedade —
   e compara o terço mais preguiçoso com o terço mais agitado do jardim para
   provar que a personalidade aparece no comportamento, não só na ficha.
+
+### Invariantes de geração do mundo
+
+O jardim é sorteado, mas não pode sortear um mundo inviável. A geração
+**verifica**, em vez de confiar em distâncias mágicas:
+
+- **Piso de água** (`terrain.ts`): sem lago suficiente a população morre de sede.
+- **Nenhuma pedra corta o jardim** (`connectivity.ts`): pôr uma pedra grande só
+  pode consumir a área dela mesma; se desconectasse um pedaço, ela não vai ali.
+  Encurralar continua possível — mas só com as mãos de quem joga.
+- **Ninguém nasce em ilha** (`spawnCreatures`): criaturas só surgem na maior
+  região contínua.
 
 ### Rumo à v1.0
 

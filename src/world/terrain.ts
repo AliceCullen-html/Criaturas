@@ -14,6 +14,14 @@ export interface Terrain extends TileGrid {
  *  pela área mantém constante a fração de água do jardim. */
 const MIN_PONDS_BASE = 3;
 const MAX_PONDS_BASE = 6;
+/** Fração mínima do jardim que precisa ser água, para ninguém morrer de sede. */
+const MIN_WATER_FRACTION = 0.11;
+
+const countWater = (cells: Uint8Array): number => {
+  let total = 0;
+  for (let i = 0; i < cells.length; i++) if (cells[i] === WATER) total += 1;
+  return total;
+};
 
 /** Gera um terreno com alguns lagos circulares, de forma determinística (via RNG). */
 export function generateTerrain(
@@ -26,10 +34,7 @@ export function generateTerrain(
   const rows = Math.max(1, Math.ceil(height / cellSize));
   const cells = new Uint8Array(cols * rows); // GROUND por padrão
 
-  const minPonds = countFor(MIN_PONDS_BASE, width, height, 2);
-  const maxPonds = countFor(MAX_PONDS_BASE, width, height, 3);
-  const ponds = minPonds + rng.int(maxPonds - minPonds + 1);
-  for (let p = 0; p < ponds; p++) {
+  const digPond = (): void => {
     const centerX = rng.int(cols);
     const centerY = rng.int(rows);
     const radius = 2 + rng.int(4);
@@ -43,7 +48,21 @@ export function generateTerrain(
         }
       }
     }
-  }
+  };
+
+  const minPonds = countFor(MIN_PONDS_BASE, width, height, 2);
+  const maxPonds = countFor(MAX_PONDS_BASE, width, height, 3);
+  const ponds = minPonds + rng.int(maxPonds - minPonds + 1);
+  for (let p = 0; p < ponds; p++) digPond();
+
+  // Piso de água.
+  //
+  // Os lagos são círculos sorteados, e às vezes o sorteio dá dois lagos
+  // minúsculos e sobrepostos: o jardim fica com 5% de água e a população morre
+  // de sede sem que nada pareça errado. Um jardim precisa de bebedouro, então
+  // a geração cava mais até ter.
+  const wanted = cells.length * MIN_WATER_FRACTION;
+  for (let tries = 0; tries < 40 && countWater(cells) < wanted; tries++) digPond();
 
   return { cols, rows, cellSize, cells };
 }

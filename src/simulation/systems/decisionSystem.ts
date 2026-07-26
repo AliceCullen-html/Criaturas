@@ -23,6 +23,11 @@ const perceivedFood: PerceivedFood[] = [];
 const hiddenSpots: Array<{ x: number; y: number }> = [];
 const hunch = { x: 0, y: 0, distance: 0 };
 const WANDER_RANGE = 150;
+/** Segundos batendo no mesmo obstáculo antes de desistir do alvo. */
+const GIVE_UP_AFTER = 1.6;
+/** A que distância ela vai dar a volta ao desistir. */
+const DETOUR = 70;
+const NO_TARGET = -1;
 
 /** O ponto suspeito mais próximo, dentro do alcance da visão. */
 function nearestHunch(x: number, y: number, vision: number): typeof hunch | null {
@@ -84,6 +89,26 @@ export const decisionSystem: System = {
 
       mind.commitment -= dt;
       mind.actionCooldown = Math.max(0, mind.actionCooldown - dt);
+
+      // Barrada há tempo demais: o plano não vai dar certo por este caminho.
+      //
+      // Como ninguém calcula rota, insistir contra uma pedra ou contra a
+      // margem do lago é um beco sem saída — a criatura fica encostada nele
+      // até morrer de fome. Aqui ela faz o que um bicho faria: larga o alvo e
+      // dá uma volta, e da próxima vez chega por outro ângulo.
+      if (mind.blocked > GIVE_UP_AFTER) {
+        mind.blocked = 0;
+        mind.commitment = 0;
+        mind.intent = 'wander';
+        mind.targetEntity = NO_TARGET;
+        const transform = transforms.get(entity);
+        if (transform) {
+          const away = rng.range(0, Math.PI * 2);
+          mind.targetX = clamp(transform.x + Math.cos(away) * DETOUR, 4, config.width - 4);
+          mind.targetY = clamp(transform.y + Math.sin(away) * DETOUR, 4, config.height - 4);
+          mind.commitment = 1.5;
+        }
+      }
 
       const transform = transforms.get(entity);
       const velocity = velocities.get(entity);

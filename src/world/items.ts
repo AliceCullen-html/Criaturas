@@ -8,7 +8,15 @@ import { countIn } from './density';
  * Objeto físico do mundo: pode ser pego, arrastado, arremessado e — no caso
  * das frutas — comido. É por aqui que o jogador alimenta, em vez de um botão.
  */
-export type ItemKind = 'fruit' | 'toy' | 'stick' | 'seed' | 'feather' | 'stone' | 'shell';
+export type ItemKind =
+  | 'fruit'
+  | 'toy'
+  | 'stick'
+  | 'seed'
+  | 'feather'
+  | 'stone'
+  | 'shell'
+  | 'boulder';
 
 export interface Item {
   kind: ItemKind;
@@ -41,6 +49,7 @@ export const VARIANT = {
   goldenFruit: 11,
   glowMushroom: 12,
   shinyStone: 13,
+  boulder: 14,
 } as const;
 
 const TRINKET_VARIANT: Record<string, number> = {
@@ -62,13 +71,57 @@ const MAX_ITEMS_BASE = 70;
 
 export const maxItems = (config: WorldConfig): number => countIn(MAX_ITEMS_BASE, config, 14);
 
+/**
+ * Quantos objetos contam para o teto.
+ *
+ * Pedra grande não conta: ela é cenário que por acaso se empurra, é permanente
+ * e não apodrece. Deixá-la ocupando vaga fazia as árvores pararem de frutificar
+ * — cinco pedras comiam um quinto da despensa do jardim.
+ */
+export function loose(world: World): number {
+  let count = 0;
+  world.store(Item).forEach((item) => {
+    if (item.kind !== 'boulder') count += 1;
+  });
+  return count;
+}
+
 /** Altura máxima de uma pilha e o quanto cada nível sobe na tela. */
 export const MAX_STACK = 3;
 export const STACK_STEP = 3.5;
 
+/**
+ * Raio de uma pedra grande. É o que ela ocupa no chão — e, diferente de todo o
+ * resto, o que as criaturas NÃO conseguem atravessar.
+ */
+export const BOULDER_RADIUS = 13;
+
 /** Raio visual conforme o frescor (frutas murcham ao apodrecer). */
 export const itemRadius = (item: Item): number =>
-  item.kind === 'fruit' ? 4.5 + item.freshness * 3 : 7;
+  item.kind === 'fruit' ? 4.5 + item.freshness * 3 : item.kind === 'boulder' ? BOULDER_RADIUS : 7;
+
+/**
+ * Pedra grande: pesada demais para ser arremessada e sólida demais para se
+ * passar por ela. Empurrando várias, o jogador constrói parede — e é isso que
+ * torna possível encurralar alguém num canto.
+ */
+export function spawnBoulder(world: World, x: number, y: number): number {
+  const entity = world.createEntity();
+  world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
+  world.store(Item).set(entity, {
+    kind: 'boulder',
+    variant: VARIANT.boulder,
+    freshness: 1,
+    toxic: false,
+    held: false,
+    hidden: false,
+    stack: 0,
+    vx: 0,
+    vy: 0,
+  });
+  world.store(Sprite).set(entity, { radius: BOULDER_RADIUS, color: 0x8d8f95, variant: VARIANT.boulder });
+  return entity;
+}
 
 export function registerItems(world: World): void {
   world.register(Item);

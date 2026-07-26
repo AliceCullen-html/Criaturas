@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Transform, Velocity } from '@engine';
+import { Mind } from '@creatures';
 import { createWorld, TerrainResource, isWaterAt } from '@world';
 import { movementSystem } from './systems/movementSystem';
 
@@ -8,6 +9,8 @@ const CONFIG = { width: 1000, height: 1000 };
 function makeWorld() {
   const world = createWorld(CONFIG, 5);
   world.register(Velocity);
+  // O movimento anota em `Mind` há quanto tempo o corpo está sendo barrado.
+  world.register(Mind);
   return world;
 }
 

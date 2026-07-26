@@ -1,20 +1,27 @@
 import { Transform, Velocity, type System } from '@engine';
+import { Mind } from '@creatures';
 import { TerrainResource, isWaterAt } from '@world';
+import { solids } from '../solids';
 
 /**
- * Integra a posição a partir da velocidade, respeitando as margens do lago.
+ * Integra a posição a partir da velocidade, respeitando o que é sólido.
  *
- * A água é intransponível: ao esbarrar nela, a criatura tenta deslizar pelo
- * eixo livre em vez de travar de frente. É isso que faz elas contornarem a
- * margem naturalmente e beberem da beira, em vez de atravessarem o lago.
+ * São dois obstáculos: a água do lago e as pedras grandes que o jogador
+ * empurra. Ao esbarrar em qualquer um dos dois, a criatura tenta deslizar pelo
+ * eixo livre em vez de travar de frente — é isso que faz ela contornar a
+ * margem naturalmente, e o que exige que uma parede de pedras esteja mesmo
+ * fechada para prender alguém.
  */
 export const movementSystem: System = {
   name: 'movement',
   update(world, dt) {
     const transforms = world.store(Transform);
     const velocities = world.store(Velocity);
+    const minds = world.store(Mind);
     const terrain = world.getResource(TerrainResource);
     const { width, height } = world.config;
+
+    solids.rebuild(world);
 
     transforms.forEach((transform, entity) => {
       const velocity = velocities.get(entity);
@@ -31,18 +38,38 @@ export const movementSystem: System = {
       const nextX = clampTo(transform.x + velocity.x * dt, width);
       const nextY = clampTo(transform.y + velocity.y * dt, height);
 
-      if (!isWaterAt(terrain, nextX, nextY)) {
+      // Já está DENTRO de uma pedra? Então pode sair andando.
+      //
+      // Sem esta saída, quem nascesse debaixo de uma pedra — ou levasse uma
+      // pedra em cima, que é o que o jogador vai fazer — ficava congelado para
+      // sempre: todo destino era bloqueado, e a criatura morria de fome parada.
+      // Continua sem poder entrar no lago, que é o único obstáculo de verdade
+      // intransponível.
+      if (solids.blocked(terrain, transform.x, transform.y)) {
+        if (!isWaterAt(terrain, nextX, nextY)) {
+          transform.x = nextX;
+          transform.y = nextY;
+        }
+        return;
+      }
+
+
+      const mind = minds.get(entity);
+
+      if (!solids.blocked(terrain, nextX, nextY)) {
         transform.x = nextX;
         transform.y = nextY;
+        if (mind) mind.blocked = 0;
         return;
       }
 
       // Bloqueada: desliza pelo eixo que ainda estiver livre.
-      if (!isWaterAt(terrain, nextX, transform.y)) {
+      if (!solids.blocked(terrain, nextX, transform.y)) {
         transform.x = nextX;
-      } else if (!isWaterAt(terrain, transform.x, nextY)) {
+      } else if (!solids.blocked(terrain, transform.x, nextY)) {
         transform.y = nextY;
       }
+      if (mind) mind.blocked += dt;
     });
   },
 };

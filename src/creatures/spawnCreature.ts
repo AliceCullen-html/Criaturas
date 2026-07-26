@@ -126,6 +126,7 @@ export function spawnCreature(
     affection: 0,
     surprise: 0,
     attention: 0,
+    blocked: 0,
   });
 
   world.store(Behavior).set(entity, {

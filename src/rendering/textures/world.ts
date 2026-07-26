@@ -255,6 +255,24 @@ export function makeResourceTextures(): Texture[] {
     return b.toTexture();
   };
 
+  // Pedra grande: o único objeto que as criaturas não atravessam. Precisa
+  // parecer PESADA — larga, escura embaixo, com sombra bem plantada no chão.
+  const boulder = (): Texture => {
+    const b = new PixelBuffer(28, 24);
+    bakeShadow(b, 14, 20, 9, 3);
+    const rock = 0x8d8f95;
+    b.ellipse(14, 14, 10.5, 7.5, shade(rock, 0.62));
+    b.ellipse(14, 12.6, 10, 7, rock);
+    b.ellipse(12, 10.5, 6.5, 4.2, mix(rock, 0xffffff, 0.22));
+    b.ellipse(10.5, 9, 3.4, 2.2, mix(rock, 0xffffff, 0.38));
+    // Rachaduras e musgo: pedra de jardim, não bola de boliche.
+    b.rect(15, 12, 1, 5, shade(rock, 0.5));
+    b.rect(16, 15, 3, 1, shade(rock, 0.5));
+    b.ellipse(18, 17, 2.6, 1.4, 0x6f9a5e);
+    b.ellipse(8, 17, 2, 1.1, 0x6f9a5e);
+    return b.toTexture();
+  };
+
   return [
     apple(),
     berries(),
@@ -270,6 +288,7 @@ export function makeResourceTextures(): Texture[] {
     goldenFruit(),
     glowMushroom(),
     shinyStone(),
+    boulder(),
   ];
 }
 

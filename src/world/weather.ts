@@ -1,6 +1,6 @@
 import { clamp01 } from '@core';
 import { defineResource, type System } from '@engine';
-import { spawnFruit, Item, maxItems, TOXIC_FRUIT_VARIANT } from './items';
+import { spawnFruit, maxItems, loose, TOXIC_FRUIT_VARIANT } from './items';
 import { SceneryResource } from './scenery';
 
 export type WeatherKind = 'clear' | 'rain';
@@ -77,10 +77,9 @@ export const weatherSystem: System = {
 function afterRain(world: Parameters<typeof weatherSystem.update>[0], weather: Weather): void {
   const { rng } = world;
   const scenery = world.getResource(SceneryResource);
-  const items = world.store(Item);
 
   const cap = maxItems(world.config);
-  for (let i = 0; i < MUSHROOMS_AFTER_RAIN && items.size < cap; i++) {
+  for (let i = 0; i < MUSHROOMS_AFTER_RAIN && loose(world) < cap; i++) {
     // Cogumelos gostam da sombra das árvores.
     const spot = scenery.length > 0 ? rng.pick(scenery) : null;
     const x = spot ? spot.x + rng.range(-30, 30) : rng.range(20, world.config.width - 20);

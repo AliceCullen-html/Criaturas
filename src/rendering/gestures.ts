@@ -269,4 +269,27 @@ export class GestureRecognizer {
     this.state = 'open';
     this.handlers.onHandMove(0, 0, false);
   }
+
+  /**
+   * Aborta o gesto em curso sem concluí-lo.
+   *
+   * Usado quando um segundo dedo encosta na tela: aquilo virou câmera, não
+   * gesto. O que estava na mão é POUSADO onde está — nunca arremessado, senão
+   * pinçar para dar zoom jogaria a fruta longe.
+   */
+  cancel(): void {
+    if (this.heldItem !== null) {
+      this.handlers.onRelease(this.heldItem, this.lastX, this.lastY, 0, 0);
+      this.heldItem = null;
+    }
+    this.down = false;
+    this.moved = false;
+    this.pettingId = null;
+    this.petTime = 0;
+    this.speed = 0;
+    this.velX = 0;
+    this.velY = 0;
+    this.state = 'open';
+    this.handlers.onHandMove(0, 0, false);
+  }
 }

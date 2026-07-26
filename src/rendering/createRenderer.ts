@@ -541,6 +541,13 @@ export function createRenderer(options: RendererOptions): Renderer {
   let sceneryList: readonly ScenerySpot[] = [];
   let waterProbe: ((x: number, y: number) => boolean) | null = null;
   const handWorld = { x: 0, y: 0, inside: false };
+  /**
+   * A última entrada veio de um dedo. Dedo é mais grosso e menos preciso que
+   * um cursor, então os alvos crescem — sem isso, pegar uma fruta no celular
+   * vira sorte.
+   */
+  let touchMode = false;
+  const pickSlack = (): number => (touchMode ? 1.7 : 1);
 
   const screenToWorldX = (sx: number, sw: number): number => (sx - sw / 2) / camera.zoom + camera.x;
   const screenToWorldY = (sy: number, sh: number): number => (sy - sh / 2) / camera.zoom + camera.y;
@@ -554,7 +561,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const dx = buffer.x[i]! - worldX;
       const dy = buffer.y[i]! - worldY;
       const dist = dx * dx + dy * dy;
-      const reach = Math.max(buffer.size[i]! * 1.7, 16);
+      const reach = Math.max(buffer.size[i]! * 1.7, 16) * pickSlack();
       if (dist <= reach * reach && dist < bestDist) {
         bestDist = dist;
         best = buffer.id[i]!;
@@ -573,7 +580,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const dx = buffer.x[i]! - worldX;
       const dy = buffer.y[i]! - worldY;
       const dist = dx * dx + dy * dy;
-      const reach = Math.max(buffer.radius[i]! * 2.2, 12);
+      const reach = Math.max(buffer.radius[i]! * 2.2, 12) * pickSlack();
       if (dist <= reach * reach && dist < bestDist) {
         bestDist = dist;
         best = ids[i]!;
@@ -586,7 +593,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   function pickScenery(worldX: number, worldY: number): { kind: string; index: number } | null {
     for (let i = 0; i < sceneryList.length; i++) {
       const piece = sceneryList[i]!;
-      const reach = piece.kind === 'tree' ? 20 : 14;
+      const reach = (piece.kind === 'tree' ? 20 : 14) * pickSlack();
       // O tronco fica abaixo do centro do sprite: o alvo acompanha isso.
       if (Math.hypot(piece.x - worldX, piece.y - worldY - 6) <= reach) {
         return { kind: piece.kind, index: i };
@@ -595,17 +602,37 @@ export function createRenderer(options: RendererOptions): Renderer {
     return null;
   }
 
+  /**
+   * Entrada.
+   *
+   * A filosofia do jogo é "um dedo (ou o mouse) É a mão" — tudo o que ela toca
+   * é o mundo, nunca um botão. Isso deixa a câmera sem gesto no celular, então
+   * ela fica com o que sobra e não conflita: **dois dedos**. Pinçar dá zoom,
+   * arrastar com dois move. No mouse continuam a roda e o botão do meio.
+   */
   function attachInput(canvas: HTMLCanvasElement): void {
     canvas.style.touchAction = 'none';
     // A seta do sistema some: quem representa o jogador é a mão desenhada.
     canvas.style.cursor = 'none';
 
-    // Câmera: botão do meio arrasta.
+    // Câmera por mouse: botão do meio arrasta.
     let panning = false;
     let panStartX = 0;
     let panStartY = 0;
     let panCamX = 0;
     let panCamY = 0;
+
+    /** Dedos encostados agora, na ordem em que chegaram. */
+    const touches = new Map<number, { x: number; y: number }>();
+    /** Estado do gesto de dois dedos, entre um quadro e o seguinte. */
+    let pinchDistance = 0;
+    let pinchMidX = 0;
+    let pinchMidY = 0;
+
+    const localX = (event: PointerEvent): number =>
+      event.clientX - canvas.getBoundingClientRect().left;
+    const localY = (event: PointerEvent): number =>
+      event.clientY - canvas.getBoundingClientRect().top;
 
     const toWorld = (event: PointerEvent): { x: number; y: number } => {
       const rect = canvas.getBoundingClientRect();
@@ -615,10 +642,45 @@ export function createRenderer(options: RendererOptions): Renderer {
       };
     };
 
+    /** Zoom mantendo fixo o ponto do mundo sob (sx, sy) na tela. */
+    const zoomAt = (sx: number, sy: number, factor: number): void => {
+      if (!app) return;
+      const worldX = screenToWorldX(sx, app.screen.width);
+      const worldY = screenToWorldY(sy, app.screen.height);
+      camera.zoom = clamp(camera.zoom * factor, fitZoom * 0.8, fitZoom * 10);
+      camera.x = worldX - (sx - app.screen.width / 2) / camera.zoom;
+      camera.y = worldY - (sy - app.screen.height / 2) / camera.zoom;
+    };
+
+    const startPinch = (): void => {
+      const [a, b] = [...touches.values()];
+      if (!a || !b) return;
+      pinchDistance = Math.hypot(b.x - a.x, b.y - a.y);
+      pinchMidX = (a.x + b.x) / 2;
+      pinchMidY = (a.y + b.y) / 2;
+    };
+
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
+    /** Capturar o ponteiro pode falhar (o dedo já saiu, o navegador recusou).
+     *  Isso não pode derrubar o resto do gesto. */
+    const capture = (id: number): void => {
+      try {
+        canvas.setPointerCapture(id);
+      } catch {
+        /* segue o jogo */
+      }
+    };
+    const release = (id: number): void => {
+      try {
+        if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      } catch {
+        /* segue o jogo */
+      }
+    };
+
     canvas.addEventListener('pointerdown', (event) => {
-      canvas.setPointerCapture(event.pointerId);
+      capture(event.pointerId);
       if (event.button === 1) {
         event.preventDefault();
         panning = true;
@@ -628,7 +690,25 @@ export function createRenderer(options: RendererOptions): Renderer {
         panCamY = camera.y;
         return;
       }
+
+      touchMode = event.pointerType === 'touch';
+      if (event.pointerType === 'touch') {
+        touches.set(event.pointerId, { x: localX(event), y: localY(event) });
+        if (touches.size === 2) {
+          // Chegou o segundo dedo: o que o primeiro tinha começado é cancelado.
+          // Sem isto, pinçar para dar zoom acabaria arremessando uma fruta.
+          gestures?.cancel();
+          handWorld.inside = false;
+          startPinch();
+          return;
+        }
+        if (touches.size > 2) return;
+      }
+
       const { x, y } = toWorld(event);
+      handWorld.x = x;
+      handWorld.y = y;
+      handWorld.inside = true;
       gestures?.pointerDown(x, y, event.timeStamp, event.button);
     });
 
@@ -638,6 +718,31 @@ export function createRenderer(options: RendererOptions): Renderer {
         camera.y = panCamY - (event.clientY - panStartY) / camera.zoom;
         return;
       }
+
+      if (event.pointerType === 'touch' && touches.has(event.pointerId)) {
+        touches.set(event.pointerId, { x: localX(event), y: localY(event) });
+        if (touches.size >= 2) {
+          const [a, b] = [...touches.values()];
+          if (!a || !b) return;
+          const distance = Math.hypot(b.x - a.x, b.y - a.y);
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+
+          // Arrastar com dois dedos move a câmera...
+          if (app) {
+            camera.x -= (midX - pinchMidX) / camera.zoom;
+            camera.y -= (midY - pinchMidY) / camera.zoom;
+          }
+          // ...e afastá-los ou juntá-los dá zoom, ancorado no meio deles.
+          if (pinchDistance > 0 && distance > 0) zoomAt(midX, midY, distance / pinchDistance);
+
+          pinchDistance = distance;
+          pinchMidX = midX;
+          pinchMidY = midY;
+          return;
+        }
+      }
+
       const { x, y } = toWorld(event);
       handWorld.x = x;
       handWorld.y = y;
@@ -646,18 +751,34 @@ export function createRenderer(options: RendererOptions): Renderer {
     });
 
     const endPointer = (event: PointerEvent): void => {
-      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      release(event.pointerId);
       if (event.button === 1 || panning) {
         panning = false;
         return;
       }
+
+      if (event.pointerType === 'touch') {
+        const wasPinching = touches.size >= 2;
+        touches.delete(event.pointerId);
+        if (wasPinching) {
+          // Saindo da pinça: o dedo que ficou não vira um gesto pela metade.
+          if (touches.size >= 2) startPinch();
+          else pinchDistance = 0;
+          handWorld.inside = false;
+          return;
+        }
+        // No toque não existe "passar o mouse": a mão some quando o dedo sai.
+        handWorld.inside = false;
+      }
+
       const { x, y } = toWorld(event);
       gestures?.pointerUp(x, y, event.timeStamp, event.button);
     };
     canvas.addEventListener('pointerup', endPointer);
     canvas.addEventListener('pointercancel', endPointer);
 
-    canvas.addEventListener('pointerleave', () => {
+    canvas.addEventListener('pointerleave', (event) => {
+      if (event.pointerType === 'touch') return; // já tratado no pointerup
       handWorld.inside = false;
       gestures?.pointerLeave();
     });
@@ -666,16 +787,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       'wheel',
       (event) => {
         event.preventDefault();
-        if (!app) return;
         const rect = canvas.getBoundingClientRect();
-        const sx = event.clientX - rect.left;
-        const sy = event.clientY - rect.top;
-        const worldX = screenToWorldX(sx, app.screen.width);
-        const worldY = screenToWorldY(sy, app.screen.height);
-        const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-        camera.zoom = clamp(camera.zoom * factor, fitZoom * 0.8, fitZoom * 10);
-        camera.x = worldX - (sx - app.screen.width / 2) / camera.zoom;
-        camera.y = worldY - (sy - app.screen.height / 2) / camera.zoom;
+        zoomAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.12 : 1 / 1.12);
       },
       { passive: false },
     );
