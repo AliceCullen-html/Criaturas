@@ -75,7 +75,147 @@ const EXPRESSIONS: readonly Expression[] = [
   'sad',
   'loved',
   'afraid',
+  'curious',
+  'hungry',
+  'thirsty',
+  'playful',
 ];
+
+const MOOD = {
+  neutral: 0,
+  happy: 1,
+  needy: 2,
+  sleepy: 3,
+  surprised: 4,
+  angry: 5,
+  sad: 6,
+  loved: 7,
+  afraid: 8,
+  curious: 9,
+  hungry: 10,
+  thirsty: 11,
+  playful: 12,
+} as const;
+
+/** Como o corpo se mexe em cada estado. Não é só trocar o rosto. */
+interface BodyMotion {
+  bob: number;
+  jitter: number;
+  squashX: number;
+  squashY: number;
+  tilt: number;
+  yOffset: number;
+}
+
+const motion: BodyMotion = { bob: 0, jitter: 0, squashX: 1, squashY: 1, tilt: 0, yOffset: 0 };
+
+function animateBody(
+  mood: number,
+  t: number,
+  seed: number,
+  size: number,
+  moving: boolean,
+  stage: LifeStage,
+): BodyMotion {
+  // Respiração de base, sempre presente.
+  motion.bob = 0;
+  motion.jitter = 0;
+  motion.squashX = 1;
+  motion.squashY = 1 + Math.sin(t * 2.4 + seed) * 0.035;
+  motion.tilt = 0;
+  motion.yOffset = 0;
+
+  if (moving) {
+    // Filhotes dão passinhos rápidos e desajeitados; idosos, lentos.
+    const cadence = stage === 0 ? 14 : stage === 2 ? 5.5 : 9;
+    const clumsy = stage === 0 ? 1.6 : 1;
+    motion.bob = Math.abs(Math.sin(t * cadence + seed)) * size * 0.1 * clumsy;
+    motion.tilt = Math.sin(t * cadence + seed) * 0.06 * clumsy;
+  }
+
+  switch (mood) {
+    case MOOD.happy:
+      // Pula e balança o corpo.
+      motion.bob += Math.abs(Math.sin(t * 6 + seed)) * size * 0.2;
+      motion.tilt += Math.sin(t * 3 + seed) * 0.1;
+      break;
+
+    case MOOD.playful: {
+      // Gira e dá pulos altos.
+      motion.bob += Math.abs(Math.sin(t * 8 + seed)) * size * 0.28;
+      motion.tilt += Math.sin(t * 7 + seed) * 0.35;
+      break;
+    }
+
+    case MOOD.loved:
+      motion.bob += Math.abs(Math.sin(t * 5 + seed)) * size * 0.12;
+      motion.squashY *= 1.03;
+      break;
+
+    case MOOD.afraid:
+      // Encolhe e treme.
+      motion.jitter = Math.sin(t * 34 + seed) * size * 0.07;
+      motion.squashX = 0.86;
+      motion.squashY *= 0.88;
+      motion.yOffset = size * 0.08;
+      break;
+
+    case MOOD.sad:
+      // Cabeça baixa: afunda um pouco e inclina para a frente.
+      motion.bob *= 0.3;
+      motion.squashY *= 0.95;
+      motion.yOffset = size * 0.07;
+      motion.tilt += 0.08;
+      break;
+
+    case MOOD.needy:
+      motion.bob *= 0.4;
+      motion.tilt += Math.sin(t * 1.6 + seed) * 0.06;
+      break;
+
+    case MOOD.curious:
+      // Inclina a cabeça e olha para os lados.
+      motion.tilt += Math.sin(t * 1.5 + seed) * 0.22;
+      motion.bob *= 0.6;
+      break;
+
+    case MOOD.angry:
+      // Encara: firme, inclinada para a frente, com tremor curto de fúria.
+      motion.tilt += 0.05;
+      motion.jitter = Math.sin(t * 22 + seed) * size * 0.02;
+      motion.squashX = 1.05;
+      break;
+
+    case MOOD.hungry:
+      // Segura a barriga: encolhe um pouco e balança devagar.
+      motion.squashY *= 0.94;
+      motion.tilt += Math.sin(t * 2 + seed) * 0.08;
+      break;
+
+    case MOOD.thirsty:
+      motion.tilt += Math.sin(t * 2.4 + seed) * 0.06;
+      motion.yOffset = size * 0.03;
+      break;
+
+    case MOOD.sleepy:
+      // Respiração lenta e profunda, sentada no chão.
+      motion.squashY = 1 + Math.sin(t * 1.4 + seed) * 0.07;
+      motion.squashX = 1.06;
+      motion.bob = 0;
+      motion.yOffset = size * 0.12;
+      break;
+
+    case MOOD.surprised:
+      motion.bob += size * 0.14;
+      motion.squashY *= 1.06;
+      break;
+
+    default:
+      break;
+  }
+
+  return motion;
+}
 
 const BLINK_DURATION = 0.11;
 const DUST_INTERVAL = 0.22;
@@ -91,6 +231,8 @@ interface CreatureSlot {
   stage: number;
   blinkIn: number;
   blinking: number;
+  yawnIn: number;
+  yawning: number;
 }
 
 interface Dust {
@@ -584,74 +726,81 @@ export function createRenderer(options: RendererOptions): Renderer {
             container,
             body,
             face,
-            features: decodeFeatures(dna),
+            features: decodeFeatures(dna, creatures.species[i]!),
             facing: 1,
             seen: frameId,
             stage: -1,
             blinkIn: 1 + (id % 7) * 0.5,
             blinking: 0,
+            yawnIn: 6 + (id % 5) * 3,
+            yawning: 0,
           };
           creatureSlots.set(id, slot);
         }
 
+        const speciesIndex = creatures.species[i]!;
         if (slot.stage !== stage) {
-          slot.body.texture = getBodyTexture(dna, creatures.bodyColor[i]!, stage);
+          slot.body.texture = getBodyTexture(
+            dna,
+            { body: creatures.bodyColor[i]!, accent: creatures.accentColor[i]! },
+            stage,
+            speciesIndex,
+          );
           slot.stage = stage;
         }
 
         // Piscar aleatório — só quando os olhos estão abertos.
-        const eyesOpen = mood !== 3 && mood !== 7;
+        const eyesOpen = mood !== MOOD.sleepy && mood !== MOOD.loved;
         slot.blinkIn -= dt;
         if (slot.blinking > 0) slot.blinking -= dt;
         else if (slot.blinkIn <= 0 && eyesOpen) {
           slot.blinking = BLINK_DURATION;
-          slot.blinkIn = 2.5 + Math.random() * 4;
+          // Sonolentas piscam devagar e com mais frequência.
+          slot.blinkIn = (mood === MOOD.sleepy ? 1.2 : 2.5) + Math.random() * 4;
+        }
+
+        // Bocejo: sonolentas e idosas bocejam de vez em quando.
+        const canYawn = mood === MOOD.sleepy || stage === 2;
+        slot.yawnIn -= dt;
+        if (slot.yawning > 0) slot.yawning -= dt;
+        else if (slot.yawnIn <= 0 && canYawn) {
+          slot.yawning = 0.9;
+          slot.yawnIn = (stage === 2 ? 8 : 14) + Math.random() * 10;
         }
 
         const expression: Expression =
-          slot.blinking > 0 && eyesOpen ? 'blink' : (EXPRESSIONS[mood] ?? 'neutral');
+          slot.yawning > 0
+            ? 'yawn'
+            : slot.blinking > 0 && eyesOpen
+              ? 'blink'
+              : (EXPRESSIONS[mood] ?? 'neutral');
         // As texturas são cacheadas: buscar todo quadro é só um lookup em Map.
         const faceTexture = getFaceTexture(
           expression,
           creatures.eyeColor[i]!,
           stage,
           slot.features,
+          speciesIndex,
         );
         if (slot.face.texture !== faceTexture) slot.face.texture = faceTexture;
 
+        // O olhar acompanha o movimento; se parada e curiosa, olha para a mão.
         if (dx > 0.05) slot.facing = 1;
         else if (dx < -0.05) slot.facing = -1;
+        else if (mood === MOOD.curious && handWorld.inside) {
+          slot.facing = handWorld.x >= cx ? 1 : -1;
+        }
 
         const scale = size / 13;
-        // Respiração constante (1–2 px) + reações por emoção.
-        let squash = 1 + Math.sin(elapsed * 2.4 + id) * 0.035;
-        let bob = 0;
-        let jitter = 0;
-        let tilt = 0;
+        const anim = animateBody(mood, elapsed, id, size, moving, stage);
+        // Bocejo empurra o corpo um pouco para trás, como um espreguiçar.
+        const yawnTilt = slot.yawning > 0 ? -0.12 : 0;
 
-        if (moving) {
-          // Balanço curto ao andar; filhotes dão passinhos mais rápidos.
-          const cadence = stage === 0 ? 13 : stage === 2 ? 6 : 9;
-          bob = Math.abs(Math.sin(elapsed * cadence + id)) * size * 0.1;
-          tilt = Math.sin(elapsed * cadence + id) * 0.06;
-        }
-        if (mood === 1 || mood === 7) {
-          bob += Math.abs(Math.sin(elapsed * 6 + id)) * size * 0.2; // pulinhos de alegria
-        } else if (mood === 8) {
-          jitter = Math.sin(elapsed * 34 + id) * size * 0.07; // tremendo de medo
-        } else if (mood === 6 || mood === 2) {
-          bob *= 0.3; // triste/carente: arrasta-se
-        } else if (mood === 3) {
-          squash = 1 + Math.sin(elapsed * 1.6 + id) * 0.06; // respirando devagar
-          bob = 0;
-        } else if (mood === 4) {
-          bob += size * 0.12; // sobressalto
-        }
+        slot.container.scale.set(slot.facing * scale * anim.squashX, scale * anim.squashY);
+        slot.container.rotation = (anim.tilt + yawnTilt) * slot.facing;
+        slot.container.position.set(cx + anim.jitter, cy - anim.bob + anim.yOffset);
 
-        slot.container.scale.set(slot.facing * scale, scale * squash);
-        slot.container.rotation = tilt * slot.facing;
-        slot.container.position.set(cx + jitter, cy - bob);
-        // O olhar acompanha a direção do movimento.
+        // O olhar segue a direção do movimento (deslocando o rosto 1 px).
         const gaze = Math.hypot(dx, dy) > 0.05 ? 1 : 0;
         slot.face.position.set(gaze * Math.sign(dx || 1) * slot.facing, gaze * Math.sign(dy) * 0.5);
         slot.seen = frameId;

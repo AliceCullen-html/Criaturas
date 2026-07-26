@@ -1,6 +1,15 @@
 import { approach, clamp01 } from '@core';
 import { type System } from '@engine';
-import { Creature, Emotions, Memory, Mind, Needs, Personality, type Mood } from '@creatures';
+import {
+  Creature,
+  Emotions,
+  Memory,
+  Mind,
+  Needs,
+  Personality,
+  type Intent,
+  type Mood,
+} from '@creatures';
 
 /**
  * Inércia emocional.
@@ -93,27 +102,35 @@ export const emotionSystem: System = {
       mind.surprise = Math.max(0, mind.surprise - dt);
       mind.attention = Math.max(0, mind.attention - dt);
 
-      mind.mood = pickMood(sleeping, emotions, mind);
+      mind.mood = pickMood(emotions, needs, mind);
 
       memories.get(entity)?.decay(dt);
     });
   },
 };
 
-/** Ordem de prioridade: momentos marcantes vencem estados de fundo. */
+/**
+ * Ordem de prioridade: momentos marcantes vencem estados de fundo, e o que a
+ * criatura está *fazendo* aparece no rosto tanto quanto o que ela sente.
+ */
 function pickMood(
-  sleeping: boolean,
   emotions: Emotions,
-  mind: { affection: number; surprise: number },
+  needs: Needs,
+  mind: { affection: number; surprise: number; attention: number; intent: Intent },
 ): Mood {
   if (mind.affection > 0) return 'loved';
-  if (sleeping) return 'sleepy';
+  if (mind.intent === 'sleep') return 'sleepy';
   if (mind.surprise > 0) return 'surprised';
   if (emotions.fear > 0.45) return 'afraid';
   if (emotions.anger > 0.5) return 'angry';
+  if (mind.intent === 'play' || mind.intent === 'mate') return 'playful';
+  if (mind.intent === 'seekWater' || needs.thirst > 0.75) return 'thirsty';
+  if (mind.intent === 'seekFood' || needs.hunger > 0.75) return 'hungry';
+  if (mind.attention > 0) return 'curious';
   if (emotions.happiness > 0.68) return 'happy';
   if (emotions.loneliness > 0.7 && emotions.happiness < 0.55) return 'needy';
   if (emotions.happiness < 0.3 || emotions.stress > 0.55) return 'sad';
   if (emotions.sleepiness > 0.7) return 'sleepy';
+  if (emotions.curiosity > 0.7) return 'curious';
   return 'neutral';
 }

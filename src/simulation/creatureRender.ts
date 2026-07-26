@@ -13,6 +13,10 @@ const MOOD_CODES: Record<Mood, number> = {
   sad: 6,
   loved: 7,
   afraid: 8,
+  curious: 9,
+  hungry: 10,
+  thirsty: 11,
+  playful: 12,
 };
 
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
@@ -46,7 +50,9 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       attribute.size * growthScale(bio),
       appearance.bodyColor,
       appearance.eyeColor,
+      appearance.accentColor,
       appearance.features,
+      appearance.speciesIndex,
       MOOD_CODES[mind.mood],
       lifeStage(bio),
       moving ? 1 : 0,

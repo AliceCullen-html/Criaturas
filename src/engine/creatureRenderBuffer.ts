@@ -13,7 +13,9 @@ export class CreatureRenderBuffer {
   readonly size: Float32Array;
   readonly bodyColor: Uint32Array;
   readonly eyeColor: Uint32Array;
+  readonly accentColor: Uint32Array;
   readonly dna: Uint32Array;
+  readonly species: Uint8Array;
   readonly mood: Uint8Array;
   readonly stage: Uint8Array;
   readonly moving: Uint8Array;
@@ -28,7 +30,9 @@ export class CreatureRenderBuffer {
     this.size = new Float32Array(capacity);
     this.bodyColor = new Uint32Array(capacity);
     this.eyeColor = new Uint32Array(capacity);
+    this.accentColor = new Uint32Array(capacity);
     this.dna = new Uint32Array(capacity);
+    this.species = new Uint8Array(capacity);
     this.mood = new Uint8Array(capacity);
     this.stage = new Uint8Array(capacity);
     this.moving = new Uint8Array(capacity);
@@ -47,7 +51,9 @@ export class CreatureRenderBuffer {
     size: number,
     bodyColor: number,
     eyeColor: number,
+    accentColor: number,
     dna: number,
+    species: number,
     mood: number,
     stage: number,
     moving: number,
@@ -62,7 +68,9 @@ export class CreatureRenderBuffer {
     this.size[i] = size;
     this.bodyColor[i] = bodyColor;
     this.eyeColor[i] = eyeColor;
+    this.accentColor[i] = accentColor;
     this.dna[i] = dna;
+    this.species[i] = species;
     this.mood[i] = mood;
     this.stage[i] = stage;
     this.moving[i] = moving;

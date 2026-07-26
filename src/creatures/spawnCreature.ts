@@ -17,8 +17,6 @@ import {
 } from './components';
 import { CREATURE_NAMES } from './names';
 
-const EYE_COLOR = 0x1c1c28;
-
 export interface SpawnOptions {
   genome?: Genome;
   name?: string;
@@ -85,7 +83,7 @@ export function spawnCreature(
 
   world.store(Bio).set(entity, {
     sex: rng.chance(0.5) ? 'M' : 'F',
-    species: 'Norn',
+    species: phenotype.species.name,
     age: (options.ageFraction ?? rng.range(0.2, 0.5)) * phenotype.lifespan,
     lifespan: phenotype.lifespan,
     metabolism: phenotype.metabolism,
@@ -102,8 +100,10 @@ export function spawnCreature(
 
   world.store(Appearance).set(entity, {
     bodyColor: phenotype.bodyColor,
-    eyeColor: EYE_COLOR,
+    accentColor: phenotype.accentColor,
+    eyeColor: phenotype.eyeColor,
     features: phenotype.features,
+    speciesIndex: phenotype.species.index,
   });
 
   world.store(Memory).set(entity, new CreatureMemory());

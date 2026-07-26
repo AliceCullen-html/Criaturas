@@ -20,7 +20,19 @@ export type Intent =
 
 /** Expressão facial dominante, derivada das emoções. */
 export type Mood =
-  'neutral' | 'happy' | 'needy' | 'sleepy' | 'surprised' | 'angry' | 'sad' | 'loved' | 'afraid';
+  | 'neutral'
+  | 'happy'
+  | 'needy'
+  | 'sleepy'
+  | 'surprised'
+  | 'angry'
+  | 'sad'
+  | 'loved'
+  | 'afraid'
+  | 'curious'
+  | 'hungry'
+  | 'thirsty'
+  | 'playful';
 
 /** Marca uma entidade como criatura. */
 export const Creature = defineComponent<true>('Creature');
@@ -86,8 +98,11 @@ export const Attributes = defineComponent<Attributes>('Attributes');
 /** Aparência procedural. `features` semeia o sprite (olhos, orelhas, manchas). */
 export interface Appearance {
   bodyColor: number;
+  accentColor: number;
   eyeColor: number;
   features: number;
+  /** Índice da espécie: liga o comportamento (genetics) à silhueta (rendering). */
+  speciesIndex: number;
 }
 export const Appearance = defineComponent<Appearance>('Appearance');
 

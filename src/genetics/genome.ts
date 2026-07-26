@@ -24,9 +24,12 @@ export const GENE = {
   activity: 13,
   territoriality: 14,
   playfulness: 15,
+  species: 16,
+  accent: 17,
+  eyeHue: 18,
 } as const;
 
-export const GENE_COUNT = 16;
+export const GENE_COUNT = 19;
 
 export type Genome = Float32Array;
 

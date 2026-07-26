@@ -17,12 +17,18 @@ export type Expression =
   | 'sad'
   | 'loved'
   | 'afraid'
-  | 'blink';
+  | 'curious'
+  | 'hungry'
+  | 'thirsty'
+  | 'playful'
+  | 'blink'
+  | 'yawn';
 
 const OUTLINE = 0x2a2333;
 const WHITE = 0xfdfdff;
 const CHEEK = 0xf2969c;
 const TEAR = 0x9fd4f0;
+const TONGUE = 0xe87f92;
 
 interface Layout {
   eyeX: number;
@@ -34,8 +40,8 @@ interface Layout {
 }
 
 /** Olhos grandes; filhotes com olhos enormes. */
-function layoutFor(stage: LifeStage): Layout {
-  const p = proportionsFor(stage);
+function layoutFor(stage: LifeStage, speciesIndex: number): Layout {
+  const p = proportionsFor(stage, speciesIndex);
   const baby = stage === 0;
   const elder = stage === 2;
   return {
@@ -53,10 +59,11 @@ export function makeFaceTexture(
   eyeColor: number,
   stage: LifeStage,
   features: Features,
+  speciesIndex: number,
 ): Texture {
   const buffer = new PixelBuffer(SPRITE_SIZE, SPRITE_SIZE);
-  const p = proportionsFor(stage);
-  const layout = layoutFor(stage);
+  const p = proportionsFor(stage, speciesIndex);
+  const layout = layoutFor(stage, speciesIndex);
   const cx = p.headX + p.lean;
   const leftX = cx - (layout.eyeX - p.headX);
   const rightX = cx + (layout.eyeX - p.headX);
@@ -199,6 +206,52 @@ export function makeFaceTexture(
       // Boca ondulada de nervosismo.
       for (let i = -2; i <= 2; i++)
         buffer.set(cx + i, layout.mouthY + (i % 2 === 0 ? 0 : 1), OUTLINE);
+      break;
+
+    case 'curious':
+      // Uma sobrancelha erguida e boquinha de "oh?".
+      openEye(leftX, 1.1);
+      openEye(rightX, 1.1);
+      brow(leftX, 1, 0, 2.5);
+      brow(rightX, -1, 0, 0.5);
+      buffer.ellipse(cx, layout.mouthY, 1.2, 1, OUTLINE);
+      break;
+
+    case 'hungry':
+      // Olhos famintos e línguinha lambendo.
+      openEye(leftX, 1.05, 1.1);
+      openEye(rightX, 1.05, 1.1);
+      brow(leftX, 1, 0.35, 0.5);
+      brow(rightX, -1, 0.35, 0.5);
+      buffer.rect(cx - 2, layout.mouthY, 4, 1, OUTLINE);
+      buffer.ellipse(cx + 2, layout.mouthY + 1.5, 1.4, 1.2, TONGUE);
+      break;
+
+    case 'thirsty':
+      // Boca entreaberta e língua para fora.
+      openEye(leftX, 0.95);
+      openEye(rightX, 0.95);
+      buffer.ellipse(cx, layout.mouthY + 1, 2, 1.6, OUTLINE);
+      buffer.ellipse(cx, layout.mouthY + 1.8, 1.4, 1.2, TONGUE);
+      break;
+
+    case 'playful':
+      // Olhos travessos (um piscando) e sorrisão.
+      openEye(leftX, 1.12);
+      for (let i = -2; i <= 2; i++) buffer.set(rightX + i, layout.eyeY - Math.abs(i) + 1, OUTLINE);
+      smile(4, 1);
+      buffer.set(cx - 1, layout.mouthY + 2, OUTLINE);
+      buffer.set(cx + 1, layout.mouthY + 2, OUTLINE);
+      buffer.ellipse(cx + 1, layout.mouthY + 2.5, 1.2, 1, TONGUE);
+      cheeks();
+      break;
+
+    case 'yawn':
+      // Bocejo: olhos apertados e boca bem aberta.
+      closedEye(leftX, 0.5);
+      closedEye(rightX, 0.5);
+      buffer.ellipse(cx, layout.mouthY + 1.5, 2.4, 2.8, OUTLINE);
+      buffer.ellipse(cx, layout.mouthY + 2.4, 1.4, 1.4, TONGUE);
       break;
 
     default:

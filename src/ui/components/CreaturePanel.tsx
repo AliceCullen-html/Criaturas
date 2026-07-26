@@ -25,6 +25,10 @@ const MOOD_FACES: Record<CreatureSnapshot['mood'], string> = {
   sad: '😢',
   loved: '😍',
   afraid: '😨',
+  curious: '🤔',
+  hungry: '🍎',
+  thirsty: '💧',
+  playful: '🤸',
 };
 
 type Tone = 'good' | 'warn' | 'bad' | 'info';
