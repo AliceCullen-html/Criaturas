@@ -13,6 +13,7 @@ import {
 import {
   makeDustTexture,
   makeGrassTexture,
+  makeGrassPatchTextures,
   makeLeafTextures,
   makeResourceTextures,
   makeSandTexture,
@@ -395,6 +396,19 @@ function animatePose(pose: number, t: number, elapsed: number, size: number, out
       out.bob += Math.sin(t * Math.PI) * size * 0.3;
       out.squashY *= 1 + Math.sin(t * Math.PI) * 0.12;
       break;
+
+    case POSE.hurt: {
+      // Encolhida: afunda, aperta o corpo e treme. O tremor é forte no começo
+      // e vai cedendo, como dor que passa.
+      const throb = 1 - t * 0.6;
+      out.squashY *= 1 - 0.2 * ease;
+      out.squashX *= 1 + 0.12 * ease;
+      out.yOffset += size * 0.2 * ease;
+      out.tilt += 0.2 * ease;
+      out.jitter += Math.sin(elapsed * 26) * size * 0.07 * ease * throb;
+      out.bob = 0;
+      break;
+    }
 
     case POSE.sigh:
       // Suspiro: enche e esvazia devagar, e afunda um pouco.
@@ -828,7 +842,28 @@ export function createRenderer(options: RendererOptions): Renderer {
         width: options.worldWidth,
         height: options.worldHeight,
       });
-      grassTile.tileScale.set(0.7);
+      // Escala 1: a 0.7 o tile repetia a cada 22px e a grade ficava evidente.
+      grassTile.tileScale.set(1);
+
+      // Manchões por cima, para o campo não parecer um papel de parede.
+      const patchTextures = makeGrassPatchTextures();
+      const patches = new Container();
+      const patchRng = createRng(0x9e11);
+      const patchCount = Math.round((options.worldWidth * options.worldHeight) / 5200);
+      for (let i = 0; i < patchCount; i++) {
+        const sprite = new Sprite(patchTextures[patchRng.int(patchTextures.length)]!);
+        sprite.anchor.set(0.5);
+        sprite.position.set(
+          patchRng.range(0, options.worldWidth),
+          patchRng.range(0, options.worldHeight),
+        );
+        // Tamanhos e achatamentos variados: nada de bolhas iguais.
+        const scale = patchRng.range(0.9, 2.6);
+        sprite.scale.set(scale * patchRng.range(0.8, 1.3), scale * patchRng.range(0.7, 1.2));
+        sprite.rotation = patchRng.range(0, Math.PI * 2);
+        sprite.alpha = patchRng.range(0.45, 0.9);
+        patches.addChild(sprite);
+      }
       const sand = new Container();
       const water = new Container();
       const reflections = new Container();
@@ -854,6 +889,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       hand.anchor.set(0.25, 0.15);
       root.addChild(
         grassTile,
+        patches,
         sand,
         water,
         reflections,
@@ -938,7 +974,9 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       const sandTexture = makeSandTexture(seed);
       const waterScale = cellSize / 16;
-      const sandScale = cellSize / 16;
+      // A mancha de areia é maior que a célula de propósito: as vizinhas se
+      // sobrepõem e o miolo da praia fica sólido, só a borda externa desbota.
+      const sandScale = (cellSize / 20) * 2.2;
       const shoreRng = createRng(seed ^ 0x5ea);
 
       // Areia (margem): células perto de água. Água por cima.
@@ -1246,12 +1284,16 @@ export function createRenderer(options: RendererOptions): Renderer {
           slot.yawnIn = (stage === 2 ? 8 : 14) + Math.random() * 10;
         }
 
+        // A dor manda no rosto: nada de piscar ou bocejar enquanto dói.
+        const pose = creatures.pose[i]!;
         const expression: Expression =
-          slot.yawning > 0
-            ? 'yawn'
-            : slot.blinking > 0 && eyesOpen
-              ? 'blink'
-              : (EXPRESSIONS[mood] ?? 'neutral');
+          pose === POSE.hurt
+            ? 'hurt'
+            : slot.yawning > 0
+              ? 'yawn'
+              : slot.blinking > 0 && eyesOpen
+                ? 'blink'
+                : (EXPRESSIONS[mood] ?? 'neutral');
         // As texturas são cacheadas: buscar todo quadro é só um lookup em Map.
         const faceTexture = getFaceTexture(
           expression,
@@ -1273,7 +1315,6 @@ export function createRenderer(options: RendererOptions): Renderer {
         const anim = animateBody(mood, elapsed, id, size, moving, stage);
         // A pose entra por cima do humor: o rosto segue contando a emoção,
         // o corpo passa a contar a ocupação.
-        const pose = creatures.pose[i]!;
         if (pose !== POSE.none) {
           animatePose(pose, creatures.poseTime[i]!, elapsed, size, anim);
         }

@@ -59,7 +59,10 @@ export const movementSystem: System = {
       if (!solids.blocked(terrain, nextX, nextY)) {
         transform.x = nextX;
         transform.y = nextY;
-        if (mind) mind.blocked = 0;
+        // DECAI em vez de zerar: numa margem recortada a criatura alterna
+        // passo livre e passo barrado sem sair do lugar, e zerando o contador
+        // ela nunca chegava a desistir — ficava presa na enseada até morrer.
+        if (mind) mind.blocked = Math.max(0, mind.blocked - dt * 1.5);
         return;
       }
 

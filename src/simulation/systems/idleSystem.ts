@@ -37,6 +37,10 @@ const IDLE_INTENTS = new Set(['wander', 'watch', 'sunbathe', 'socialize', 'follo
 const URGENT_HUNGER = 0.65;
 const URGENT_THIRST = 0.65;
 const URGENT_FEAR = 0.45;
+/** Acima disto a criatura fica encolhida de dor. */
+const PAIN_HOLDS = 0.25;
+/** E acima disto nem anda. */
+const PAIN_FREEZES = 0.55;
 
 /** Intervalo entre microcomportamentos (segundos), antes da personalidade. */
 const MIN_GAP = 1.5;
@@ -110,6 +114,22 @@ export const idleSystem: System = {
       const transform = transforms.get(entity);
       const bio = bios.get(entity);
       if (!behavior || !mind || !needs || !emotions || !traits || !transform || !bio) return;
+
+      // Dor manda em tudo. Machucada, ela encolhe onde está e não faz mais
+      // nada até passar — é isso que torna o sofrimento VISÍVEL, e não apenas
+      // um número escondido na ficha.
+      if (emotions.pain > PAIN_HOLDS) {
+        behavior.pose = POSE.hurt;
+        behavior.elapsed = 0;
+        behavior.duration = 1;
+        behavior.cooldown = 0;
+        const velocity = velocities.get(entity);
+        if (velocity && emotions.pain > PAIN_FREEZES) {
+          velocity.x = 0;
+          velocity.y = 0;
+        }
+        return;
+      }
 
       const urgent =
         needs.hunger > URGENT_HUNGER ||

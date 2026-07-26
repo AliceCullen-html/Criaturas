@@ -175,7 +175,10 @@ export function generateProps(
 
   // ---- Margem do lago --------------------------------------------------
   // Juncos, vitórias-régias e conchinhas fazem a água ter beira, não borda.
-  const step = terrain.cellSize;
+  // Passo FIXO, independente da grade do terreno. Antes usava `terrain.cellSize`,
+  // e ao afinar a grade de 25 para 10 pixels a margem passou a ser varrida 6
+  // vezes mais — o lago ficou coberto de vitórias-régias e a beira, de juncos.
+  const step = 26;
   for (let y = step; y < height - step; y += step) {
     for (let x = step; x < width - step; x += step) {
       const water = isWaterAt(terrain, x, y);

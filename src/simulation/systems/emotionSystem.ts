@@ -23,6 +23,8 @@ const ANGER_CALM = 0.02;
 const STRESS_CALM = 0.01;
 const HAPPINESS_INERTIA = 0.035;
 const TRAUMA_CALM = 0.0006;
+/** A dor sara sozinha: some por volta de dois minutos. */
+const PAIN_HEAL = 0.009;
 
 const SLEEP_RATE = 0.012;
 const WAKE_RATE = 0.16;
@@ -47,9 +49,15 @@ export const emotionSystem: System = {
 
       const sleeping = mind.intent === 'sleep';
 
+      // A dor aguda passa em alguns minutos — o corpo sara. O que não passa
+      // junto é o trauma: a marca de ter apanhado fica muito depois de parar
+      // de doer.
+      emotions.pain = Math.max(0, emotions.pain - PAIN_HEAL * dt);
+
       // O trauma sustenta um piso de medo: quem sofreu não volta ao normal.
       emotions.trauma = Math.max(0, emotions.trauma - TRAUMA_CALM * dt);
-      const fearFloor = emotions.trauma * 0.45;
+      // Doendo, o medo não cede: é difícil relaxar machucada.
+      const fearFloor = Math.max(emotions.trauma * 0.45, emotions.pain * 0.5);
       emotions.fear = Math.max(
         fearFloor,
         approach(emotions.fear, fearFloor, FEAR_CALM * (0.6 + traits.bravery), dt),

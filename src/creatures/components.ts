@@ -70,6 +70,12 @@ export interface Emotions {
    * muito tempo. Filhotes herdam parte dela por aprendizado social.
    */
   trauma: number;
+  /**
+   * Dor aguda. Diferente do trauma, que é a marca psicológica: isto é o corpo
+   * doendo AGORA. Some sozinha em minutos, mas enquanto dura ela encolhe, manca
+   * e não consegue fazer mais nada.
+   */
+  pain: number;
 }
 export const Emotions = defineComponent<Emotions>('Emotions');
 

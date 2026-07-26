@@ -47,11 +47,13 @@ export const POSE = {
   perk: 16,
   /** Suspira. */
   sigh: 17,
+  /** Encolhida de dor, depois de apanhar. */
+  hurt: 18,
 } as const;
 
 export type PoseId = (typeof POSE)[keyof typeof POSE];
 
-export const POSE_COUNT = 18;
+export const POSE_COUNT = 19;
 
 /** Quanto tempo cada pose dura, em segundos. */
 export const POSE_DURATION: readonly number[] = [
@@ -73,6 +75,7 @@ export const POSE_DURATION: readonly number[] = [
   3, // play
   1, // perk
   1.6, // sigh
+  3, // hurt
 ];
 
 /** Nome legível — usado nos relatórios de observação, não na tela. */
@@ -95,4 +98,5 @@ export const POSE_NAMES: readonly string[] = [
   'brinca com uma folha',
   'se anima',
   'suspira',
+  'encolhida de dor',
 ];

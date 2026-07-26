@@ -259,6 +259,9 @@ export const decisionSystem: System = {
         mind.targetY = player.y;
       }
 
+      // Machucada anda devagar — mancando. A dor não é só um rosto triste.
+      const limp = 1 - emotions.pain * 0.65;
+
       // Traduz a intenção em movimento.
       if (mind.intent === 'sleep') {
         velocity.x = 0;
@@ -297,7 +300,7 @@ export const decisionSystem: System = {
             ? 1.15
             : 1;
       const tired = needs.energy < 0.25 ? 0.55 : 1;
-      const speed = attributes.speed * haste * tired;
+      const speed = attributes.speed * haste * tired * limp;
       velocity.x = (dx / distance) * speed;
       velocity.y = (dy / distance) * speed;
     });

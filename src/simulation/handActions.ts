@@ -1,6 +1,6 @@
-import { clamp, clamp01, subjects } from '@core';
+import { POSE, clamp, clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
-import { Emotions, Identity, Memory, Mind, Needs } from '@creatures';
+import { Attributes, Behavior, Creature, Emotions, Identity, Memory, Mind, Needs } from '@creatures';
 import { Item, MAX_STACK, SceneryResource, VARIANT, itemRadius } from '@world';
 import { PlayerResource } from './player';
 
@@ -19,6 +19,8 @@ const STACK_RADIUS = 9;
 const HIDE_RADIUS = 15;
 /** Acima disso o objeto foi arremessado: não encosta, não empilha, não esconde. */
 const THROW_SPEED = 60;
+/** Velocidade a partir da qual o gesto já conta como pancada. */
+const ROUGH_SPEED_FLOOR = 620;
 
 function episodeBase(world: World, id: number) {
   const transform = world.store(Transform).get(id);
@@ -205,7 +207,12 @@ export function roughGesture(
   emotions.anger = clamp01(emotions.anger + (violent ? 0.35 : 0.15));
   emotions.trust = clamp01(emotions.trust - (violent ? 0.3 : 0.12));
   emotions.trauma = clamp01(emotions.trauma + (violent ? ROUGH_TRAUMA : ROUGH_TRAUMA * 0.4));
-  if (violent && needs) needs.health = clamp01(needs.health - 0.06);
+
+  // A pancada dói. A dor é aguda e some em minutos; o corpo mostra ela
+  // enquanto dura — encolhido, mancando, sem conseguir fazer mais nada.
+  const force = clamp01((speed - ROUGH_SPEED_FLOOR) / 900);
+  emotions.pain = clamp01(emotions.pain + 0.4 + force * 0.5);
+  if (needs) needs.health = clamp01(needs.health - (violent ? 0.1 : 0.04));
 
   // Empurra fisicamente.
   const len = Math.hypot(dirX, dirY) || 1;
@@ -223,6 +230,72 @@ export function roughGesture(
   });
   mind.surprise = 2;
   mind.commitment = 0;
+
+  // Encolhe de dor na hora, largando o que estivesse fazendo.
+  const behavior = world.store(Behavior).get(id);
+  if (behavior) {
+    behavior.pose = POSE.hurt;
+    behavior.elapsed = 0;
+    behavior.duration = 2 + force * 2.5;
+    behavior.cooldown = 0;
+  }
+
+  witnessTheBlow(world, id, transform.x, transform.y);
+}
+
+/**
+ * Quem viu, aprendeu.
+ *
+ * Bater numa criatura não assusta só ela: as outras que estavam por perto e
+ * enxergaram a cena passam a desconfiar da mão do jogador, sem nunca terem
+ * apanhado. É o mesmo aprendizado por observação que o filhote usa para evitar
+ * o cogumelo venenoso sem precisar prová-lo — e é o que faz a crueldade ter
+ * preço social, não só individual.
+ */
+function witnessTheBlow(world: World, victim: number, x: number, y: number): void {
+  const transforms = world.store(Transform);
+  const attributes = world.store(Attributes);
+  const emotionsStore = world.store(Emotions);
+  const memories = world.store(Memory);
+  const minds = world.store(Mind);
+
+  world.store(Creature).forEach((_tag, entity) => {
+    if (entity === victim) return;
+    const transform = transforms.get(entity);
+    const attrs = attributes.get(entity);
+    const emotions = emotionsStore.get(entity);
+    if (!transform || !attrs || !emotions) return;
+
+    const distance = Math.hypot(transform.x - x, transform.y - y);
+    if (distance > attrs.vision) return;
+
+    // Quanto mais perto da cena, mais forte a lição.
+    const clarity = 1 - distance / attrs.vision;
+    emotions.fear = clamp01(emotions.fear + 0.3 * clarity);
+    emotions.stress = clamp01(emotions.stress + 0.2 * clarity);
+    emotions.trust = clamp01(emotions.trust - 0.15 * clarity);
+
+    const memory = memories.get(entity);
+    memory?.record(subjects.player(), -0.85, 0.4 * clarity);
+    if (clarity > 0.55) {
+      memory?.addEpisode({
+        text: 'Vi você machucar alguém',
+        valence: -0.9,
+        intensity: 0.8 * clarity,
+        emotion: 'horror',
+        tick: world.tick,
+        x,
+        y,
+        actor: 'você',
+      });
+    }
+
+    const mind = minds.get(entity);
+    if (mind) {
+      mind.surprise = 1.5;
+      mind.commitment = 0;
+    }
+  });
 }
 
 /** Chamar a atenção (duplo clique): a criatura olha, e pode vir se confiar. */

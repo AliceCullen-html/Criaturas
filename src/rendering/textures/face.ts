@@ -22,7 +22,8 @@ export type Expression =
   | 'thirsty'
   | 'playful'
   | 'blink'
-  | 'yawn';
+  | 'yawn'
+  | 'hurt';
 
 const OUTLINE = 0x2a2333;
 const WHITE = 0xfdfdff;
@@ -244,6 +245,27 @@ export function makeFaceTexture(
       buffer.set(cx + 1, layout.mouthY + 2, OUTLINE);
       buffer.ellipse(cx + 1, layout.mouthY + 2.5, 1.2, 1, TONGUE);
       cheeks();
+      break;
+
+    case 'hurt':
+      // Dor: olhos apertados com força, boca torta para baixo e lágrima.
+      for (const x of [leftX, rightX]) {
+        for (let i = -2; i <= 2; i++) {
+          buffer.set(x + i, layout.eyeY - Math.abs(i) * 0.5 + 1, OUTLINE);
+          buffer.set(x + i, layout.eyeY - Math.abs(i) * 0.5, OUTLINE);
+        }
+      }
+      // Sobrancelhas franzidas para dentro.
+      for (let i = 0; i < 4; i++) {
+        buffer.set(leftX - 1 + i, layout.eyeY - 4 - i * 0.5, OUTLINE);
+        buffer.set(rightX + 1 - i, layout.eyeY - 4 - i * 0.5, OUTLINE);
+      }
+      // Boca aberta em careta.
+      buffer.ellipse(cx, layout.mouthY + 1, 2.2, 1.6, OUTLINE);
+      buffer.set(cx - 3, layout.mouthY, OUTLINE);
+      buffer.set(cx + 3, layout.mouthY, OUTLINE);
+      // Lágrima escorrendo.
+      buffer.ellipse(leftX - 3, layout.eyeY + 3, 1, 1.6, TEAR);
       break;
 
     case 'yawn':

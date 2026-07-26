@@ -13,7 +13,15 @@ import { PropsResource, generateProps } from './props';
 import { largestOpenRegion, type Blocker } from './connectivity';
 import { countFor } from './density';
 
-const TERRAIN_CELL_SIZE = 25;
+/**
+ * Célula do terreno.
+ *
+ * Era 25px, e é de onde vinha a escadaria grosseira na beira dos lagos: cada
+ * degrau tinha 25 pixels de altura e a margem parecia recortada com tesoura.
+ * A 10px a curva do lago fica lisa. Custa mais sprites de água, mas são
+ * algumas centenas — irrisório perto de deixar o jardim bonito.
+ */
+const TERRAIN_CELL_SIZE = 10;
 /** Plantas e bugigangas iniciais num mundo 1000×1000. */
 const INITIAL_PLANTS_BASE = 55;
 const INITIAL_TRINKETS_BASE = 26;

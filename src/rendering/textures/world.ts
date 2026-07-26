@@ -10,65 +10,188 @@ const WATER_MID = 0x3f83bd;
 const WATER_LIGHT = 0x6fb0dd;
 const SAND = 0xcdb789;
 
-/** Tile de grama 32x32 com ruído, tufos e florzinhas ocasionais. */
+/**
+ * Tile de grama.
+ *
+ * A versão antiga era ruído aleatório pixel a pixel: de perto some, de longe
+ * vira um carpete verde chapado e estático. Grama de verdade tem MANCHAS —
+ * áreas mais escuras onde é densa, mais claras onde o sol bate — e é a mancha,
+ * não o chuvisco, que dá vida ao chão.
+ *
+ * As manchas vêm de senóides sobrepostas em vez de ruído, porque a soma delas
+ * é contínua e **fecha nas bordas do tile**: sem isso aparece uma grade de
+ * costuras a cada 45 pixels.
+ */
 export function makeGrassTexture(seed: number): Texture {
   const rng = createRng(seed);
-  const size = 32;
+  const size = 48;
   const buffer = new PixelBuffer(size, size);
+  const TAU = Math.PI * 2;
+
+  // Três ondas de períodos inteiros: casam nas bordas, então o tile repete sem
+  // emenda visível.
+  const bands = [
+    { fx: 1, fy: 1, phase: rng.range(0, TAU), weight: 0.55 },
+    { fx: 2, fy: 1, phase: rng.range(0, TAU), weight: 0.3 },
+    { fx: 1, fy: 3, phase: rng.range(0, TAU), weight: 0.25 },
+  ];
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const r = rng.next();
-      buffer.set(x, y, r < 0.12 ? GRASS_DARK : r > 0.9 ? GRASS_LIGHT : GRASS_BASE);
+      let value = 0;
+      for (const band of bands) {
+        value +=
+          Math.sin((x / size) * TAU * band.fx + band.phase) *
+          Math.cos((y / size) * TAU * band.fy + band.phase * 0.7) *
+          band.weight;
+      }
+      // Uma pitada de granulado por cima, só para não ficar liso demais.
+      value += (rng.next() - 0.5) * 0.35;
+
+      const color =
+        value < -0.35
+          ? shade(GRASS_DARK, 0.94)
+          : value < 0
+            ? GRASS_DARK
+            : value < 0.38
+              ? GRASS_BASE
+              : GRASS_LIGHT;
+      buffer.set(x, y, color);
     }
   }
-  // Tufos de grama.
-  for (let i = 0; i < 26; i++) {
+
+  // Fiapos de grama em pé, seguindo as manchas claras.
+  for (let i = 0; i < 40; i++) {
     const x = rng.int(size);
     const y = rng.int(size);
-    buffer.set(x, y, GRASS_LIGHT);
+    const blade = mix(GRASS_LIGHT, 0xffffff, 0.12);
+    buffer.set(x, y, blade);
     buffer.set(x, y - 1, GRASS_LIGHT);
-  }
-  // Florzinhas.
-  const flowerColors = [0xf3d06b, 0xe89ac0, 0xf0f0f5];
-  for (let i = 0; i < 5; i++) {
-    const x = rng.int(size);
-    const y = rng.int(size);
-    buffer.set(x, y, flowerColors[rng.int(flowerColors.length)]!);
   }
   return buffer.toTexture();
 }
 
-/** Quadros de água 16x16 animados (linhas de brilho que deslizam). */
+/**
+ * Manchões suaves de grama, desenhados por cima do tile.
+ *
+ * O tile resolve a textura de perto; isto resolve a de longe. São elipses
+ * grandes e translúcidas de verdes vizinhos que quebram a repetição — o olho
+ * deixa de enxergar a grade e passa a enxergar um campo.
+ */
+export function makeGrassPatchTextures(): Texture[] {
+  const rng = createRng(0x6a55);
+  const tones = [shade(GRASS_DARK, 0.9), GRASS_DARK, GRASS_LIGHT, mix(GRASS_LIGHT, 0xd8e88a, 0.35)];
+
+  return tones.map((tone) => {
+    const size = 64;
+    const buffer = new PixelBuffer(size, size);
+    const center = (size - 1) / 2;
+    // Borda irregular: um manchão com contorno de elipse perfeita vira bolha.
+    const waves = [
+      { freq: 2 + rng.int(2), phase: rng.range(0, Math.PI * 2), depth: 0.2 },
+      { freq: 5 + rng.int(3), phase: rng.range(0, Math.PI * 2), depth: 0.1 },
+    ];
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = (x - center) / center;
+        const dy = (y - center) / center;
+        const distance = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        let edge = 1;
+        for (const wave of waves) edge += Math.sin(angle * wave.freq + wave.phase) * wave.depth;
+        if (distance > edge) continue;
+        // Desbota até sumir na borda: sem contorno duro, sem "adesivo".
+        const fade = 1 - distance / edge;
+        buffer.set(x, y, tone, Math.round(150 * fade * fade));
+      }
+    }
+    return buffer.toTexture();
+  });
+}
+
+/**
+ * Quadros de água animados.
+ *
+ * A versão antiga tinha uma linha de brilho HORIZONTAL atravessando o tile.
+ * Repetida célula a célula, as linhas se alinhavam e o lago inteiro virava uma
+ * bandeira listrada. Agora a superfície é mosqueada — manchas de fundo e de
+ * raso que andam devagar entre os quadros — e o brilho aparece em pontos
+ * soltos, nunca em faixa.
+ */
 export function makeWaterTextures(): Texture[] {
-  const frames = 4;
+  const frames = 6;
   const size = 16;
   const out: Texture[] = [];
+  const TAU = Math.PI * 2;
+
   for (let f = 0; f < frames; f++) {
     const buffer = new PixelBuffer(size, size);
+    const drift = (f / frames) * TAU;
     for (let y = 0; y < size; y++) {
-      const base = y < 5 ? WATER_MID : WATER_DEEP;
-      for (let x = 0; x < size; x++) buffer.set(x, y, base);
+      for (let x = 0; x < size; x++) {
+        // Períodos inteiros no tile: repete sem costura.
+        const value =
+          Math.sin((x / size) * TAU + drift) * Math.cos((y / size) * TAU * 2 - drift * 0.6) * 0.6 +
+          Math.sin((x / size) * TAU * 3 - drift) * Math.cos((y / size) * TAU + drift) * 0.4;
+        // Tons VIZINHOS, não contrastantes: com a diferença antiga o padrão da
+        // senóide aparecia como um xadrez tecido em cima do lago inteiro.
+        buffer.set(
+          x,
+          y,
+          value < -0.3
+            ? shade(WATER_DEEP, 0.95)
+            : value < 0.45
+              ? WATER_DEEP
+              : mix(WATER_DEEP, WATER_MID, 0.45),
+        );
+      }
     }
-    for (let x = 0; x < size; x++) {
-      const wave = Math.sin((x + f * 4) * 0.6);
-      const y = 4 + Math.round(wave * 1.5) + 4;
+    // Faíscas de sol na superfície, em pontos isolados.
+    const sparkRng = createRng(0x5ea + f);
+    for (let i = 0; i < 5; i++) {
+      const x = sparkRng.int(size);
+      const y = sparkRng.int(size);
       buffer.set(x, y, WATER_LIGHT);
-      if (wave > 0.6) buffer.set(x, y - 3, mix(WATER_MID, 0xffffff, 0.3));
+      if (sparkRng.chance(0.5)) buffer.set(x + 1, y, mix(WATER_LIGHT, 0xffffff, 0.35));
     }
     out.push(buffer.toTexture());
   }
   return out;
 }
 
-/** Textura de borda de areia (praia) — usada nas margens dos lagos. */
+/**
+ * Areia da margem.
+ *
+ * Não é um quadrado cheio: é uma mancha de borda macia. Quadrados cheios
+ * lado a lado formavam uma FAIXA de contorno reto contra a grama — parecia um
+ * muro pintado em volta do lago, não uma praia. Com a borda desbotando, as
+ * manchas vizinhas se somam no miolo e se dissolvem na grama.
+ */
 export function makeSandTexture(seed: number): Texture {
   const rng = createRng(seed);
-  const size = 16;
+  const size = 20;
   const buffer = new PixelBuffer(size, size);
+  const center = (size - 1) / 2;
+  const waves = [
+    { freq: 3, phase: rng.range(0, Math.PI * 2), depth: 0.16 },
+    { freq: 6, phase: rng.range(0, Math.PI * 2), depth: 0.09 },
+  ];
+
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
+      const dx = (x - center) / center;
+      const dy = (y - center) / center;
+      const distance = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      let edge = 0.95;
+      for (const wave of waves) edge += Math.sin(angle * wave.freq + wave.phase) * wave.depth;
+      if (distance > edge) continue;
+
       const r = rng.next();
-      buffer.set(x, y, r < 0.2 ? shade(SAND, 0.9) : r > 0.85 ? mix(SAND, 0xffffff, 0.2) : SAND);
+      const tone = r < 0.22 ? shade(SAND, 0.92) : r > 0.85 ? mix(SAND, 0xffffff, 0.18) : SAND;
+      // Opaca no miolo, sumindo na borda.
+      const fade = Math.min(1, (1 - distance / edge) * 2.6);
+      buffer.set(x, y, tone, Math.round(255 * fade));
     }
   }
   return buffer.toTexture();

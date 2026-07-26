@@ -1,4 +1,4 @@
-import type { Rng } from '@core';
+import { TAU, type Rng } from '@core';
 import type { TileGrid } from '@engine';
 import { countFor } from './density';
 
@@ -16,6 +16,10 @@ const MIN_PONDS_BASE = 3;
 const MAX_PONDS_BASE = 6;
 /** Fração mínima do jardim que precisa ser água, para ninguém morrer de sede. */
 const MIN_WATER_FRACTION = 0.11;
+/** Raio dos lagos em pixels de mundo — não em células, para o desenho não
+ *  mudar quando a grade fica mais fina. */
+const POND_MIN_RADIUS = 55;
+const POND_MAX_RADIUS = 130;
 
 const countWater = (cells: Uint8Array): number => {
   let total = 0;
@@ -34,18 +38,43 @@ export function generateTerrain(
   const rows = Math.max(1, Math.ceil(height / cellSize));
   const cells = new Uint8Array(cols * rows); // GROUND por padrão
 
+  /**
+   * Um lago.
+   *
+   * Não é um círculo: o raio ondula com três senóides de fases sorteadas, então
+   * a margem entra e sai como margem de lago de verdade. Um disco perfeito, na
+   * grade, vira uma escadinha simétrica que denuncia na hora que aquilo é um
+   * programa desenhando.
+   */
   const digPond = (): void => {
-    const centerX = rng.int(cols);
-    const centerY = rng.int(rows);
-    const radius = 2 + rng.int(4);
-    for (let y = centerY - radius; y <= centerY + radius; y++) {
-      for (let x = centerX - radius; x <= centerX + radius; x++) {
+    const centerX = rng.range(cols * 0.15, cols * 0.85);
+    const centerY = rng.range(rows * 0.15, rows * 0.85);
+    const radius = rng.range(POND_MIN_RADIUS, POND_MAX_RADIUS) / cellSize;
+
+    // Três ondulações de frequências diferentes dão um contorno irregular sem
+    // parecer ruído puro.
+    // Amplitudes contidas de propósito. Com ondulação forte a margem ganha
+    // baías fundas, e como ninguém calcula rota a criatura entra na baía atrás
+    // de água e não acha mais a saída.
+    const waveA = { freq: 2 + rng.int(2), phase: rng.range(0, TAU), depth: rng.range(0.06, 0.13) };
+    const waveB = { freq: 4 + rng.int(3), phase: rng.range(0, TAU), depth: rng.range(0.03, 0.07) };
+    const waveC = { freq: 7 + rng.int(4), phase: rng.range(0, TAU), depth: rng.range(0.015, 0.035) };
+
+    const reach = Math.ceil(radius * 1.4);
+    for (let y = Math.floor(centerY - reach); y <= centerY + reach; y++) {
+      for (let x = Math.floor(centerX - reach); x <= centerX + reach; x++) {
         if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
         const dx = x - centerX;
         const dy = y - centerY;
-        if (dx * dx + dy * dy <= radius * radius) {
-          cells[y * cols + x] = WATER;
-        }
+        const distance = Math.hypot(dx, dy);
+        if (distance > reach) continue;
+        const angle = Math.atan2(dy, dx);
+        const wobble =
+          1 +
+          Math.sin(angle * waveA.freq + waveA.phase) * waveA.depth +
+          Math.sin(angle * waveB.freq + waveB.phase) * waveB.depth +
+          Math.sin(angle * waveC.freq + waveC.phase) * waveC.depth;
+        if (distance <= radius * wobble) cells[y * cols + x] = WATER;
       }
     }
   };
