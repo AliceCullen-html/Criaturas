@@ -59,6 +59,7 @@ export const itemSystem: System = {
         }
       }
 
+      // Só frutas apodrecem; gravetos e pedrinhas ficam para sempre.
       if (item.kind === 'fruit') {
         item.freshness = clamp01(item.freshness - ROT_RATE * dt);
         const sprite = sprites.get(entity);

@@ -4,9 +4,10 @@ import { Plant } from './components';
 import { generateTerrain, isWaterAt } from './terrain';
 import { TerrainResource } from './terrainResource';
 import { spawnPlant } from './plant';
-import { registerItems, spawnFruit } from './items';
+import { registerItems, spawnFruit, spawnTrinket } from './items';
 import { SceneryResource, generateScenery } from './scenery';
 import { WeatherResource, createWeather } from './weather';
+import { DayNightResource, createDayNight } from './dayNight';
 import { AmbientResource, createAmbient } from './ambient';
 import { PropsResource, generateProps } from './props';
 
@@ -31,6 +32,7 @@ export function createWorld(config: WorldConfig, seed: number): World {
   const scenery = generateScenery(terrain, config.width, config.height, seed);
   world.setResource(SceneryResource, scenery);
   world.setResource(WeatherResource, createWeather());
+  world.setResource(DayNightResource, createDayNight());
   world.setResource(
     AmbientResource,
     createAmbient(config.width, config.height, seed, (x, y) => isWaterAt(terrain, x, y)),
@@ -39,6 +41,15 @@ export function createWorld(config: WorldConfig, seed: number): World {
     PropsResource,
     generateProps(terrain, scenery, config.width, config.height, seed),
   );
+
+  // Objetos soltos: o jardim já começa com coisas para mexer.
+  const trinkets = ['stick', 'seed', 'feather', 'stone', 'shell'] as const;
+  for (let i = 0; i < 26; i++) {
+    const x = world.rng.range(20, config.width - 20);
+    const y = world.rng.range(20, config.height - 20);
+    if (isWaterAt(terrain, x, y)) continue;
+    spawnTrinket(world, world.rng.pick(trinkets), x, y);
+  }
 
   // Algumas frutas já caídas, para o mundo não começar vazio.
   for (const piece of scenery) {

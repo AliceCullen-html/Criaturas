@@ -26,7 +26,9 @@ export const foodIndexSystem: System = {
     });
     // Frutas caídas também são comida — inclusive as que o jogador largou.
     world.store(Item).forEach((item, entity) => {
-      if (item.kind !== 'fruit' || item.held) return;
+      // Gravetos, pedrinhas e penas não são comida — e o que está escondido
+      // atrás de uma pedra só entra aqui depois de alguém encontrar.
+      if (item.kind !== 'fruit' || item.held || item.hidden) return;
       const transform = transforms.get(entity);
       if (transform) index.insert(entity, transform.x, transform.y);
     });

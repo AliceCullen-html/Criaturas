@@ -1,7 +1,7 @@
 import { clamp, clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
 import { Emotions, Identity, Memory, Mind, Needs } from '@creatures';
-import { Item, itemRadius } from '@world';
+import { Item, MAX_STACK, SceneryResource, VARIANT, itemRadius } from '@world';
 import { PlayerResource } from './player';
 
 /**
@@ -15,6 +15,10 @@ const ROUGH_FEAR = 0.35;
 const ROUGH_TRAUMA = 0.16;
 const PUSH_DISTANCE = 26;
 const OFFER_REACH = 26;
+const STACK_RADIUS = 9;
+const HIDE_RADIUS = 15;
+/** Acima disso o objeto foi arremessado: não encosta, não empilha, não esconde. */
+const THROW_SPEED = 60;
 
 function episodeBase(world: World, id: number) {
   const transform = world.store(Transform).get(id);
@@ -26,6 +30,9 @@ export function grabItem(world: World, id: number): void {
   const item = world.store(Item).get(id);
   if (!item) return;
   item.held = true;
+  // Ao sair do esconderijo ou do topo da pilha, o objeto volta a ser comum.
+  item.hidden = false;
+  item.stack = 0;
   item.vx = 0;
   item.vy = 0;
 }
@@ -40,20 +47,96 @@ export function moveHeldItem(world: World, id: number, x: number, y: number): vo
   transform.y = clamp(y, 3, world.config.height - 3);
 }
 
-/** Solta o objeto, com a velocidade do gesto (arremesso). */
-export function releaseItem(world: World, id: number, vx: number, vy: number): void {
+/** O que aconteceu com o objeto ao ser largado — o mundo responde a isso. */
+export interface DropResult {
+  /** Nível na pilha (0 = caiu solto no chão). */
+  stacked: number;
+  /** Ficou escondido atrás de uma pedra ou moita. */
+  hidden: boolean;
+}
+
+const LOOSE_DROP: DropResult = { stacked: 0, hidden: false };
+
+/**
+ * Solta o objeto, com a velocidade do gesto (arremesso). Largar com cuidado é
+ * diferente de atirar: pousado devagar atrás de uma pedra, o objeto **some** de
+ * vista; pousado sobre outro, vira pilha.
+ */
+export function releaseItem(world: World, id: number, vx: number, vy: number): DropResult {
   const item = world.store(Item).get(id);
-  if (!item) return;
+  if (!item) return LOOSE_DROP;
   item.held = false;
   item.vx = vx;
   item.vy = vy;
+  item.hidden = false;
+  item.stack = 0;
 
-  // Um objeto arremessado com força assusta quem estiver por perto.
-  const speed = Math.hypot(vx, vy);
-  if (speed < 220) return;
   const transform = world.store(Transform).get(id);
-  if (!transform) return;
-  scareNear(world, transform.x, transform.y, 60, 0.25);
+  if (!transform) return LOOSE_DROP;
+
+  const speed = Math.hypot(vx, vy);
+  if (speed >= THROW_SPEED) {
+    // Um objeto arremessado com força assusta quem estiver por perto.
+    if (speed >= 220) scareNear(world, transform.x, transform.y, 60, 0.25);
+    return LOOSE_DROP;
+  }
+
+  if (hideBehindScenery(world, item, transform)) return { stacked: 0, hidden: true };
+
+  const level = stackOnNeighbour(world, id, item, transform);
+  return level > 0 ? { stacked: level, hidden: false } : LOOSE_DROP;
+}
+
+/**
+ * Pousado junto de uma pedra ou moita, o objeto fica atrás dela: continua no
+ * mundo, mas ninguém o encontra sem procurar.
+ */
+function hideBehindScenery(world: World, item: Item, transform: Transform): boolean {
+  const scenery = world.getResource(SceneryResource);
+  for (const piece of scenery) {
+    if (piece.kind === 'tree') continue; // tronco fino não esconde nada
+    if (Math.hypot(piece.x - transform.x, piece.y - transform.y) > HIDE_RADIUS) continue;
+    // Encosta atrás da pedra: o sprite dela passa a cobrir o objeto.
+    transform.x = piece.x + (transform.x - piece.x) * 0.3;
+    transform.y = piece.y - 5;
+    transform.prevX = transform.x;
+    transform.prevY = transform.y;
+    item.hidden = true;
+    return true;
+  }
+  return false;
+}
+
+/** Pousado em cima de outro objeto parado, forma uma pilha. */
+function stackOnNeighbour(world: World, id: number, item: Item, transform: Transform): number {
+  const transforms = world.store(Transform);
+  let bestId = -1;
+  let bestLevel = -1;
+  let bestDistance = STACK_RADIUS;
+
+  world.store(Item).forEach((other, entity) => {
+    if (entity === id || other.held || other.hidden) return;
+    if (other.stack >= MAX_STACK) return;
+    const otherTransform = transforms.get(entity);
+    if (!otherTransform) return;
+    const distance = Math.hypot(otherTransform.x - transform.x, otherTransform.y - transform.y);
+    if (distance > bestDistance) return;
+    // Empilha sempre sobre o topo mais alto que estiver ao alcance.
+    if (other.stack < bestLevel) return;
+    bestDistance = distance;
+    bestLevel = other.stack;
+    bestId = entity;
+  });
+
+  if (bestId < 0) return 0;
+  const base = transforms.get(bestId);
+  if (!base) return 0;
+  transform.x = base.x;
+  transform.y = base.y;
+  transform.prevX = base.x;
+  transform.prevY = base.y;
+  item.stack = bestLevel + 1;
+  return item.stack;
 }
 
 /**
@@ -203,7 +286,10 @@ export function offerItem(world: World, itemId: number, creatureId: number): boo
   const trusts = bond > -0.1 || emotions.fear < 0.35;
   if (!hungry || !trusts || opinion < -0.35) return false;
 
-  needs.hunger = clamp01(needs.hunger - 0.3);
+  // A fruta dourada é rara: mata a fome de vez e deixa a criatura radiante.
+  const golden = item.variant === VARIANT.goldenFruit;
+  needs.hunger = clamp01(needs.hunger - (golden ? 0.85 : 0.3));
+  if (golden) emotions.happiness = clamp01(emotions.happiness + 0.3);
   emotions.trust = clamp01(emotions.trust + 0.1);
   emotions.happiness = clamp01(emotions.happiness + 0.1);
   memory.record(subjects.player(), 0.85, 0.35);

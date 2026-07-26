@@ -16,6 +16,7 @@ export { writeCreatureBuffer } from './creatureRender';
 export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
+export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export {
   grabItem,
   moveHeldItem,
@@ -29,7 +30,15 @@ export {
   setCreatureName,
   setHandPresence,
 } from './handActions';
+export type { DropResult } from './handActions';
 export { writeItemBuffer } from './itemRender';
-export { shakeTree, turnRock, pokeProps, touchWater, rememberPleasantPlace } from './worldActions';
+export {
+  shakeTree,
+  turnRock,
+  pokeProps,
+  touchWater,
+  rememberPleasantPlace,
+  attractBirds,
+} from './worldActions';
 export type { PokeResult } from './worldActions';
 export { isBaby, isElder, lifeStage, growthScale } from './age';

@@ -53,6 +53,11 @@ export interface Perception {
   ambient: { x: number; y: number; distance: number } | null;
   /** Abrigo mais próximo (árvore), para se proteger da chuva. */
   shelter: { x: number; y: number; distance: number } | null;
+  /**
+   * Suspeita de que há algo ali. Não é "sei que tem uma fruta atrás da pedra":
+   * é só um ponto que destoa. Quem investiga é quem está curioso.
+   */
+  hunch: { x: number; y: number; distance: number } | null;
   /** 0 = tempo bom, 1 = chovendo forte. */
   rain: number;
 }

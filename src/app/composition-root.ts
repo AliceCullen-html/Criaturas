@@ -25,6 +25,9 @@ import {
   propSystem,
   WeatherResource,
   weatherSystem,
+  DayNightResource,
+  dayNightSystem,
+  Item as ItemComponent,
 } from '@world';
 import { Creature, Emotions, Mind } from '@creatures';
 import {
@@ -49,6 +52,9 @@ import {
   rememberPetting,
   reproductionSystem,
   roughGesture,
+  attractBirds,
+  searchSystem,
+  DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
   setHandPresence,
@@ -87,6 +93,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const ambient = world.getResource(AmbientResource);
   const weather = world.getResource(WeatherResource);
   const props = world.getResource(PropsResource);
+  const cycle = world.getResource(DayNightResource);
 
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
@@ -99,7 +106,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(reproductionSystem)
     .add(metabolismSystem)
     .add(itemSystem)
+    .add(searchSystem)
     .add(weatherSystem)
+    .add(dayNightSystem)
     .add(ambientSystem)
     .add(propSystem)
     .add(plantGrowthSystem)
@@ -167,7 +176,15 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       rain: weather.intensity,
       puddles: weather.puddles,
       rainbow: weather.rainbow,
+      darkness: cycle.darkness,
     });
+
+    // Alguém achou o que estava escondido: uma estrela marca o lugar.
+    if (world.hasResource(DiscoveryResource)) {
+      const found = world.getResource(DiscoveryResource);
+      for (const spot of found) activeRenderer?.emit('star', spot.x, spot.y - 10);
+      found.length = 0;
+    }
 
     // O cartão some sozinho depois de alguns segundos.
     if (state.selectedId !== null) {
@@ -254,7 +271,13 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       onGrab: (itemId) => grabItem(world, itemId),
       onDragHeld: (itemId, x, y) => moveHeldItem(world, itemId, x, y),
       onRelease: (itemId, x, y, vx, vy) => {
-        releaseItem(world, itemId, vx, vy);
+        // Sementes largadas no chão chamam os pássaros.
+        if (world.store(ItemComponent).get(itemId)?.kind === 'seed') attractBirds(world, x, y);
+        const drop = releaseItem(world, itemId, vx, vy);
+        // Arrumar uma pilha ou esconder algo tem retorno visual imediato: é
+        // assim que o jogador descobre que pode fazer isso.
+        if (drop.stacked > 0) activeRenderer?.emit('star', x, y - 12);
+        else if (drop.hidden) activeRenderer?.emit('question', x, y - 12);
         // Enfeitar um canto torna o lugar agradável: quem estava por perto
         // passa a lembrar bem dali e volta com mais frequência.
         rememberPleasantPlace(world, x, y, 120);
@@ -292,7 +315,10 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       onPokeScenery: (kind, index) => {
         if (kind === 'tree') {
           const spot = shakeTree(world, index);
-          if (spot.kind !== 'none') activeRenderer?.emit('star', spot.x, spot.y - 30);
+          if (spot.kind !== 'none') {
+            activeRenderer?.shakeTreeAt(index);
+            activeRenderer?.emit('star', spot.x, spot.y - 30);
+          }
         } else if (kind === 'rock') {
           const spot = turnRock(world, index);
           if (spot.kind !== 'none') activeRenderer?.emit('question', spot.x, spot.y - 14);

@@ -213,3 +213,42 @@ describe('determinismo', () => {
     expect(snapshot()).toEqual(snapshot());
   });
 });
+
+describe('reprodução', () => {
+  it('um casal fértil, alimentado e feliz, tem filhote', () => {
+    const world = makeWorld(21, 2);
+    const transforms = world.store(Transform);
+    const bios = world.store(Bio);
+    const ids: Entity[] = [];
+    world.store(Creature).forEach((_tag, entity) => ids.push(entity));
+    expect(ids.length).toBe(2);
+
+    // Um casal adulto, lado a lado, sem fome e de bem com a vida.
+    const [a, b] = ids as [Entity, Entity];
+    bios.get(a)!.sex = 'M';
+    bios.get(b)!.sex = 'F';
+    for (const id of ids) {
+      const bio = bios.get(id)!;
+      bio.age = bio.lifespan * 0.4;
+      bio.matingCooldown = 0;
+      const needs = world.store(Needs).get(id)!;
+      needs.hunger = 0.1;
+      needs.thirst = 0.1;
+      needs.energy = 1;
+      needs.health = 1;
+      const emotions = world.store(Emotions).get(id)!;
+      emotions.happiness = 0.9;
+      emotions.fear = 0;
+    }
+    const spot = transforms.get(a)!;
+    const mate = transforms.get(b)!;
+    mate.x = spot.x + 10;
+    mate.y = spot.y;
+
+    run(world, 200);
+
+    // Sem esta expectativa o jogo nunca teria uma segunda geração: o mundo
+    // só envelheceria até esvaziar.
+    expect(world.store(Creature).size).toBeGreaterThan(2);
+  });
+});

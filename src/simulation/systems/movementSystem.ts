@@ -1,41 +1,51 @@
 import { Transform, Velocity, type System } from '@engine';
+import { TerrainResource, isWaterAt } from '@world';
 
 /**
- * Integra a posição a partir da velocidade e envolve nas bordas do mundo
- * (topologia toroidal). Ajusta também `prev*` no *wrap* para que a interpolação
- * do render não desenhe um salto de um lado ao outro.
+ * Integra a posição a partir da velocidade, respeitando as margens do lago.
+ *
+ * A água é intransponível: ao esbarrar nela, a criatura tenta deslizar pelo
+ * eixo livre em vez de travar de frente. É isso que faz elas contornarem a
+ * margem naturalmente e beberem da beira, em vez de atravessarem o lago.
  */
 export const movementSystem: System = {
   name: 'movement',
   update(world, dt) {
     const transforms = world.store(Transform);
     const velocities = world.store(Velocity);
+    const terrain = world.getResource(TerrainResource);
     const { width, height } = world.config;
 
     transforms.forEach((transform, entity) => {
       const velocity = velocities.get(entity);
       if (!velocity) return;
+      if (velocity.x === 0 && velocity.y === 0) {
+        transform.prevX = transform.x;
+        transform.prevY = transform.y;
+        return;
+      }
 
       transform.prevX = transform.x;
       transform.prevY = transform.y;
-      transform.x += velocity.x * dt;
-      transform.y += velocity.y * dt;
 
-      if (transform.x < 0) {
-        transform.x += width;
-        transform.prevX += width;
-      } else if (transform.x >= width) {
-        transform.x -= width;
-        transform.prevX -= width;
+      const nextX = clampTo(transform.x + velocity.x * dt, width);
+      const nextY = clampTo(transform.y + velocity.y * dt, height);
+
+      if (!isWaterAt(terrain, nextX, nextY)) {
+        transform.x = nextX;
+        transform.y = nextY;
+        return;
       }
 
-      if (transform.y < 0) {
-        transform.y += height;
-        transform.prevY += height;
-      } else if (transform.y >= height) {
-        transform.y -= height;
-        transform.prevY -= height;
+      // Bloqueada: desliza pelo eixo que ainda estiver livre.
+      if (!isWaterAt(terrain, nextX, transform.y)) {
+        transform.x = nextX;
+      } else if (!isWaterAt(terrain, transform.x, nextY)) {
+        transform.y = nextY;
       }
     });
   },
 };
+
+const clampTo = (value: number, max: number): number =>
+  value < 2 ? 2 : value > max - 2 ? max - 2 : value;

@@ -88,7 +88,10 @@ export function createUtilityBrain(): Brain {
         options.push(
           option(
             'flee',
-            threat.weight * (1.6 + emotions.fear) * (1.4 - traits.bravery),
+            // O peso do medo é de QUEM FOGE. Com um termo constante alto, uma
+            // criatura destemida fugia para sempre de qualquer vizinho de
+            // temperamento forte — e nunca mais socializava nem acasalava.
+            threat.weight * (0.35 + emotions.fear * 1.6) * (1.4 - traits.bravery),
             self.x + (dx / len) * 140,
             self.y + (dy / len) * 140,
             NO_TARGET,
@@ -243,7 +246,16 @@ export function createUtilityBrain(): Brain {
           options.push(
             option(
               'mate',
-              attributes.fertility * (0.7 + other.affinity) * proximity * emotions.happiness * 1.3,
+              // Multiplicar tudo junto (afinidade × proximidade × felicidade)
+              // zerava a vontade de acasalar: ninguém nunca escolhia, e a
+              // população só envelhecia até acabar. Cada fator agora modula,
+              // nenhum anula — bem alimentada, feliz e perto de alguém fértil,
+              // a criatura quer mesmo é ter filhote.
+              attributes.fertility *
+                (0.55 + other.affinity * 0.6) *
+                (0.4 + proximity * 0.8) *
+                (0.5 + emotions.happiness * 0.8) *
+                2.6,
               other.x,
               other.y,
               other.id,
@@ -289,6 +301,28 @@ export function createUtilityBrain(): Brain {
             self.y,
             NO_TARGET,
             8,
+          ),
+        );
+      }
+
+      // ---- Investigar o que parece escondido ----------------------------
+      // Ninguém "sabe" que há algo atrás da pedra. O que existe é curiosidade:
+      // quem tem pouca passa direto, quem tem muita vai lá ver.
+      if (perception.hunch) {
+        const proximity = 1 - clamp01(perception.hunch.distance / attributes.vision);
+        options.push(
+          option(
+            'search',
+            (emotions.curiosity * 1.6 + traits.curiosity * 0.8) *
+              // Curiosidade com endereço vence a vontade de vagar à toa — mas
+              // só quem está curioso mesmo; saciada ou com medo, passa direto.
+              (0.45 + proximity * 0.9) *
+              (1 - emotions.fear) *
+              (1 - needs.hunger * 0.5),
+            perception.hunch.x,
+            perception.hunch.y,
+            NO_TARGET,
+            4,
           ),
         );
       }

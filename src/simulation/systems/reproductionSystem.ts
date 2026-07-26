@@ -16,7 +16,7 @@ import {
 import { isBaby } from '../age';
 
 const MATING_COOLDOWN = 90;
-const MATE_REACH = 12;
+const MATE_REACH = 16;
 /** Fração das lembranças dos pais que o filhote absorve (aprendizado por observação). */
 const CULTURAL_INHERITANCE = 0.45;
 const MAX_POPULATION = 60;

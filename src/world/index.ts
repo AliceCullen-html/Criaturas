@@ -10,14 +10,22 @@ export {
   dropFruitNear,
   itemRadius,
   MAX_ITEMS,
+  MAX_STACK,
+  STACK_STEP,
   TOXIC_FRUIT_VARIANT,
+  VARIANT,
+  isRare,
+  spawnTrinket,
 } from './items';
+export type { ItemKind } from './items';
 export { SceneryResource, generateScenery } from './scenery';
 export type { SceneryPiece, SceneryKind } from './scenery';
 export { itemSystem } from './systems/itemSystem';
 export { PROP, PropsResource, generateProps, propSystem, isTallProp, swayPropsNear } from './props';
 export type { Prop, PropKind } from './props';
 export { WeatherResource, createWeather, weatherSystem } from './weather';
+export { DayNightResource, createDayNight, dayNightSystem, isNight } from './dayNight';
+export type { DayNight } from './dayNight';
 export type { Weather, WeatherKind } from './weather';
 export {
   AmbientResource,
@@ -29,6 +37,8 @@ export {
   AMBIENT_CRITTER,
   AMBIENT_FISH,
   AMBIENT_DRAGONFLY,
+  AMBIENT_FROG,
+  AMBIENT_FIREFLY,
 } from './ambient';
 export type { AmbientBeing } from './ambient';
 export { generateTerrain, isWaterAt, findNearestWater, GROUND, WATER } from './terrain';

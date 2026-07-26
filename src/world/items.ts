@@ -1,18 +1,26 @@
 import { TAU, clamp, type Rng } from '@core';
 import { Sprite, Transform, defineComponent, type World } from '@engine';
+import { isWaterAt } from './terrain';
+import { TerrainResource } from './terrainResource';
 
 /**
  * Objeto físico do mundo: pode ser pego, arrastado, arremessado e — no caso
  * das frutas — comido. É por aqui que o jogador alimenta, em vez de um botão.
  */
+export type ItemKind = 'fruit' | 'toy' | 'stick' | 'seed' | 'feather' | 'stone' | 'shell';
+
 export interface Item {
-  kind: 'fruit' | 'toy';
+  kind: ItemKind;
   variant: number;
   /** 1 = fresca, 0 = podre. Frutas apodrecem no chão. */
   freshness: number;
   toxic: boolean;
   /** Na mão do jogador — não sofre física nem é comida. */
   held: boolean;
+  /** Escondido atrás de uma pedra: ninguém acha sem procurar. */
+  hidden: boolean;
+  /** Altura na pilha (0 = no chão). Empilhar é só arrumar, não guardar. */
+  stack: number;
   vx: number;
   vy: number;
 }
@@ -22,11 +30,41 @@ export const FRUIT_VARIANTS = [0, 1, 5] as const; // maçã, frutinhas, amora
 export const TOXIC_FRUIT_VARIANT = 2; // cogumelo
 const TOY_VARIANT = 3;
 
+/** Variantes dos objetos soltos e das raridades (índice na folha de sprites). */
+export const VARIANT = {
+  stick: 6,
+  seed: 7,
+  feather: 8,
+  stone: 9,
+  shell: 10,
+  goldenFruit: 11,
+  glowMushroom: 12,
+  shinyStone: 13,
+} as const;
+
+const TRINKET_VARIANT: Record<string, number> = {
+  stick: VARIANT.stick,
+  seed: VARIANT.seed,
+  feather: VARIANT.feather,
+  stone: VARIANT.stone,
+  shell: VARIANT.shell,
+};
+
+/** Raridades: valem mais e brilham. */
+export const isRare = (variant: number): boolean =>
+  variant === VARIANT.goldenFruit ||
+  variant === VARIANT.glowMushroom ||
+  variant === VARIANT.shinyStone;
+
 export const MAX_ITEMS = 70;
+
+/** Altura máxima de uma pilha e o quanto cada nível sobe na tela. */
+export const MAX_STACK = 3;
+export const STACK_STEP = 3.5;
 
 /** Raio visual conforme o frescor (frutas murcham ao apodrecer). */
 export const itemRadius = (item: Item): number =>
-  item.kind === 'toy' ? 7 : 4.5 + item.freshness * 3;
+  item.kind === 'fruit' ? 4.5 + item.freshness * 3 : 7;
 
 export function registerItems(world: World): void {
   world.register(Item);
@@ -40,7 +78,11 @@ export function spawnFruit(
 ): number {
   const { rng } = world;
   const toxic = options.toxic ?? rng.chance(0.18);
-  const variant = options.variant ?? (toxic ? TOXIC_FRUIT_VARIANT : rng.pick(FRUIT_VARIANTS));
+  // Uma em muitas frutas é dourada — a recompensa de quem fica olhando.
+  const golden = !toxic && options.variant === undefined && rng.chance(0.04);
+  const variant =
+    options.variant ??
+    (golden ? VARIANT.goldenFruit : toxic ? TOXIC_FRUIT_VARIANT : rng.pick(FRUIT_VARIANTS));
   const entity = world.createEntity();
 
   world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
@@ -50,6 +92,34 @@ export function spawnFruit(
     freshness: options.freshness ?? 1,
     toxic,
     held: false,
+    hidden: false,
+    stack: 0,
+    vx: 0,
+    vy: 0,
+  };
+  world.store(Item).set(entity, item);
+  world.store(Sprite).set(entity, { radius: itemRadius(item), color: 0xffffff, variant });
+  return entity;
+}
+
+/** Objeto solto do cenário: graveto, semente, pena, pedrinha ou concha. */
+export function spawnTrinket(
+  world: World,
+  kind: 'stick' | 'seed' | 'feather' | 'stone' | 'shell',
+  x: number,
+  y: number,
+): number {
+  const entity = world.createEntity();
+  const variant = TRINKET_VARIANT[kind]!;
+  world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
+  const item: Item = {
+    kind,
+    variant,
+    freshness: 1,
+    toxic: false,
+    held: false,
+    hidden: false,
+    stack: 0,
     vx: 0,
     vy: 0,
   };
@@ -67,6 +137,8 @@ export function spawnToy(world: World, x: number, y: number): number {
     freshness: 1,
     toxic: false,
     held: false,
+    hidden: false,
+    stack: 0,
     vx: 0,
     vy: 0,
   };
@@ -77,13 +149,21 @@ export function spawnToy(world: World, x: number, y: number): number {
   return entity;
 }
 
-/** Espalha uma fruta caída ao redor de um ponto (usado pelas árvores). */
+/**
+ * Espalha uma fruta caída ao redor de um ponto (usado pelas árvores). Árvores
+ * de beira de lago existem: a fruta procura chão antes de cair, senão ficaria
+ * boiando onde ninguém alcança.
+ */
 export function dropFruitNear(world: World, x: number, y: number, rng: Rng): number {
-  const angle = rng.range(0, TAU);
-  const distance = rng.range(6, 18);
-  return spawnFruit(
-    world,
-    clamp(x + Math.cos(angle) * distance, 4, world.config.width - 4),
-    clamp(y + Math.sin(angle) * distance, 4, world.config.height - 4),
-  );
+  const terrain = world.getResource(TerrainResource);
+  let fallX = x;
+  let fallY = y;
+  for (let i = 0; i < 8; i++) {
+    const angle = rng.range(0, TAU);
+    const distance = rng.range(6, 18);
+    fallX = clamp(x + Math.cos(angle) * distance, 4, world.config.width - 4);
+    fallY = clamp(y + Math.sin(angle) * distance, 4, world.config.height - 4);
+    if (!isWaterAt(terrain, fallX, fallY)) break;
+  }
+  return spawnFruit(world, fallX, fallY);
 }

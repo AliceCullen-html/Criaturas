@@ -163,28 +163,194 @@ export function makeResourceTextures(): Texture[] {
       b.set(x, y, 0xd6473f);
     return b.toTexture();
   };
-  return [apple(), berries(), mushroom(), flower(), sprout(), bush()];
+  // --- Objetos que o jogador pode pegar e espalhar ---------------------
+  const stick = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 12, 5, 1.3);
+    const wood = 0x8a6a3c;
+    for (let i = 0; i < 12; i++) b.set(2 + i, 9 - Math.round(i * 0.25), wood);
+    for (let i = 0; i < 12; i++) b.set(2 + i, 10 - Math.round(i * 0.25), shade(wood, 0.78));
+    b.set(6, 7, wood);
+    b.set(7, 6, wood);
+    return b.toTexture();
+  };
+  const seed = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 12, 3, 1.2);
+    for (const [x, y] of [
+      [7, 9],
+      [9, 10],
+      [8, 11],
+    ] as const) {
+      b.ellipse(x, y, 1.6, 1.1, 0xb89a5c);
+      b.set(x - 1, y - 1, 0xd8c088);
+    }
+    return b.toTexture();
+  };
+  const feather = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 13, 3, 1.2);
+    const quill = 0xe8eef5;
+    b.ellipse(8, 8, 2.2, 5, quill);
+    b.ellipse(8, 8, 1.1, 4.4, mix(quill, 0x9ab4d0, 0.5));
+    for (let i = 0; i < 9; i++) b.set(8, 4 + i, 0xc8d4e0);
+    b.set(8, 13, 0xb0bcc8);
+    return b.toTexture();
+  };
+  const stone = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 12, 4.5, 1.5);
+    b.ellipse(8, 9, 4, 3, shade(0x9aa0ab, 0.75));
+    b.ellipse(7.4, 8.2, 3.4, 2.4, 0x9aa0ab);
+    b.disc(6.4, 7.2, 1.1, mix(0x9aa0ab, 0xffffff, 0.4));
+    return b.toTexture();
+  };
+  const shellItem = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 12, 4, 1.4);
+    const color = 0xf0dcc8;
+    b.ellipse(8, 9, 4, 3.2, shade(color, 0.8));
+    b.ellipse(8, 8.4, 3.4, 2.7, color);
+    for (let i = -3; i <= 3; i++) b.set(8 + i, 8 - Math.abs(i) * 0.6, shade(color, 0.85));
+    return b.toTexture();
+  };
+
+  // --- Raridades: recompensam quem repara nos detalhes ------------------
+  const goldenFruit = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 13, 4, 1.6);
+    const gold = 0xf2c341;
+    b.disc(8, 8, 4.2, shade(gold, 0.72));
+    b.disc(8, 8, 3.5, gold);
+    b.disc(6.6, 6.6, 1.3, 0xfff0b0);
+    b.rect(8, 3, 1, 2, 0x8a6a3c);
+    b.set(9, 3, 0x6ab04a);
+    // Faíscas.
+    b.set(3, 5, 0xfff6d0);
+    b.set(13, 10, 0xfff6d0);
+    b.set(12, 4, 0xfff6d0);
+    return b.toTexture();
+  };
+  const glowMushroom = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 13, 4, 1.6);
+    const glow = 0x7fe8d0;
+    b.rect(7, 8, 2, 4, 0xdff5ef);
+    b.disc(8, 7, 4, shade(glow, 0.7));
+    b.disc(8, 7, 3.2, glow);
+    b.set(6, 5, 0xd8fff5);
+    b.set(10, 6, 0xd8fff5);
+    b.rect(4, 8, 9, 1, mix(glow, 0xffffff, 0.4));
+    return b.toTexture();
+  };
+  const shinyStone = (): Texture => {
+    const b = new PixelBuffer(16, 16);
+    bakeShadow(b, 8, 12, 4, 1.4);
+    const gem = 0x9a7ad6;
+    b.ellipse(8, 9, 3.6, 2.8, shade(gem, 0.7));
+    b.ellipse(7.6, 8.4, 3, 2.2, gem);
+    b.disc(6.8, 7.6, 1.1, 0xe0d0ff);
+    b.set(11, 6, 0xfffaff);
+    b.set(4, 11, 0xfffaff);
+    return b.toTexture();
+  };
+
+  return [
+    apple(),
+    berries(),
+    mushroom(),
+    flower(),
+    sprout(),
+    bush(),
+    stick(),
+    seed(),
+    feather(),
+    stone(),
+    shellItem(),
+    goldenFruit(),
+    glowMushroom(),
+    shinyStone(),
+  ];
 }
 
 export interface SceneryTextures {
-  tree: Texture;
-  rock: Texture;
-  bush: Texture;
+  /** Variantes de árvore: comum, florida, frutífera e com ninho. */
+  tree: Texture[];
+  rock: Texture[];
+  bush: Texture[];
 }
 
 /** Cenário decorativo (não interativo): árvore, pedra, arbusto — com sombra. */
 export function makeSceneryTextures(rng: Rng): SceneryTextures {
-  const tree = (): Texture => {
-    const b = new PixelBuffer(32, 40);
-    bakeShadow(b, 16, 37, 9, 3);
-    b.rect(14, 24, 4, 12, 0x6b4a2b);
-    b.rect(14, 24, 1, 12, shade(0x6b4a2b, 1.2));
+  /**
+   * Árvore com tronco, galhos visíveis e copa em camadas. `decor` acrescenta
+   * flores, frutos ou um ninho — a árvore deixa de ser enfeite e passa a
+   * contar o que está acontecendo nela.
+   */
+  const tree = (decor: 'plain' | 'flowers' | 'fruit' | 'nest'): Texture => {
+    const b = new PixelBuffer(38, 46);
+    const bark = 0x6b4a2b;
+    const barkLight = shade(bark, 1.2);
     const leaf = 0x4f9440;
-    b.disc(16, 16, 10, shade(leaf, 0.85));
-    b.disc(12, 14, 7, leaf);
-    b.disc(20, 15, 7, leaf);
-    b.disc(16, 11, 7, mix(leaf, 0xffffff, 0.12));
-    for (let i = 0; i < 14; i++) b.set(6 + rng.int(20), 8 + rng.int(16), mix(leaf, 0xffffff, 0.25));
+
+    bakeShadow(b, 19, 43, 11, 3.5);
+
+    // Tronco com leve alargamento na base.
+    b.rect(17, 26, 5, 16, bark);
+    b.rect(17, 26, 1, 16, barkLight);
+    b.rect(15, 40, 9, 2, shade(bark, 0.85));
+    b.rect(16, 38, 7, 2, shade(bark, 0.92));
+
+    // Galhos saindo do tronco para a copa.
+    for (const [dx, dy, len] of [
+      [-1, -1, 7],
+      [1, -1, 7],
+      [-1, -1, 4],
+    ] as const) {
+      let bx = 19;
+      let by = 28;
+      for (let i = 0; i < len; i++) {
+        bx += dx;
+        by += dy;
+        b.set(bx, by, bark);
+        b.set(bx, by + 1, shade(bark, 0.8));
+      }
+    }
+
+    // Copa em três volumes, com brilho no topo.
+    b.disc(19, 18, 11.5, shade(leaf, 0.8));
+    b.disc(13, 16, 8, leaf);
+    b.disc(25, 17, 8, leaf);
+    b.disc(19, 12, 8.5, mix(leaf, 0xffffff, 0.14));
+    for (let i = 0; i < 20; i++) {
+      b.set(8 + rng.int(23), 6 + rng.int(20), mix(leaf, 0xffffff, 0.26));
+    }
+
+    if (decor === 'flowers') {
+      const petal = 0xf2b8d0;
+      for (let i = 0; i < 16; i++) {
+        b.disc(9 + rng.int(21), 7 + rng.int(18), 1.2, petal);
+      }
+      b.disc(14, 10, 1.4, mix(petal, 0xffffff, 0.5));
+    } else if (decor === 'fruit') {
+      // Frutos amadurecendo nos galhos, antes de caírem.
+      for (let i = 0; i < 7; i++) {
+        const fx = 10 + rng.int(19);
+        const fy = 12 + rng.int(14);
+        b.disc(fx, fy, 1.8, 0xb8352f);
+        b.disc(fx, fy, 1.2, 0xd6473f);
+        b.set(fx - 1, fy - 1, 0xef7a72);
+      }
+    } else if (decor === 'nest') {
+      const straw = 0xa8814a;
+      b.ellipse(24, 13, 4, 2.4, shade(straw, 0.8));
+      b.ellipse(24, 12.4, 3.4, 1.9, straw);
+      b.ellipse(24, 12.6, 2.2, 1.1, shade(straw, 0.65));
+      // Ovinhos.
+      b.set(23, 12, 0xeaf0f5);
+      b.set(25, 12, 0xeaf0f5);
+    }
+
     return b.toTexture();
   };
   const rock = (): Texture => {
@@ -203,7 +369,11 @@ export function makeSceneryTextures(rng: Rng): SceneryTextures {
     b.disc(10, 7, 4.5, 0x59a049);
     return b.toTexture();
   };
-  return { tree: tree(), rock: rock(), bush: bush() };
+  return {
+    tree: [tree('plain'), tree('flowers'), tree('fruit'), tree('nest')],
+    rock: [rock(), rock()],
+    bush: [bush(), bush()],
+  };
 }
 
 /** Nuvenzinha de poeira dos passos. */

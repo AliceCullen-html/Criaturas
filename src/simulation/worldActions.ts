@@ -2,6 +2,7 @@ import { TAU, clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
 import { Creature, Emotions, Memory, Mind } from '@creatures';
 import {
+  AMBIENT_BIRD,
   AMBIENT_BUTTERFLY,
   AmbientResource,
   Item,
@@ -144,4 +145,21 @@ export function rememberPleasantPlace(world: World, x: number, y: number, radius
     if (Math.hypot(transform.x - x, transform.y - y) > radius) return;
     memory.record(subjects.place(x, y), 0.5, 0.2);
   });
+}
+
+/**
+ * Largar sementes chama os pássaros: eles largam o que estavam fazendo e vêm
+ * comer ali.
+ */
+export function attractBirds(world: World, x: number, y: number): void {
+  const beings = world.getResource(AmbientResource);
+  let called = 0;
+  for (const being of beings) {
+    if (called >= 3) break;
+    if (being.kind !== AMBIENT_BIRD) continue;
+    being.resting = 0;
+    being.targetX = x + world.rng.range(-10, 10);
+    being.targetY = y + world.rng.range(-10, 10);
+    called += 1;
+  }
 }

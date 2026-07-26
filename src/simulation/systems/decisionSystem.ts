@@ -20,7 +20,24 @@ import { isBaby } from '../age';
 const candidates: number[] = [];
 const perceivedCreatures: PerceivedCreature[] = [];
 const perceivedFood: PerceivedFood[] = [];
+const hiddenSpots: Array<{ x: number; y: number }> = [];
+const hunch = { x: 0, y: 0, distance: 0 };
 const WANDER_RANGE = 150;
+
+/** O ponto suspeito mais próximo, dentro do alcance da visão. */
+function nearestHunch(x: number, y: number, vision: number): typeof hunch | null {
+  let best: typeof hunch | null = null;
+  for (let i = 0; i < hiddenSpots.length; i++) {
+    const spot = hiddenSpots[i]!;
+    const distance = Math.hypot(spot.x - x, spot.y - y);
+    if (distance > vision || (best && distance >= hunch.distance)) continue;
+    hunch.x = spot.x;
+    hunch.y = spot.y;
+    hunch.distance = distance;
+    best = hunch;
+  }
+  return best;
+}
 
 /**
  * Monta a percepção de cada criatura e pede uma decisão ao seu cérebro.
@@ -51,6 +68,15 @@ export const decisionSystem: System = {
     const scenery = world.getResource(SceneryResource);
     const weather = world.getResource(WeatherResource);
     const { rng, config } = world;
+
+    // Objetos que o jogador escondeu atrás de pedras. São poucos, e ficam fora
+    // do índice de comida de propósito: só quem procurar encontra.
+    hiddenSpots.length = 0;
+    items.forEach((item, entity) => {
+      if (!item.hidden || item.held) return;
+      const transform = transforms.get(entity);
+      if (transform) hiddenSpots.push({ x: transform.x, y: transform.y });
+    });
 
     creatures.forEach((_tag, entity) => {
       const mind = minds.get(entity);
@@ -168,6 +194,7 @@ export const decisionSystem: System = {
           attention: mind.attention,
           ambient: nearestAmbient(ambient, transform.x, transform.y, attributes.vision),
           shelter: nearestTree(scenery, transform.x, transform.y),
+          hunch: nearestHunch(transform.x, transform.y, attributes.vision),
           rain: weather.intensity,
         };
 
@@ -218,8 +245,13 @@ export const decisionSystem: System = {
       const dy = mind.targetY - transform.y;
       const distance = Math.hypot(dx, dy);
       // Observar é de longe: ninguém persegue uma borboleta até encostar.
+      // Procurar e acasalar são o contrário de observar: exigem encostar. Parar
+      // a `size` de distância deixava as maiores sem nunca alcançar o par.
       const stopAt =
-        mind.intent === 'seekFood' || mind.intent === 'seekWater'
+        mind.intent === 'seekFood' ||
+        mind.intent === 'seekWater' ||
+        mind.intent === 'search' ||
+        mind.intent === 'mate'
           ? 2
           : mind.intent === 'watch'
             ? 34

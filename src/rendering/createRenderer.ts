@@ -47,6 +47,8 @@ export interface FrameInput {
   puddles: ReadonlyArray<{ x: number; y: number; life: number }>;
   /** 0..1 — arco-íris que aparece depois da chuva. */
   rainbow: number;
+  /** 0 = dia pleno, 1 = noite fechada. */
+  darkness: number;
 }
 
 /** O mínimo que o renderer precisa saber sobre um bichinho de ambiente. */
@@ -66,6 +68,8 @@ export interface Renderer {
   setProps(props: readonly PropView[]): void;
   /** Onda circular na água, onde o jogador tocou. */
   ripple(x: number, y: number): void;
+  /** Faz a árvore tremer quando sacudida. */
+  shakeTreeAt(index: number): void;
   setHandlers(handlers: GestureHandlers): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
@@ -79,6 +83,7 @@ export interface ScenerySpot {
   kind: 'tree' | 'rock' | 'bush';
   x: number;
   y: number;
+  variant: number;
 }
 
 /** Um detalhe do jardim, como o renderer precisa vê-lo. */
@@ -97,6 +102,19 @@ const SHADOW_COLOR = 0x101408;
 const PIXEL_SCALE = 0.8;
 const LEAF_COUNT = 36;
 const WATER_FRAME_MS = 220;
+/** A que distância abaixo do pé procuramos água, para saber se há reflexo. */
+const REFLECTION_PROBE = 18;
+/** O reflexo é uma silhueta escura na água, não uma cópia clara dela. */
+const REFLECTION_TINT = 0x3a6b92;
+const NIGHT_COLOR = 0x131c38;
+/** Índice do vaga-lume em @world/ambient. Cópia local: rendering não importa @world. */
+const FIREFLY_KIND = 7;
+/** Cogumelo luminoso em @world/items. Mesma razão. */
+const GLOW_MUSHROOM_VARIANT = 12;
+/** Água rasa da margem: mais clara que o fundo do lago. */
+const SHALLOW_TINT = 0xb9e2f2;
+/** O quanto o arco-íris é achatado em relação a um semicírculo perfeito. */
+const RAINBOW_SQUASH = 0.62;
 
 /** Índice do humor (vindo da simulação) → expressão facial. */
 const EXPRESSIONS: readonly Expression[] = [
@@ -251,6 +269,12 @@ function animateBody(
   return motion;
 }
 
+/**
+ * Bit de "escondido" que a simulação empacota junto do frescor, no campo
+ * `color` do buffer de itens. Cópia local: o renderer não importa @simulation.
+ */
+const HIDDEN_FLAG = 256;
+
 /** Props altos dividem camada com as criaturas (grama alta, tronco, junco). */
 const TALL_PROP_KINDS = new Set([0, 6, 9]);
 const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
@@ -305,6 +329,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   let decorationLayer: Container | null = null;
   let resourceLayer: Container | null = null;
   let itemLayer: Container | null = null;
+  let hiddenItemLayer: Container | null = null;
+  let reflectionLayer: Container | null = null;
   let shadowG: Graphics | null = null;
   let selectionG: Graphics | null = null;
   let creatureLayer: Container | null = null;
@@ -323,7 +349,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
   const creatureSlots = new Map<number, CreatureSlot>();
   const resourceSprites: Sprite[] = [];
-  const waterSprites: Sprite[] = [];
+  const waterSprites: Array<{ sprite: Sprite; phase: number }> = [];
   const leaves: Leaf[] = [];
   const dust: Dust[] = [];
   const dustPool: Sprite[] = [];
@@ -331,6 +357,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   const feedback: Feedback[] = [];
   let propTextures: Texture[][] = [];
   const tallProps: Array<{ sprite: Sprite; view: PropView }> = [];
+  const treeSprites: Array<{ sprite: Sprite; phase: number; shake: number }> = [];
+  const reflections: Array<{ sprite: Sprite; phase: number }> = [];
   const ripples: Array<{ x: number; y: number; life: number }> = [];
   let groundPropLayer: Container | null = null;
   let rippleG: Graphics | null = null;
@@ -340,6 +368,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   const ambientSprites: Sprite[] = [];
   const rainDrops: Array<{ sprite: Sprite; x: number; y: number; speed: number }> = [];
   let ambientLayer: Container | null = null;
+  /** O que emite luz própria fica ACIMA do escurecimento da noite. */
+  let glowLayer: Container | null = null;
   let rainLayer: Container | null = null;
   let puddleG: Graphics | null = null;
   let weatherTint: Graphics | null = null;
@@ -549,6 +579,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       grassTile.tileScale.set(0.7);
       const sand = new Container();
       const water = new Container();
+      const reflections = new Container();
+      const hiddenItems = new Container();
       const decorations = new Container();
       decorations.sortableChildren = true;
       const resources = new Container();
@@ -560,6 +592,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const ambient = new Container();
       const rain = new Container();
       const tint = new Graphics();
+      const glow = new Container();
       const shadows = new Graphics();
       const selection = new Graphics();
       const creatures = new Container();
@@ -571,9 +604,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         grassTile,
         sand,
         water,
+        reflections,
         ripplesG,
         puddles,
         groundProps,
+        hiddenItems,
         decorations,
         resources,
         shadows,
@@ -584,6 +619,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         particles,
         rain,
         tint,
+        glow,
         rainbow,
         hand,
       );
@@ -612,7 +648,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       app = instance;
       handSprite = hand;
       itemLayer = itemsLayer;
+      hiddenItemLayer = hiddenItems;
+      reflectionLayer = reflections;
       ambientLayer = ambient;
+      glowLayer = glow;
       groundPropLayer = groundProps;
       rippleG = ripplesG;
       rainbowG = rainbow;
@@ -648,6 +687,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const sandTexture = makeSandTexture(seed);
       const waterScale = cellSize / 16;
       const sandScale = cellSize / 16;
+      const shoreRng = createRng(seed ^ 0x5ea);
 
       // Areia (margem): células perto de água. Água por cima.
       for (let cy = 0; cy < rows; cy++) {
@@ -665,16 +705,34 @@ export function createRenderer(options: RendererOptions): Renderer {
             isWater(cx + 1, cy - 1);
           if (nearWater) {
             const s = new Sprite(sandTexture);
-            s.position.set(cx * cellSize, cy * cellSize);
-            s.scale.set(sandScale);
+            s.anchor.set(0.5);
+            // Espelhar e girar a areia quebra a escadinha: a margem deixa de
+            // repetir o mesmo canto quadrado célula após célula.
+            s.position.set(cx * cellSize + cellSize / 2, cy * cellSize + cellSize / 2);
+            s.scale.set(
+              shoreRng.chance(0.5) ? sandScale : -sandScale,
+              shoreRng.chance(0.5) ? sandScale : -sandScale,
+            );
+            // Uma faixa de areia um pouco maior avança sobre a grama, para a
+            // borda não terminar num degrau perfeito.
+            s.scale.x *= 1 + shoreRng.range(0, 0.22);
+            s.scale.y *= 1 + shoreRng.range(0, 0.22);
             sandLayer.addChild(s);
           }
           if (water) {
             const s = new Sprite(waterFrames[0]);
-            s.position.set(cx * cellSize, cy * cellSize);
-            s.scale.set(waterScale);
+            s.anchor.set(0.5);
+            s.position.set(cx * cellSize + cellSize / 2, cy * cellSize + cellSize / 2);
+            s.scale.set(shoreRng.chance(0.5) ? waterScale : -waterScale, waterScale);
+            // Raso na margem, fundo no meio: é o que dá volume ao lago.
+            const shallow =
+              !isWater(cx - 1, cy) ||
+              !isWater(cx + 1, cy) ||
+              !isWater(cx, cy - 1) ||
+              !isWater(cx, cy + 1);
+            if (shallow) s.tint = SHALLOW_TINT;
+            waterSprites.push({ sprite: s, phase: shoreRng.int(8) });
             waterLayer.addChild(s);
-            waterSprites.push(s);
           }
         }
       }
@@ -684,14 +742,36 @@ export function createRenderer(options: RendererOptions): Renderer {
     setScenery(pieces: readonly ScenerySpot[]): void {
       if (!decorationLayer || !scenery) return;
       decorationLayer.removeChildren();
+      reflectionLayer?.removeChildren();
+      treeSprites.length = 0;
+      reflections.length = 0;
       sceneryList = pieces;
       for (const piece of pieces) {
-        const sprite = new Sprite(scenery[piece.kind]);
-        sprite.anchor.set(0.5, 0.9);
+        const variants = scenery[piece.kind];
+        const texture = variants[piece.variant % variants.length]!;
+        const sprite = new Sprite(texture);
+        // Âncora no pé do tronco: é em torno dele que a árvore balança.
+        sprite.anchor.set(0.5, 0.95);
         sprite.scale.set(PIXEL_SCALE);
         sprite.position.set(piece.x, piece.y);
         sprite.zIndex = piece.y;
         decorationLayer.addChild(sprite);
+        if (piece.kind === 'tree') {
+          treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
+        }
+
+        // Quem está na beira aparece de cabeça para baixo na água. Só quem
+        // está na beira: reflexo em cima da grama não seria reflexo nenhum.
+        if (reflectionLayer && waterProbe?.(piece.x, piece.y + REFLECTION_PROBE)) {
+          const mirror = new Sprite(texture);
+          mirror.anchor.set(0.5, 0.95);
+          mirror.scale.set(PIXEL_SCALE, -PIXEL_SCALE);
+          mirror.position.set(piece.x, piece.y);
+          mirror.tint = REFLECTION_TINT;
+          mirror.alpha = 0.45;
+          reflectionLayer.addChild(mirror);
+          reflections.push({ sprite: mirror, phase: (piece.x - piece.y) * 0.04 });
+        }
       }
     },
 
@@ -716,6 +796,15 @@ export function createRenderer(options: RendererOptions): Renderer {
           groundPropLayer.addChild(sprite);
         }
       }
+    },
+
+    shakeTreeAt(index: number): void {
+      const spot = sceneryList[index];
+      if (!spot) return;
+      let treeIndex = 0;
+      for (let i = 0; i < index; i++) if (sceneryList[i]!.kind === 'tree') treeIndex += 1;
+      const tree = treeSprites[treeIndex];
+      if (tree) tree.shake = 1;
     },
 
     ripple(x: number, y: number): void {
@@ -793,11 +882,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         screenHeight / 2 - camera.y * camera.zoom,
       );
 
-      // Água animada.
+      // Água animada. Cada célula anda no seu próprio compasso: sem isso o
+      // lago inteiro pisca junto e vira uma bandeira listrada.
       if (waterFrames.length > 0 && waterSprites.length > 0) {
-        const frame = Math.floor((elapsed * 1000) / WATER_FRAME_MS) % waterFrames.length;
-        const texture = waterFrames[frame]!;
-        for (let i = 0; i < waterSprites.length; i++) waterSprites[i]!.texture = texture;
+        const frame = Math.floor((elapsed * 1000) / WATER_FRAME_MS);
+        for (let i = 0; i < waterSprites.length; i++) {
+          const cell = waterSprites[i]!;
+          cell.sprite.texture = waterFrames[(frame + cell.phase) % waterFrames.length]!;
+        }
       }
 
       // Recursos (plantas).
@@ -1009,9 +1101,22 @@ export function createRenderer(options: RendererOptions): Renderer {
           );
           sprite.scale.set(clamp(items.radius[i]! * 0.14, 0.4, 1.2));
           // Frutas passadas escurecem: dá para ver que estão apodrecendo.
-          const freshness = items.color[i]! / 255;
+          const packed = items.color[i]!;
+          const freshness = (packed & 0xff) / 255;
+          const hidden = (packed & HIDDEN_FLAG) !== 0;
           sprite.tint = freshness > 0.5 ? 0xffffff : 0xa89070;
-          sprite.alpha = 0.5 + freshness * 0.5;
+          // Escondido atrás da pedra: mal se vê a pontinha. Quem olhar com
+          // atenção percebe; as criaturas precisam ir até lá.
+          sprite.alpha = hidden ? 0.55 : 0.5 + freshness * 0.5;
+          // O que está escondido desce para debaixo do cenário: a pedra passa
+          // a cobri-lo de verdade, em vez de ficar transparente por cima dela.
+          // O cogumelo luminoso acende quando escurece: sobe para a camada de
+          // luz e atravessa a noite em vez de sumir nela.
+          const glowing =
+            items.variant[i] === GLOW_MUSHROOM_VARIANT && input.darkness > 0.3 && !hidden;
+          if (glowing) sprite.alpha = 0.6 + input.darkness * 0.4;
+          const wanted = hidden ? hiddenItemLayer : glowing ? glowLayer : itemLayer;
+          if (wanted && sprite.parent !== wanted) wanted.addChild(sprite);
           sprite.visible = true;
         }
         for (let i = items.count; i < itemSprites.length; i++) itemSprites[i]!.visible = false;
@@ -1046,6 +1151,21 @@ export function createRenderer(options: RendererOptions): Renderer {
         signal.sprite.scale.set(0.8 + t * 0.4);
       }
 
+      // Vento na copa das árvores; sacudir soma um tranco por cima.
+      for (const tree of treeSprites) {
+        if (tree.shake > 0) tree.shake = Math.max(0, tree.shake - dt * 2.2);
+        const wind = Math.sin(elapsed * 0.9 + tree.phase) * 0.022;
+        tree.sprite.rotation = wind + tree.shake * Math.sin(elapsed * 26) * 0.09;
+      }
+
+      // O reflexo na água nunca fica parado: ondula e respira com a superfície.
+      for (const mirror of reflections) {
+        const wobble = Math.sin(elapsed * 1.7 + mirror.phase);
+        mirror.sprite.skew.x = wobble * 0.09;
+        mirror.sprite.scale.y = -PIXEL_SCALE * (0.86 + Math.sin(elapsed * 1.1 + mirror.phase) * 0.06);
+        mirror.sprite.alpha = 0.42 + wobble * 0.06;
+      }
+
       // Vento e toque: a vegetação alta balança.
       for (const entry of tallProps) {
         const wind = Math.sin(elapsed * 1.6 + entry.view.phase) * 0.05;
@@ -1069,17 +1189,22 @@ export function createRenderer(options: RendererOptions): Renderer {
         }
       }
 
-      // Arco-íris depois da chuva.
+      // Arco-íris depois da chuva. É um ARCO — meia volta, com os pés no chão —
+      // e só existe de dia: à noite não há sol para atravessar a água no ar.
       if (rainbowG) {
         rainbowG.clear();
-        if (input.rainbow > 0.01) {
+        const daylight = 1 - input.darkness;
+        if (input.rainbow > 0.01 && daylight > 0.25) {
           const colors = [0xef6b6b, 0xf0a94a, 0xf2e05a, 0x6fc46a, 0x5aa8e0, 0x9a7ad6];
           const cx = options.worldWidth * 0.5;
-          const cy = options.worldHeight * 0.62;
+          const cy = options.worldHeight * 0.78;
+          // Círculo achatado: desenhamos meia circunferência e esprememos o Y.
+          rainbowG.scale.set(1, RAINBOW_SQUASH);
+          rainbowG.position.set(0, cy * (1 - RAINBOW_SQUASH));
           for (let i = 0; i < colors.length; i++) {
             rainbowG
-              .ellipse(cx, cy, 360 - i * 12, 250 - i * 9)
-              .stroke({ width: 11, color: colors[i]!, alpha: input.rainbow * 0.3 });
+              .arc(cx, cy, 380 - i * 13, Math.PI, Math.PI * 2)
+              .stroke({ width: 13, color: colors[i]!, alpha: input.rainbow * daylight * 0.32 });
           }
         }
       }
@@ -1092,7 +1217,10 @@ export function createRenderer(options: RendererOptions): Renderer {
           if (!sprite) {
             sprite = new Sprite();
             sprite.anchor.set(0.5);
-            ambientLayer.addChild(sprite);
+            // O vaga-lume é a própria luz: fica por cima da escuridão.
+            (being.kind === FIREFLY_KIND ? (glowLayer ?? ambientLayer) : ambientLayer).addChild(
+              sprite,
+            );
             ambientSprites[i] = sprite;
           }
           const frames = ambientTextures[being.kind] ?? ambientTextures[0]!;
@@ -1101,8 +1229,16 @@ export function createRenderer(options: RendererOptions): Renderer {
           sprite.texture = frames[frame]!;
           sprite.position.set(being.x, being.y - (being.resting > 0 ? 0 : 3));
           sprite.visible = true;
-          // Na chuva os insetos somem de cena.
-          sprite.alpha = being.kind <= 1 ? 1 - input.rain : 1;
+          // Na chuva os insetos se recolhem; vaga-lumes só aparecem à noite,
+          // pulsando devagar.
+          if (being.kind === FIREFLY_KIND) {
+            // Pisca devagar, cada um no seu ritmo, e só existe quando escurece.
+            const pulse = 0.68 + Math.sin(being.phase * 0.7) * 0.32;
+            sprite.alpha = Math.max(0, (input.darkness - 0.25) / 0.75) * pulse;
+            sprite.scale.set(1 + pulse * 0.5);
+          } else {
+            sprite.alpha = being.kind <= 1 ? 1 - input.rain : 1;
+          }
         }
         for (let i = input.ambient.length; i < ambientSprites.length; i++) {
           ambientSprites[i]!.visible = false;
@@ -1148,11 +1284,15 @@ export function createRenderer(options: RendererOptions): Renderer {
           drop.sprite.position.set(drop.x, drop.y);
         }
 
+        // A noite e a chuva escurecem o mundo pela mesma camada. A noite tem de
+        // ser noite de verdade: sem isso os vaga-lumes não aparecem.
         weatherTint.clear();
-        if (input.rain > 0.01) {
+        const nightAlpha = input.darkness * 0.78;
+        const rainAlpha = input.rain * 0.4;
+        if (nightAlpha + rainAlpha > 0.01) {
           weatherTint
             .rect(0, 0, options.worldWidth, options.worldHeight)
-            .fill({ color: 0x24344f, alpha: input.rain * 0.4 });
+            .fill({ color: NIGHT_COLOR, alpha: Math.min(0.84, nightAlpha + rainAlpha) });
         }
       }
 
@@ -1200,6 +1340,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       ambientSprites.length = 0;
       rainDrops.length = 0;
       tallProps.length = 0;
+      treeSprites.length = 0;
+      reflections.length = 0;
       ripples.length = 0;
       clearCreatureTextureCache();
       if (app) {
@@ -1215,12 +1357,16 @@ export function createRenderer(options: RendererOptions): Renderer {
         creatureLayer = null;
         particleLayer = null;
         ambientLayer = null;
+        glowLayer = null;
         rainLayer = null;
         puddleG = null;
         weatherTint = null;
         groundPropLayer = null;
         rippleG = null;
         rainbowG = null;
+        itemLayer = null;
+        hiddenItemLayer = null;
+        reflectionLayer = null;
       }
     },
   };

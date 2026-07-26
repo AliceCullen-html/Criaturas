@@ -20,6 +20,7 @@ export type Intent =
   | 'watch'
   | 'shelter'
   | 'sunbathe'
+  | 'search'
   | 'follow';
 
 /** Expressão facial dominante, derivada das emoções. */

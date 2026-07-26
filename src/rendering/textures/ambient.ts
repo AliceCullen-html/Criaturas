@@ -84,6 +84,46 @@ export function makeAmbientTextures(): Texture[][] {
     return b.toTexture();
   };
 
+  const frog = (jump: boolean): Texture => {
+    const b = new PixelBuffer(11, 9);
+    const skin = 0x6aa84a;
+    const y = jump ? 3 : 4;
+    b.ellipse(5.5, y + 1.5, 3.6, 2.4, shade(skin, 0.8));
+    b.ellipse(5.5, y + 1, 3.2, 2, skin);
+    // Olhinhos saltados.
+    for (const ex of [4, 7]) {
+      b.disc(ex, y - 1, 1.3, skin);
+      b.set(ex, y - 1, 0x1c1c28);
+    }
+    // Patas.
+    b.set(2, y + 3, shade(skin, 0.75));
+    b.set(9, y + 3, shade(skin, 0.75));
+    return b.toTexture();
+  };
+
+  // O vaga-lume é quase só luz: um halo largo e fraco, um miolo pequeno e
+  // aceso. Sem o halo ele vira um pixel perdido no escuro.
+  const firefly = (bright: boolean): Texture => {
+    const size = 13;
+    const center = (size - 1) / 2;
+    const b = new PixelBuffer(size, size);
+    const glow = bright ? 0xf5f0a0 : 0xd8d080;
+    const radius = bright ? 6.2 : 4.8;
+    const peak = bright ? 150 : 100;
+    // Queda radial suave em vez de discos concêntricos: assim o halo é uma
+    // luz, não um quadrado com degraus.
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const distance = Math.hypot(x - center, y - center);
+        if (distance > radius) continue;
+        const falloff = 1 - distance / radius;
+        b.set(x, y, glow, Math.round(peak * falloff * falloff));
+      }
+    }
+    b.disc(center, center, bright ? 1.5 : 1.1, bright ? 0xfffde0 : 0xf0e8b0);
+    return b.toTexture();
+  };
+
   return [
     [butterfly(true), butterfly(false)],
     [bee(true), bee(false)],
@@ -91,6 +131,8 @@ export function makeAmbientTextures(): Texture[][] {
     [critter(true), critter(false)],
     [fish(true), fish(false)],
     [dragonfly(true), dragonfly(false)],
+    [frog(true), frog(false)],
+    [firefly(true), firefly(false)],
   ];
 }
 
