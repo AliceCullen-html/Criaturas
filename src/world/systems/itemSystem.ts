@@ -42,6 +42,23 @@ export const itemSystem: System = {
     items.forEach((item, entity) => {
       if (item.held) return;
 
+      // Na boca de alguém: acompanha o dono e não sofre física.
+      if (item.carriedBy >= 0) {
+        const owner = transforms.get(item.carriedBy);
+        const transform = transforms.get(entity);
+        if (!owner) {
+          item.carriedBy = -1; // o dono morreu: a fruta cai onde estava
+        } else if (transform) {
+          transform.prevX = transform.x;
+          transform.prevY = transform.y;
+          transform.x = owner.x;
+          transform.y = owner.y - 7;
+          item.vx = 0;
+          item.vy = 0;
+        }
+        return;
+      }
+
       // Física de arremesso.
       if (item.vx !== 0 || item.vy !== 0) {
         const transform = transforms.get(entity);

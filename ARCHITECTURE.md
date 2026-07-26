@@ -106,7 +106,7 @@ personalidade própria. Nada entra se não servir a isso.
 | A ✅  | Mundo compacto: densidades proporcionais à área, jardim que se sustenta   |
 | B ✅  | Microcomportamentos: canal de **pose** separado do humor, 17 gestos ociosos |
 | — ✅  | Celular: toque, dois dedos para câmera, layout responsivo; pedras que prendem |
-| C     | Pequenas histórias: o cérebro escolhe **rotinas** encadeadas; carregar objetos |
+| C ✅  | Pequenas histórias: camada de **rotinas** encadeadas; criaturas carregam objetos |
 | D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
@@ -116,6 +116,9 @@ Critérios de aceitação da fase, verificados por teste:
 - `garden.test.ts` roda o mundo por 30 minutos simulados em três seeds e cobra
   população viva e **ninguém sozinho**. Sem isso nenhuma história social
   acontece.
+- `routines.test.ts` cobra que as histórias **cheguem ao fim** sozinhas: num
+  jardim comum de 10 minutos, quantas correntes completas aconteceram sem o
+  jogador tocar em nada.
 - `observation.test.ts` é a **regra principal virada em verificação**: segue uma
   criatura por cinco minutos, escreve a vida dela em frases e cobra variedade —
   e compara o terço mais preguiçoso com o terço mais agitado do jardim para

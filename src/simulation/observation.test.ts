@@ -24,6 +24,8 @@ import { metabolismSystem } from './systems/metabolismSystem';
 import { reproductionSystem } from './systems/reproductionSystem';
 import { searchSystem } from './systems/searchSystem';
 import { idleSystem } from './systems/idleSystem';
+import { planSystem, Plan } from './systems/planSystem';
+import { ROUTINE, ROUTINE_NAMES } from './routines';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
 
@@ -56,6 +58,7 @@ const scheduler = (): SystemScheduler =>
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
     .add(emotionSystem)
+    .add(planSystem)
     .add(decisionSystem)
     .add(idleSystem)
     .add(movementSystem)
@@ -115,10 +118,14 @@ describe('teste do observador', () => {
       const mind = world.store(Mind).get(watched)!;
       const behavior = world.store(Behavior).get(watched)!;
 
+      // A rotina em curso tem prioridade no relato: é ela que dá o enredo.
+      const plan = world.store(Plan).get(watched);
       const line =
-        behavior.pose !== POSE.none
-          ? (POSE_NAMES[behavior.pose] ?? '?')
-          : (INTENT_NAMES[mind.intent] ?? mind.intent);
+        plan && plan.routine !== ROUTINE.none
+          ? (ROUTINE_NAMES[plan.routine] ?? '?')
+          : behavior.pose !== POSE.none
+            ? (POSE_NAMES[behavior.pose] ?? '?')
+            : (INTENT_NAMES[mind.intent] ?? mind.intent);
 
       if (line !== lastLine) {
         story.push(`${(tick / 20).toFixed(0).padStart(3)}s  ${line}`);

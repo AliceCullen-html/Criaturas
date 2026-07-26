@@ -28,7 +28,8 @@ export const foodIndexSystem: System = {
     world.store(Item).forEach((item, entity) => {
       // Gravetos, pedrinhas e penas não são comida — e o que está escondido
       // atrás de uma pedra só entra aqui depois de alguém encontrar.
-      if (item.kind !== 'fruit' || item.held || item.hidden) return;
+      // O que já está na boca de alguém também sai do índice.
+      if (item.kind !== 'fruit' || item.held || item.hidden || item.carriedBy >= 0) return;
       const transform = transforms.get(entity);
       if (transform) index.insert(entity, transform.x, transform.y);
     });

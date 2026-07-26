@@ -56,6 +56,7 @@ import {
   searchSystem,
   idleSystem,
   confinementSystem,
+  planSystem,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -102,6 +103,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(creatureIndexSystem)
     .add(emotionSystem)
     .add(handReactionSystem)
+    .add(planSystem)
     .add(decisionSystem)
     .add(idleSystem)
     .add(movementSystem)

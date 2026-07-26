@@ -1,4 +1,6 @@
 import { subjects, type Episode } from '@core';
+import { Plan } from './systems/planSystem';
+import { ROUTINE, ROUTINE_NAMES } from './routines';
 import type { World } from '@engine';
 import { describePersonality, type PersonalityTraits } from '@genetics';
 import {
@@ -30,6 +32,8 @@ export interface CreatureSnapshot {
   lifespan: number;
   isBaby: boolean;
   intent: Intent;
+  /** A história em curso, em palavras — vazio se não houver nenhuma. */
+  story: string;
   mood: Mood;
 
   needs: { hunger: number; thirst: number; energy: number; health: number };
@@ -95,6 +99,7 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     lifespan: bio.lifespan,
     isBaby: isBaby(bio),
     intent: mind.intent,
+    story: storyOf(world, id),
     mood: mind.mood,
     needs: { ...needs },
     emotions: { ...emotions },
@@ -158,4 +163,20 @@ function formatDna(genome: Float32Array): string {
       .toUpperCase();
   }
   return out;
+}
+
+/**
+ * O que a criatura está fazendo AGORA, se for uma história.
+ *
+ * O cartão é a única superfície do jogo, e o que ele mostra tem de ser o que
+ * emociona. "levando comida para a Nina" conta mais sobre a vida dela do que
+ * qualquer barra.
+ */
+function storyOf(world: World, id: number): string {
+  const plan = world.store(Plan).get(id);
+  if (!plan || plan.routine === ROUTINE.none) return '';
+  const other = plan.other >= 0 ? world.store(Identity).get(plan.other)?.name : null;
+  const what = ROUTINE_NAMES[plan.routine] ?? '';
+  if (!what) return '';
+  return other ? what.replace('alguém', other).replace('a outra', other) : what;
 }

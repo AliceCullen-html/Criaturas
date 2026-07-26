@@ -3,10 +3,13 @@ import { registerCreatureComponents, spawnCreature } from '@creatures';
 import { BOULDER_RADIUS, Item, TerrainResource, makeMainlandTest, type Blocker } from '@world';
 import { Transform } from '@engine';
 import { solids } from './solids';
+import { Plan } from './systems/planSystem';
 
 /** Registra os componentes de criatura e povoa o mundo com `count` criaturas em solo. */
 export function spawnCreatures(world: World, count: number): void {
   registerCreatureComponents(world);
+  // O plano em curso vive na simulação, não em @creatures: rotina é caso de uso.
+  world.register(Plan);
   const terrain = world.getResource(TerrainResource);
   // Nem na água, nem debaixo de uma pedra grande.
   solids.rebuild(world);

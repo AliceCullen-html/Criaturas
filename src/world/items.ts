@@ -26,6 +26,12 @@ export interface Item {
   toxic: boolean;
   /** Na mão do jogador — não sofre física nem é comida. */
   held: boolean;
+  /**
+   * Id da criatura que está carregando, ou -1. Diferente de `held`, que é a mão
+   * do jogador: uma fruta na boca de alguém continua sendo do mundo, mas anda
+   * junto com quem a pegou e ninguém mais pode comê-la.
+   */
+  carriedBy: number;
   /** Escondido atrás de uma pedra: ninguém acha sem procurar. */
   hidden: boolean;
   /** Altura na pilha (0 = no chão). Empilhar é só arrumar, não guardar. */
@@ -114,6 +120,7 @@ export function spawnBoulder(world: World, x: number, y: number): number {
     freshness: 1,
     toxic: false,
     held: false,
+    carriedBy: -1,
     hidden: false,
     stack: 0,
     vx: 0,
@@ -149,6 +156,7 @@ export function spawnFruit(
     freshness: options.freshness ?? 1,
     toxic,
     held: false,
+    carriedBy: -1,
     hidden: false,
     stack: 0,
     vx: 0,
@@ -175,6 +183,7 @@ export function spawnTrinket(
     freshness: 1,
     toxic: false,
     held: false,
+    carriedBy: -1,
     hidden: false,
     stack: 0,
     vx: 0,
@@ -194,6 +203,7 @@ export function spawnToy(world: World, x: number, y: number): number {
     freshness: 1,
     toxic: false,
     held: false,
+    carriedBy: -1,
     hidden: false,
     stack: 0,
     vx: 0,

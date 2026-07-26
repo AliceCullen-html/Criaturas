@@ -99,7 +99,9 @@ export function CreatureCard() {
       <div className="card__mood">
         {MOOD_FACES[creature.mood]} {MOOD_LABELS[creature.mood]}
       </div>
-      <div className="card__need">{mainNeed(creature)}</div>
+      {/* Se há uma história em curso, ela vem no lugar da necessidade: contar
+          que ela está levando comida para alguém vale mais que "fome". */}
+      <div className="card__need">{creature.story || mainNeed(creature)}</div>
     </div>
   );
 }
