@@ -1,12 +1,16 @@
 import { TAU, clamp, createRng } from '@core';
 import { defineResource, type System } from '@engine';
 import { SceneryResource } from './scenery';
+import { TerrainResource } from './terrainResource';
+import { isWaterAt } from './terrain';
 import { WeatherResource } from './weather';
 
 export const AMBIENT_BUTTERFLY = 0;
 export const AMBIENT_BEE = 1;
 export const AMBIENT_BIRD = 2;
 export const AMBIENT_CRITTER = 3;
+export const AMBIENT_FISH = 4;
+export const AMBIENT_DRAGONFLY = 5;
 
 export interface AmbientBeing {
   kind: number;
@@ -30,16 +34,29 @@ export interface AmbientBeing {
  */
 export const AmbientResource = defineResource<AmbientBeing[]>('Ambient');
 
-const COUNTS = [14, 8, 5, 4]; // borboletas, abelhas, pássaros, bichinhos
-const SPEEDS = [16, 26, 34, 30];
+// borboletas, abelhas, pássaros, bichinhos, peixes, libélulas
+const COUNTS = [14, 8, 5, 4, 10, 6];
+const SPEEDS = [16, 26, 34, 30, 22, 40];
 
-export function createAmbient(width: number, height: number, seed: number): AmbientBeing[] {
+export function createAmbient(
+  width: number,
+  height: number,
+  seed: number,
+  isWater?: (x: number, y: number) => boolean,
+): AmbientBeing[] {
   const rng = createRng(seed ^ 0xa11b1e);
   const beings: AmbientBeing[] = [];
   for (let kind = 0; kind < COUNTS.length; kind++) {
     for (let i = 0; i < COUNTS[kind]!; i++) {
-      const x = rng.range(0, width);
-      const y = rng.range(0, height);
+      let x = rng.range(0, width);
+      let y = rng.range(0, height);
+      // Peixes e libélulas pertencem à água: procuram o lago para nascer.
+      if ((kind === AMBIENT_FISH || kind === AMBIENT_DRAGONFLY) && isWater) {
+        for (let tries = 0; tries < 200 && !isWater(x, y); tries++) {
+          x = rng.range(0, width);
+          y = rng.range(0, height);
+        }
+      }
       beings.push({
         kind,
         x,
@@ -70,8 +87,11 @@ export const ambientSystem: System = {
     // Na chuva, os insetos se recolhem: quase todos somem de cena.
     const raining = weather.intensity > 0.4;
 
+    const terrain = world.getResource(TerrainResource);
+    const inWater = (x: number, y: number): boolean => isWaterAt(terrain, x, y);
+
     for (const being of beings) {
-      being.phase += dt * (being.kind === AMBIENT_BIRD ? 8 : 14);
+      being.phase += dt * (being.kind === AMBIENT_BIRD ? 8 : being.kind === AMBIENT_FISH ? 5 : 14);
 
       if (being.resting > 0) {
         being.resting -= dt;
@@ -85,8 +105,10 @@ export const ambientSystem: System = {
       if (distance < REACH) {
         // Chegou: descansa um pouco (pousa) e escolhe outro destino.
         being.resting =
-          being.kind === AMBIENT_CRITTER ? 0 : rng.range(1.5, being.kind === AMBIENT_BIRD ? 7 : 4);
-        pickTarget(being, scenery, rng, config.width, config.height, raining);
+          being.kind === AMBIENT_CRITTER || being.kind === AMBIENT_FISH
+            ? 0
+            : rng.range(1.5, being.kind === AMBIENT_BIRD ? 7 : 4);
+        pickTarget(being, scenery, rng, config.width, config.height, raining, inWater);
         continue;
       }
 
@@ -117,7 +139,21 @@ function pickTarget(
   width: number,
   height: number,
   raining: boolean,
+  inWater?: (x: number, y: number) => boolean,
 ): void {
+  // Peixes e libélulas não saem do lago: sorteiam destinos até cair na água.
+  if ((being.kind === AMBIENT_FISH || being.kind === AMBIENT_DRAGONFLY) && inWater) {
+    for (let i = 0; i < 24; i++) {
+      const tx = clamp(being.x + rng.range(-90, 90), 4, width - 4);
+      const ty = clamp(being.y + rng.range(-90, 90), 4, height - 4);
+      if (inWater(tx, ty)) {
+        being.targetX = tx;
+        being.targetY = ty;
+        return;
+      }
+    }
+    return;
+  }
   // Pássaros preferem árvores; os outros vagam pelo campo.
   if (being.kind === AMBIENT_BIRD && scenery.length > 0 && !raining && rng.chance(0.7)) {
     const trees = scenery.filter((piece) => piece.kind === 'tree');

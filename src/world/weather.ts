@@ -12,12 +12,14 @@ export interface Weather {
   timer: number;
   /** Poças que aparecem depois da chuva e secam devagar. */
   puddles: Array<{ x: number; y: number; life: number }>;
+  /** 0..1 — arco-íris, a recompensa rara de quem estava olhando na hora certa. */
+  rainbow: number;
 }
 
 export const WeatherResource = defineResource<Weather>('Weather');
 
 export function createWeather(): Weather {
-  return { kind: 'clear', intensity: 0, timer: 120, puddles: [] };
+  return { kind: 'clear', intensity: 0, timer: 120, puddles: [], rainbow: 0 };
 }
 
 const CLEAR_MIN = 150;
@@ -48,6 +50,8 @@ export const weatherSystem: System = {
         weather.kind = 'clear';
         weather.timer = rng.range(CLEAR_MIN, CLEAR_MAX);
         afterRain(world, weather);
+        // Nem toda chuva deixa arco-íris — é isso que o torna especial.
+        if (rng.chance(0.6)) weather.rainbow = 1;
       }
     }
 
@@ -56,6 +60,9 @@ export const weatherSystem: System = {
     weather.intensity = clamp01(
       weather.intensity + Math.sign(target - weather.intensity) * FADE_RATE * dt,
     );
+
+    // O arco-íris some devagar.
+    if (weather.rainbow > 0) weather.rainbow = Math.max(0, weather.rainbow - 0.02 * dt);
 
     // Poças secam.
     for (let i = weather.puddles.length - 1; i >= 0; i--) {

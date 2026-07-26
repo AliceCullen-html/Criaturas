@@ -21,6 +21,8 @@ import {
   SceneryResource,
   TerrainResource,
   WATER,
+  PropsResource,
+  propSystem,
   WeatherResource,
   weatherSystem,
 } from '@world';
@@ -47,8 +49,13 @@ import {
   rememberPetting,
   reproductionSystem,
   roughGesture,
+  pokeProps,
+  rememberPleasantPlace,
   setHandPresence,
+  shakeTree,
   spawnCreatures,
+  touchWater,
+  turnRock,
   writeCreatureBuffer,
   writeItemBuffer,
 } from '@simulation';
@@ -79,6 +86,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const scenery = world.getResource(SceneryResource);
   const ambient = world.getResource(AmbientResource);
   const weather = world.getResource(WeatherResource);
+  const props = world.getResource(PropsResource);
 
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
@@ -93,6 +101,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(itemSystem)
     .add(weatherSystem)
     .add(ambientSystem)
+    .add(propSystem)
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 
@@ -157,6 +166,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       ambient,
       rain: weather.intensity,
       puddles: weather.puddles,
+      rainbow: weather.rainbow,
     });
 
     // O cartão some sozinho depois de alguns segundos.
@@ -243,7 +253,12 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       },
       onGrab: (itemId) => grabItem(world, itemId),
       onDragHeld: (itemId, x, y) => moveHeldItem(world, itemId, x, y),
-      onRelease: (itemId, _x, _y, vx, vy) => releaseItem(world, itemId, vx, vy),
+      onRelease: (itemId, x, y, vx, vy) => {
+        releaseItem(world, itemId, vx, vy);
+        // Enfeitar um canto torna o lugar agradável: quem estava por perto
+        // passa a lembrar bem dali e volta com mais frequência.
+        rememberPleasantPlace(world, x, y, 120);
+      },
       onPet: (creatureId, dt) => {
         if (petCreature(world, creatureId, dt) === 'accepted') {
           if (Math.random() < dt * 1.5) signal('heart', creatureId);
@@ -271,12 +286,32 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         }
       },
       onHandMove: (x, y, inside) => setHandPresence(world, x, y, inside),
+
+      // Mexer no cenário tem consequência: cai fruta, insetos voam, e as
+      // criaturas curiosas vêm ver o que aconteceu.
+      onPokeScenery: (kind, index) => {
+        if (kind === 'tree') {
+          const spot = shakeTree(world, index);
+          if (spot.kind !== 'none') activeRenderer?.emit('star', spot.x, spot.y - 30);
+        } else if (kind === 'rock') {
+          const spot = turnRock(world, index);
+          if (spot.kind !== 'none') activeRenderer?.emit('question', spot.x, spot.y - 14);
+        } else {
+          pokeProps(world, 0, 0);
+        }
+      },
+      onPokeGround: (x, y) => pokeProps(world, x, y),
+      onPokeWater: (x, y) => {
+        touchWater(world, x, y);
+        activeRenderer?.ripple(x, y);
+      },
     });
 
     void renderer.mount(container).then(() => {
       if (cancelled) return;
       renderer.setTerrain(terrain, WATER, WORLD_SEED);
       renderer.setScenery(scenery);
+      renderer.setProps(props);
       activeRenderer = renderer;
     });
 

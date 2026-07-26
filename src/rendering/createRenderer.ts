@@ -23,6 +23,7 @@ import {
 import { makeFeedbackTextures, type FeedbackKind } from './textures/feedback';
 import { makeHandTextures, type HandState } from './textures/hand';
 import { makeAmbientTextures, makeRainTextures } from './textures/ambient';
+import { makePropTextures } from './textures/props';
 import { GestureRecognizer, type GestureHandlers } from './gestures';
 
 export interface RendererOptions {
@@ -44,6 +45,8 @@ export interface FrameInput {
   /** 0 = tempo bom, 1 = chuva forte. */
   rain: number;
   puddles: ReadonlyArray<{ x: number; y: number; life: number }>;
+  /** 0..1 — arco-íris que aparece depois da chuva. */
+  rainbow: number;
 }
 
 /** O mínimo que o renderer precisa saber sobre um bichinho de ambiente. */
@@ -59,6 +62,10 @@ export interface Renderer {
   mount(container: HTMLElement): Promise<void>;
   setTerrain(grid: TileGrid, waterValue: number, seed: number): void;
   setScenery(pieces: readonly ScenerySpot[]): void;
+  /** Detalhes do jardim: grama, flores, pedrinhas, troncos, juncos... */
+  setProps(props: readonly PropView[]): void;
+  /** Onda circular na água, onde o jogador tocou. */
+  ripple(x: number, y: number): void;
   setHandlers(handlers: GestureHandlers): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
@@ -72,6 +79,16 @@ export interface ScenerySpot {
   kind: 'tree' | 'rock' | 'bush';
   x: number;
   y: number;
+}
+
+/** Um detalhe do jardim, como o renderer precisa vê-lo. */
+export interface PropView {
+  kind: number;
+  x: number;
+  y: number;
+  variant: number;
+  sway: number;
+  phase: number;
 }
 
 const BACKGROUND_COLOR = 0x2b4a3a;
@@ -234,6 +251,10 @@ function animateBody(
   return motion;
 }
 
+/** Props altos dividem camada com as criaturas (grama alta, tronco, junco). */
+const TALL_PROP_KINDS = new Set([0, 6, 9]);
+const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
+
 const BLINK_DURATION = 0.11;
 const DUST_INTERVAL = 0.22;
 
@@ -308,6 +329,12 @@ export function createRenderer(options: RendererOptions): Renderer {
   const dustPool: Sprite[] = [];
   const itemSprites: Sprite[] = [];
   const feedback: Feedback[] = [];
+  let propTextures: Texture[][] = [];
+  const tallProps: Array<{ sprite: Sprite; view: PropView }> = [];
+  const ripples: Array<{ x: number; y: number; life: number }> = [];
+  let groundPropLayer: Container | null = null;
+  let rippleG: Graphics | null = null;
+  let rainbowG: Graphics | null = null;
   let ambientTextures: Texture[][] = [];
   let rainTextures: Texture[] = [];
   const ambientSprites: Sprite[] = [];
@@ -342,6 +369,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   let lastCreatures: CreatureRenderBuffer | null = null;
   let lastItems: RenderBuffer | null = null;
   let lastItemIds: Int32Array | null = null;
+  let sceneryList: readonly ScenerySpot[] = [];
+  let waterProbe: ((x: number, y: number) => boolean) | null = null;
   const handWorld = { x: 0, y: 0, inside: false };
 
   const screenToWorldX = (sx: number, sw: number): number => (sx - sw / 2) / camera.zoom + camera.x;
@@ -382,6 +411,19 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
     }
     return best;
+  }
+
+  /** Árvore/pedra/arbusto sob o ponto (com folga generosa, para ser clicável). */
+  function pickScenery(worldX: number, worldY: number): { kind: string; index: number } | null {
+    for (let i = 0; i < sceneryList.length; i++) {
+      const piece = sceneryList[i]!;
+      const reach = piece.kind === 'tree' ? 20 : 14;
+      // O tronco fica abaixo do centro do sprite: o alvo acompanha isso.
+      if (Math.hypot(piece.x - worldX, piece.y - worldY - 6) <= reach) {
+        return { kind: piece.kind, index: i };
+      }
+    }
+    return null;
   }
 
   function attachInput(canvas: HTMLCanvasElement): void {
@@ -492,6 +534,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       feedbackTextures = makeFeedbackTextures();
       handTextures = makeHandTextures();
       ambientTextures = makeAmbientTextures();
+      propTextures = makePropTextures();
       rainTextures = makeRainTextures();
       scenery = makeSceneryTextures(createRng(7));
 
@@ -509,6 +552,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       const decorations = new Container();
       decorations.sortableChildren = true;
       const resources = new Container();
+      const groundProps = new Container();
+      const ripplesG = new Graphics();
+      const rainbow = new Graphics();
       const puddles = new Graphics();
       const itemsLayer = new Container();
       const ambient = new Container();
@@ -517,6 +563,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const shadows = new Graphics();
       const selection = new Graphics();
       const creatures = new Container();
+      creatures.sortableChildren = true;
       const particles = new Container();
       const hand = new Sprite(handTextures.open);
       hand.anchor.set(0.25, 0.15);
@@ -524,7 +571,9 @@ export function createRenderer(options: RendererOptions): Renderer {
         grassTile,
         sand,
         water,
+        ripplesG,
         puddles,
+        groundProps,
         decorations,
         resources,
         shadows,
@@ -535,6 +584,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         particles,
         rain,
         tint,
+        rainbow,
         hand,
       );
       instance.stage.addChild(root);
@@ -563,6 +613,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       handSprite = hand;
       itemLayer = itemsLayer;
       ambientLayer = ambient;
+      groundPropLayer = groundProps;
+      rippleG = ripplesG;
+      rainbowG = rainbow;
       rainLayer = rain;
       puddleG = puddles;
       weatherTint = tint;
@@ -585,6 +638,12 @@ export function createRenderer(options: RendererOptions): Renderer {
       const { cols, rows, cellSize, cells } = grid;
       const isWater = (cx: number, cy: number): boolean =>
         cx >= 0 && cy >= 0 && cx < cols && cy < rows && cells[cy * cols + cx] === waterValue;
+
+      waterProbe = (x, y) => {
+        const cx = Math.floor(x / cellSize);
+        const cy = Math.floor(y / cellSize);
+        return isWater(cx, cy);
+      };
 
       const sandTexture = makeSandTexture(seed);
       const waterScale = cellSize / 16;
@@ -625,6 +684,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     setScenery(pieces: readonly ScenerySpot[]): void {
       if (!decorationLayer || !scenery) return;
       decorationLayer.removeChildren();
+      sceneryList = pieces;
       for (const piece of pieces) {
         const sprite = new Sprite(scenery[piece.kind]);
         sprite.anchor.set(0.5, 0.9);
@@ -635,6 +695,34 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
     },
 
+    setProps(props: readonly PropView[]): void {
+      if (!groundPropLayer || !creatureLayer || propTextures.length === 0) return;
+      groundPropLayer.removeChildren();
+      tallProps.length = 0;
+
+      for (const prop of props) {
+        const variants = propTextures[prop.kind];
+        if (!variants || variants.length === 0) continue;
+        const sprite = new Sprite(variants[prop.variant % variants.length]!);
+        sprite.anchor.set(0.5, 0.9);
+        sprite.position.set(prop.x, prop.y);
+        if (isTall(prop.kind)) {
+          // Vegetação alta divide camada com as criaturas: quem está mais
+          // abaixo na tela aparece na frente. É o que dá volume ao mundo.
+          sprite.zIndex = prop.y;
+          creatureLayer.addChild(sprite);
+          tallProps.push({ sprite, view: prop });
+        } else {
+          groundPropLayer.addChild(sprite);
+        }
+      }
+    },
+
+    ripple(x: number, y: number): void {
+      if (ripples.length > 12) return;
+      ripples.push({ x, y, life: 1 });
+    },
+
     onSelectedScreen(callback: (x: number, y: number, visible: boolean) => void): void {
       selectedScreenCb = callback;
     },
@@ -643,6 +731,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       gestures = new GestureRecognizer(next, {
         creatureAt: pickCreature,
         itemAt: pickItem,
+        sceneryAt: pickScenery,
+        isWater: (x, y) => waterProbe?.(x, y) ?? false,
       });
     },
 
@@ -956,6 +1046,44 @@ export function createRenderer(options: RendererOptions): Renderer {
         signal.sprite.scale.set(0.8 + t * 0.4);
       }
 
+      // Vento e toque: a vegetação alta balança.
+      for (const entry of tallProps) {
+        const wind = Math.sin(elapsed * 1.6 + entry.view.phase) * 0.05;
+        entry.sprite.rotation = wind + entry.view.sway * Math.sin(elapsed * 22) * 0.3;
+      }
+
+      // Ondas onde o jogador tocou a água.
+      if (rippleG) {
+        rippleG.clear();
+        for (let i = ripples.length - 1; i >= 0; i--) {
+          const wave = ripples[i]!;
+          wave.life -= dt * 0.9;
+          if (wave.life <= 0) {
+            ripples.splice(i, 1);
+            continue;
+          }
+          const radius = (1 - wave.life) * 34;
+          rippleG
+            .ellipse(wave.x, wave.y, radius, radius * 0.55)
+            .stroke({ width: 1.4, color: 0xcfe8f7, alpha: wave.life * 0.7 });
+        }
+      }
+
+      // Arco-íris depois da chuva.
+      if (rainbowG) {
+        rainbowG.clear();
+        if (input.rainbow > 0.01) {
+          const colors = [0xef6b6b, 0xf0a94a, 0xf2e05a, 0x6fc46a, 0x5aa8e0, 0x9a7ad6];
+          const cx = options.worldWidth * 0.5;
+          const cy = options.worldHeight * 0.62;
+          for (let i = 0; i < colors.length; i++) {
+            rainbowG
+              .ellipse(cx, cy, 360 - i * 12, 250 - i * 9)
+              .stroke({ width: 11, color: colors[i]!, alpha: input.rainbow * 0.3 });
+          }
+        }
+      }
+
       // Bichinhos de ambiente: borboletas, abelhas, pássaros, bichinhos.
       if (ambientLayer && ambientTextures.length > 0) {
         for (let i = 0; i < input.ambient.length; i++) {
@@ -1071,6 +1199,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       dustPool.length = 0;
       ambientSprites.length = 0;
       rainDrops.length = 0;
+      tallProps.length = 0;
+      ripples.length = 0;
       clearCreatureTextureCache();
       if (app) {
         app.destroy(true, { children: true });
@@ -1088,6 +1218,9 @@ export function createRenderer(options: RendererOptions): Renderer {
         rainLayer = null;
         puddleG = null;
         weatherTint = null;
+        groundPropLayer = null;
+        rippleG = null;
+        rainbowG = null;
       }
     },
   };

@@ -8,6 +8,7 @@ import { registerItems, spawnFruit } from './items';
 import { SceneryResource, generateScenery } from './scenery';
 import { WeatherResource, createWeather } from './weather';
 import { AmbientResource, createAmbient } from './ambient';
+import { PropsResource, generateProps } from './props';
 
 const TERRAIN_CELL_SIZE = 25;
 const INITIAL_PLANTS = 55;
@@ -30,7 +31,14 @@ export function createWorld(config: WorldConfig, seed: number): World {
   const scenery = generateScenery(terrain, config.width, config.height, seed);
   world.setResource(SceneryResource, scenery);
   world.setResource(WeatherResource, createWeather());
-  world.setResource(AmbientResource, createAmbient(config.width, config.height, seed));
+  world.setResource(
+    AmbientResource,
+    createAmbient(config.width, config.height, seed, (x, y) => isWaterAt(terrain, x, y)),
+  );
+  world.setResource(
+    PropsResource,
+    generateProps(terrain, scenery, config.width, config.height, seed),
+  );
 
   // Algumas frutas já caídas, para o mundo não começar vazio.
   for (const piece of scenery) {

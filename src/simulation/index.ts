@@ -30,4 +30,6 @@ export {
   setHandPresence,
 } from './handActions';
 export { writeItemBuffer } from './itemRender';
+export { shakeTree, turnRock, pokeProps, touchWater, rememberPleasantPlace } from './worldActions';
+export type { PokeResult } from './worldActions';
 export { isBaby, isElder, lifeStage, growthScale } from './age';

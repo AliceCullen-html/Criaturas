@@ -15,6 +15,8 @@ export {
 export { SceneryResource, generateScenery } from './scenery';
 export type { SceneryPiece, SceneryKind } from './scenery';
 export { itemSystem } from './systems/itemSystem';
+export { PROP, PropsResource, generateProps, propSystem, isTallProp, swayPropsNear } from './props';
+export type { Prop, PropKind } from './props';
 export { WeatherResource, createWeather, weatherSystem } from './weather';
 export type { Weather, WeatherKind } from './weather';
 export {
@@ -25,6 +27,8 @@ export {
   AMBIENT_BEE,
   AMBIENT_BIRD,
   AMBIENT_CRITTER,
+  AMBIENT_FISH,
+  AMBIENT_DRAGONFLY,
 } from './ambient';
 export type { AmbientBeing } from './ambient';
 export { generateTerrain, isWaterAt, findNearestWater, GROUND, WATER } from './terrain';

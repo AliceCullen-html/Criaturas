@@ -31,11 +31,20 @@ export interface GestureHandlers {
   onOffer: (itemId: number, creatureId: number) => void;
   /** Posição da mão no mundo. */
   onHandMove: (x: number, y: number, inside: boolean) => void;
+  /** Clique numa árvore/pedra/arbusto do cenário. */
+  onPokeScenery: (kind: string, index: number) => void;
+  /** Clique no chão: sacode a vegetação dali. */
+  onPokeGround: (x: number, y: number) => void;
+  /** Clique na água: ondas e peixes fugindo. */
+  onPokeWater: (x: number, y: number) => void;
 }
 
 export interface WorldProbe {
   creatureAt: (x: number, y: number) => number | null;
   itemAt: (x: number, y: number) => number | null;
+  /** Cenário grande sob o ponto: árvore, pedra ou arbusto. */
+  sceneryAt: (x: number, y: number) => { kind: string; index: number } | null;
+  isWater: (x: number, y: number) => boolean;
 }
 
 const DOUBLE_CLICK_MS = 320;
@@ -229,8 +238,21 @@ export class GestureRecognizer {
         this.observed = true;
         this.handlers.onObserve(creature);
       }
-      // Clique simples seleciona (criatura ou nada).
-      this.handlers.onSelect(creature);
+      if (creature !== null) {
+        this.handlers.onSelect(creature);
+        this.state = 'open';
+        this.down = false;
+        this.pettingId = null;
+        this.petTime = 0;
+        return;
+      }
+
+      // Clique fora de uma criatura age sobre o mundo, não sobre menus.
+      const scenery = this.probe.sceneryAt(x, y);
+      if (scenery) this.handlers.onPokeScenery(scenery.kind, scenery.index);
+      else if (this.probe.isWater(x, y)) this.handlers.onPokeWater(x, y);
+      else this.handlers.onPokeGround(x, y);
+      this.handlers.onSelect(null);
       this.state = 'open';
     } else {
       this.state = 'open';

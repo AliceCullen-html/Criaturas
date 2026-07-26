@@ -60,11 +60,37 @@ export function makeAmbientTextures(): Texture[][] {
     return b.toTexture();
   };
 
+  const fish = (flip: boolean): Texture => {
+    const b = new PixelBuffer(10, 7);
+    const body = 0xe0904a;
+    b.ellipse(5, 3.5, 3.2, 1.9, body);
+    b.ellipse(4, 3, 2, 1.2, mix(body, 0xffffff, 0.3));
+    // Cauda batendo.
+    const ty = flip ? 2.4 : 4.4;
+    b.ellipse(1.4, ty, 1.6, 1.6, shade(body, 0.8));
+    b.set(7.4, 3, 0x1c1c28);
+    return b.toTexture();
+  };
+
+  const dragonfly = (open: boolean): Texture => {
+    const b = new PixelBuffer(12, 8);
+    const body = 0x54c2c8;
+    b.rect(3, 4, 7, 1, body);
+    b.ellipse(9.6, 4, 1.4, 1.3, body);
+    b.set(10.4, 3.6, 0x1c1c28);
+    const wy = open ? 2 : 3;
+    b.ellipse(5, wy, 3, 1, 0xdff2f7, 170);
+    b.ellipse(5, 8 - wy - 1, 3, 1, 0xdff2f7, 150);
+    return b.toTexture();
+  };
+
   return [
     [butterfly(true), butterfly(false)],
     [bee(true), bee(false)],
     [bird(true), bird(false)],
     [critter(true), critter(false)],
+    [fish(true), fish(false)],
+    [dragonfly(true), dragonfly(false)],
   ];
 }
 
