@@ -40,6 +40,7 @@ export const NAMED = 20;
  * quadro próprio: é o `idle`, como na ficha original.
  */
 export const FRAME = {
+  // --- Movimento (linha 0) ---
   idle: 0,
   walk1: 1,
   walk2: 2,
@@ -48,6 +49,7 @@ export const FRAME = {
   run1: 5,
   run2: 6,
   jump: 7,
+  // --- Ações (linha 1) ---
   /** As bolinhas das antenas apagam por um instante: é o "ativar". */
   activate: 8,
   push: 9,
@@ -55,6 +57,7 @@ export const FRAME = {
   /** Pupilas para fora: olhando para o lado. */
   look: 11,
   surprised: 12,
+  // --- Emoções ---
   happy: 13,
   curious: 14,
   /** Lágrimas azuis. */
@@ -64,13 +67,62 @@ export const FRAME = {
   sleeping: 18,
   /** Olhos de coração. */
   loved: 19,
+  // --- Animações da folha nova (linhas 3 a 5) ---
+  /** O outro tempo da respiração: o corpo inteiro desce um pixel. */
+  breatheOut: 20,
+  /** Olhos fechados por um instante — diferente de dormir. */
+  blink: 21,
+  wave1: 22,
+  wave2: 23,
+  dance1: 24,
+  dance2: 25,
+  /** Boca aberta e boca fechada: a criatura falando. */
+  talk1: 26,
+  talk2: 27,
+  cheer1: 28,
+  cheer2: 29,
+  /** Pupilas para a esquerda e para a direita. */
+  lookLeft: 30,
+  lookRight: 31,
+  sit: 32,
+  eat1: 33,
+  eat2: 34,
+  /** Olhos arregalados de susto. */
+  startled: 35,
+  fall1: 36,
+  dizzy1: 37,
+  dizzy2: 38,
+  dizzy3: 39,
+  fall2: 40,
+  fall3: 41,
 } as const;
 
 export type FrameId = (typeof FRAME)[keyof typeof FRAME];
 
-/** Ciclos de andar e correr, na ordem em que se alternam. */
+/**
+ * Os CICLOS.
+ *
+ * Um quadro parado é uma pose; dois ou três alternados é uma criatura viva. A
+ * folha veio com estes ciclos prontos, e é deles que sai quase tudo o que se
+ * enxerga de vida: a respiração de fundo, a conversa, a dança, o cambaleio.
+ */
 export const WALK_CYCLE: readonly number[] = [FRAME.walk1, FRAME.walk2, FRAME.walk3, FRAME.walk4];
 export const RUN_CYCLE: readonly number[] = [FRAME.run1, FRAME.run2];
+/** Respirar: o jardim inteiro sobe e desce um pixel, cada um no seu tempo. */
+export const BREATHE: readonly number[] = [FRAME.idle, FRAME.breatheOut];
+export const WAVE: readonly number[] = [FRAME.idle, FRAME.wave1, FRAME.wave2, FRAME.wave1];
+export const DANCE: readonly number[] = [FRAME.dance1, FRAME.idle, FRAME.dance2, FRAME.idle];
+export const TALK: readonly number[] = [FRAME.talk1, FRAME.talk2];
+export const CHEER: readonly number[] = [FRAME.cheer1, FRAME.cheer2];
+export const LOOK_AROUND: readonly number[] = [
+  FRAME.lookLeft,
+  FRAME.look,
+  FRAME.lookRight,
+  FRAME.look,
+];
+export const EAT: readonly number[] = [FRAME.eat1, FRAME.eat2];
+export const FALL: readonly number[] = [FRAME.fall1, FRAME.fall2, FRAME.fall3];
+export const DIZZY: readonly number[] = [FRAME.dizzy1, FRAME.dizzy2, FRAME.dizzy3];
 
 /**
  * Índice do humor vindo da simulação. Cópia local do que a simulação escreve
@@ -93,46 +145,51 @@ const MOOD_FRAME: readonly number[] = [
 ];
 
 /**
- * Cada microcomportamento tem um quadro.
+ * Cada microcomportamento vira uma ANIMAÇÃO, não um quadro parado.
  *
- * São dezenove gestos ociosos e vinte desenhos, então vários dividem o mesmo
- * quadro — e tudo bem: o que separa "se coçar" de "cheirar uma flor" é o
- * MOVIMENTO do corpo, que a pose comanda, não a cara. O que não pode acontecer
- * é um gesto cair no quadro de repouso, porque aí ele deixa de existir para
- * quem olha. Antes, sete dos dezenove caíam.
+ * São dezenove gestos ociosos, e a folha nova trouxe ciclos com nome: acenar,
+ * dançar, falar, cambalear, cair, comer, sentar, olhar em volta. Casar os dois
+ * é o que transforma "se coçar" e "cheirar uma flor" — que antes eram o mesmo
+ * desenho parado com um tremidinho diferente — em dois gestos que qualquer um
+ * distingue de longe.
+ *
+ * O ciclo de um quadro só é legítimo: sentar é sentar, não tem tempo dois.
  *
  * Índices espelham `POSE` em @core — o renderer não importa o núcleo da
  * simulação, mas os dois combinaram este vocabulário.
  */
-const POSE_FRAME: readonly number[] = [
-  FRAME.idle, // 0 nada
-  FRAME.look, // 1 se coça
-  FRAME.jump, // 2 espreguiça
-  FRAME.sleeping, // 3 senta
-  FRAME.sleeping, // 4 deita
-  FRAME.look, // 5 olha o céu
-  FRAME.push, // 6 cheira uma flor
-  FRAME.look, // 7 para e escuta
-  FRAME.look, // 8 olha a água
-  FRAME.surprised, // 9 se sacode
-  FRAME.jump, // 10 rola no chão
-  FRAME.curious, // 11 se limpa
-  FRAME.push, // 12 cava
-  FRAME.surprised, // 13 escorrega
-  FRAME.curious, // 14 fica pensando
-  FRAME.happy, // 15 brinca com uma folha
-  FRAME.happy, // 16 se anima
-  FRAME.sleeping, // 17 suspira
-  FRAME.sad, // 18 encolhida de dor
+const POSE_CYCLE: readonly (readonly number[])[] = [
+  BREATHE, // 0 nada — respira
+  WAVE, // 1 se coça: a mão sobe até a cabeça
+  CHEER, // 2 espreguiça: estica os braços para cima
+  [FRAME.sit], // 3 senta
+  [FRAME.sleeping], // 4 deita
+  LOOK_AROUND, // 5 olha o céu
+  EAT, // 6 cheira uma flor: abaixa e chega o rosto
+  LOOK_AROUND, // 7 para e escuta
+  LOOK_AROUND, // 8 olha a água
+  DIZZY, // 9 se sacode: o corpo inteiro balança
+  FALL, // 10 rola no chão
+  EAT, // 11 se limpa: leva a mão ao rosto
+  [FRAME.push], // 12 cava
+  FALL, // 13 escorrega
+  [FRAME.curious], // 14 fica pensando
+  DANCE, // 15 brinca com uma folha
+  CHEER, // 16 se anima do nada
+  BREATHE, // 17 suspira
+  [FRAME.sad], // 18 encolhida de dor
 ];
 
 const POSE_NONE = 0;
 const POSE_HURT = 18;
-const POSE_SIT = 3;
 const POSE_LIE = 4;
 
 /** Acima disto o passo vira corrida, em pixels de mundo por segundo. */
 export const RUN_SPEED = 42;
+
+/** Tempos por segundo: a respiração é lenta, o gesto é mais vivo. */
+const BREATH_SPEED = 1.1;
+const GESTURE_SPEED = 3.4;
 
 export interface FrameChoice {
   mood: number;
@@ -144,6 +201,12 @@ export interface FrameChoice {
   carrying: boolean;
   /** Relógio do ciclo de passos desta criatura. */
   step: number;
+  /**
+   * Relógio contínuo desta criatura, em segundos, com uma defasagem própria.
+   * É o que faz cada uma respirar no seu tempo em vez de o jardim inteiro
+   * inflar e desinflar em uníssono — que seria pior que não respirar.
+   */
+  breath: number;
 }
 
 /**
@@ -157,10 +220,10 @@ export interface FrameChoice {
  * foi desenhada.
  */
 export function frameFor(choice: FrameChoice): number {
-  const { mood, pose, moving, speed, carrying, step } = choice;
+  const { mood, pose, moving, speed, carrying, step, breath } = choice;
 
   if (pose === POSE_HURT) return FRAME.sad;
-  if (pose === POSE_LIE || pose === POSE_SIT) return FRAME.sleeping;
+  if (pose === POSE_LIE) return FRAME.sleeping;
   if (mood === 3 && !moving) return FRAME.sleeping; // humor sonolento
 
   if (carrying) return FRAME.carry;
@@ -173,9 +236,18 @@ export function frameFor(choice: FrameChoice): number {
     return cycle[Math.floor(step) % cycle.length]!;
   }
 
-  // Parada, o gesto em curso manda no quadro; sem gesto, fala o humor.
-  if (pose !== POSE_NONE) return POSE_FRAME[pose] ?? FRAME.idle;
-  return MOOD_FRAME[mood] ?? FRAME.idle;
+  // Parada, o gesto em curso vira uma animação inteira, não um quadro só.
+  if (pose !== POSE_NONE) {
+    const cycle = POSE_CYCLE[pose] ?? BREATHE;
+    return cycle[Math.floor(breath * GESTURE_SPEED) % cycle.length]!;
+  }
+
+  // Sem gesto, o humor fala — e, no humor neutro, ela RESPIRA. É a diferença
+  // entre um jardim de bonecos e um jardim de bichos parados: nenhum deles
+  // está fazendo nada, e mesmo assim todos estão vivos.
+  const frame = MOOD_FRAME[mood] ?? FRAME.idle;
+  if (frame !== FRAME.idle) return frame;
+  return BREATHE[Math.floor(breath * BREATH_SPEED) % BREATHE.length]!;
 }
 
 /**

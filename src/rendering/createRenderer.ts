@@ -479,6 +479,8 @@ interface CreatureSlot {
   /** Onde ela estava no quadro anterior, para medir o passo de verdade. */
   lastX: number;
   lastY: number;
+  /** Defasagem própria do relógio de respiração e de gesto. */
+  phase: number;
   blinkIn: number;
   blinking: number;
   yawnIn: number;
@@ -1486,6 +1488,7 @@ export function createRenderer(options: RendererOptions): Renderer {
             facing: 1,
             seen: frameId,
             step: (id % 4) * 0.7,
+            phase: (id % 17) * 0.41,
             lastX: cx,
             lastY: cy,
             blinkIn: 1 + (id % 7) * 0.5,
@@ -1539,10 +1542,14 @@ export function createRenderer(options: RendererOptions): Renderer {
           speed,
           carrying: creatures.carrying[i] === 1,
           step: slot.step,
+          // Cada criatura respira no SEU tempo: sem a defasagem, o jardim
+          // inteiro inflaria e desinflaria em uníssono, que é pior do que não
+          // respirar.
+          breath: elapsed + slot.phase,
         });
         if (!moving) {
           if (slot.yawning > 0) frame = FRAME.surprised;
-          else if (slot.blinking > 0 && eyesOpen) frame = FRAME.sleeping;
+          else if (slot.blinking > 0 && eyesOpen) frame = FRAME.blink;
         }
         const texture = tintimFrames[frame];
         if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
