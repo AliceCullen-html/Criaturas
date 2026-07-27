@@ -1,4 +1,5 @@
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
+import { Item } from '@world';
 import { Appearance, Attributes, Behavior, Bio, Creature, Mind, type Mood } from '@creatures';
 import { growthScale, lifeStage } from './age';
 
@@ -19,6 +20,8 @@ const MOOD_CODES: Record<Mood, number> = {
   playful: 12,
 };
 
+const carrying = new Set<number>();
+
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
 export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer): void {
   const creatures = world.store(Creature);
@@ -29,6 +32,13 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const bios = world.store(Bio);
   const velocities = world.store(Velocity);
   const behaviors = world.store(Behavior);
+
+  // Quem está com alguma coisa na boca. Uma passada só pela lista de objetos,
+  // em vez de uma busca por criatura — são poucos objetos e muitas criaturas.
+  carrying.clear();
+  world.store(Item).forEach((item) => {
+    if (item.carriedBy >= 0) carrying.add(item.carriedBy);
+  });
 
   buffer.clear();
   creatures.forEach((_tag, entity) => {
@@ -63,6 +73,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       moving ? 1 : 0,
       pose,
       poseTime,
+      carrying.has(entity) ? 1 : 0,
     );
   });
 }

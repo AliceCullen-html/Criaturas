@@ -64,7 +64,7 @@ verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
 | **genetics**   | Genoma, genótipo→fenótipo, cruzamento, mutação                                   | core                               |
 | **ai**         | Interface `Brain` (percepção→intenção) e implementações plugáveis                | core, engine, creatures            |
 | **simulation** | Sistemas que aplicam as regras a cada tick; define o snapshot                    | core, engine, world, creatures, genetics, ai |
-| **rendering**  | Adapter PixiJS: desenha o snapshot, câmera, interpolação, pooling de sprites     | core, engine                       |
+| **rendering**  | Adapter PixiJS: desenha o snapshot, câmera, interpolação, pooling de sprites     | core, engine, assets               |
 | **ui**         | React + Zustand: HUD, inspetor, painéis, controles                               | core, engine, simulation           |
 | **save**       | Serialização e persistência em IndexedDB (inclui a seed)                          | core, engine, world                |
 | **app**        | Composition root: instancia e conecta tudo                                        | todas                              |
@@ -109,6 +109,7 @@ personalidade própria. Nada entra se não servir a isso.
 | C ✅  | Pequenas histórias: camada de **rotinas** encadeadas; criaturas carregam objetos |
 | — ✅  | Vista isométrica 2:1 e jardim maior (900×900), sem tocar na simulação        |
 | — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
+| — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
 | D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
@@ -188,6 +189,32 @@ O segundo motivo era o gesto: pegar exigia segurar **e mexer**. Quem apertava e
 esperava — o que todo mundo faz num celular — não levantava nada. Agora o
 relógio corre com o dedo parado (0,18s para um objeto, 0,45s para cenário), e a
 peça **treme** enquanto cede, para o jogador saber que vale continuar segurando.
+
+### A criatura vem de uma folha desenhada à mão
+
+Até aqui a criatura era gerada por código: um corpo montado de elipses com as
+cores do genoma, e um rosto numa segunda camada que trocava com a emoção sem
+redesenhar o corpo. Foi substituída pela folha do **Tintim** — 512×192, oito
+colunas por três linhas de células de 64×64, com o desenho de verdade em 16×16
+ampliado quatro vezes.
+
+A leitura (`textures/tintimSheet.ts`) **desfaz a ampliação** e guarda os 16×16
+originais numa tira única de vinte recortes. Redesenhar a partir do original e
+ampliar por um inteiro é o que mantém o pixel quadrado; usar a célula de 64 e
+encolher por um fator quebrado borraria a arte que ela veio trazer.
+
+Duas consequências:
+
+- **Uma camada em vez de duas.** Corpo e rosto separados existiam porque a arte
+  era gerada; com quadros inteiros desenhados, cada estado é um quadro só.
+- **A deformação foi contida a um terço.** Achatar e girar era barato quando o
+  corpo era procedural; sobre pixel art, desmancha a grade. O movimento agora é
+  quase todo por posição — o pulinho, o tremor —, que não distorce nada.
+
+A tradução de comportamento para quadro é `frameFor`, o único ponto onde a arte
+encontra a simulação, e está coberta por `tintimFrames.test.ts`: a ordem de
+importância (dor antes do passo, sono antes do humor) é o que impede a criatura
+de mentir sobre o que está sentindo.
 
 ### Invariantes de geração do mundo
 

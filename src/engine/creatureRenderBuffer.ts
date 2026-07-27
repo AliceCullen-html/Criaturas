@@ -23,6 +23,8 @@ export class CreatureRenderBuffer {
   readonly pose: Uint8Array;
   /** Progresso dentro da pose, 0..1 — o renderer anima a partir disto. */
   readonly poseTime: Float32Array;
+  /** 1 quando está levando alguma coisa na boca: tem quadro próprio. */
+  readonly carrying: Uint8Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -42,6 +44,7 @@ export class CreatureRenderBuffer {
     this.moving = new Uint8Array(capacity);
     this.pose = new Uint8Array(capacity);
     this.poseTime = new Float32Array(capacity);
+    this.carrying = new Uint8Array(capacity);
   }
 
   clear(): void {
@@ -65,6 +68,7 @@ export class CreatureRenderBuffer {
     moving: number,
     pose: number,
     poseTime: number,
+    carrying: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -84,6 +88,7 @@ export class CreatureRenderBuffer {
     this.moving[i] = moving;
     this.pose[i] = pose;
     this.poseTime[i] = poseTime;
+    this.carrying[i] = carrying;
     this.count = i + 1;
   }
 }

@@ -19,7 +19,9 @@ const layerRules = [
   { from: 'genetics', allow: ['core'] },
   { from: 'ai', allow: ['core', 'engine', 'genetics', 'creatures', 'world'] },
   { from: 'simulation', allow: ['core', 'engine', 'world', 'creatures', 'genetics', 'ai'] },
-  { from: 'rendering', allow: ['core', 'engine'] },
+  // `assets` entra aqui porque é justamente o renderer quem lê sprite: a
+  // camada de assets não depende de nada e existe para ser consumida.
+  { from: 'rendering', allow: ['core', 'engine', 'assets'] },
   { from: 'save', allow: ['core', 'engine', 'world'] },
   { from: 'ui', allow: ['core', 'engine', 'simulation'] },
   {

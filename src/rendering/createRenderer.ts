@@ -13,15 +13,7 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import {
-  clearCreatureTextureCache,
-  decodeFeatures,
-  getBodyTexture,
-  getFaceTexture,
-  type Expression,
-  type Features,
-  type LifeStage,
-} from './textures/creature';
+import { FRAME, frameFor, loadTintimFrames } from './textures/tintimSheet';
 import {
   makeDustTexture,
   makeTileTextures,
@@ -134,23 +126,6 @@ const SHALLOW_TINT = 0xb9e2f2;
 /** O quanto o arco-íris é achatado em relação a um semicírculo perfeito. */
 const RAINBOW_SQUASH = 0.62;
 
-/** Índice do humor (vindo da simulação) → expressão facial. */
-const EXPRESSIONS: readonly Expression[] = [
-  'neutral',
-  'happy',
-  'needy',
-  'sleepy',
-  'surprised',
-  'angry',
-  'sad',
-  'loved',
-  'afraid',
-  'curious',
-  'hungry',
-  'thirsty',
-  'playful',
-];
-
 const MOOD = {
   neutral: 0,
   happy: 1,
@@ -185,7 +160,7 @@ function animateBody(
   seed: number,
   size: number,
   moving: boolean,
-  stage: LifeStage,
+  stage: number,
 ): BodyMotion {
   // Respiração de base, sempre presente.
   motion.bob = 0;
@@ -466,18 +441,25 @@ const HIDDEN_FLAG = 256;
 const TALL_PROP_KINDS = new Set([0, 6, 9]);
 const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
 
+/** O quanto das deformações do corpo sobra, agora que o desenho é à mão. */
+const SQUASH_DAMPING = 0.34;
 const BLINK_DURATION = 0.11;
 const DUST_INTERVAL = 0.22;
 
-/** Uma criatura na tela: corpo estático + rosto que troca com a emoção. */
+/**
+ * Uma criatura na tela.
+ *
+ * Era corpo + rosto em duas camadas, porque a arte era gerada por código e
+ * trocar de emoção não podia redesenhar o corpo. Com a folha desenhada à mão,
+ * cada estado é UM quadro inteiro: um sprite só, e a troca é de textura.
+ */
 interface CreatureSlot {
   container: Container;
-  body: Sprite;
-  face: Sprite;
-  features: Features;
+  sprite: Sprite;
   facing: number;
   seen: number;
-  stage: number;
+  /** Relógio do ciclo de passos, avança com a distância percorrida. */
+  step: number;
   blinkIn: number;
   blinking: number;
   yawnIn: number;
@@ -525,6 +507,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   let destroyed = false;
 
   // Texturas geradas no mount.
+  /** Os vinte quadros do Tintim, recortados da folha desenhada à mão. */
+  let tintimFrames: Texture[] = [];
   let resourceTextures: Texture[] = [];
   let waterFrames: Texture[] = [];
   let leafTextures: Texture[] = [];
@@ -985,6 +969,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       propTextures = makePropTextures();
       rainTextures = makeRainTextures();
       scenery = makeSceneryTextures(createRng(7));
+      tintimFrames = await loadTintimFrames();
 
       const root = new Container();
       root.sortableChildren = false;
@@ -1420,26 +1405,23 @@ export function createRenderer(options: RendererOptions): Renderer {
         const dy = creatures.y[i]! - py;
         const moving = creatures.moving[i] === 1;
         const mood = creatures.mood[i]!;
-        const stage = creatures.stage[i]! as LifeStage;
-        const dna = creatures.dna[i]!;
+        const stage = creatures.stage[i]!;
 
         let slot = creatureSlots.get(id);
         if (!slot) {
           const container = new Container();
-          const body = new Sprite();
-          const face = new Sprite();
-          body.anchor.set(0.5, 0.78);
-          face.anchor.set(0.5, 0.78);
-          container.addChild(body, face);
+          const sprite = new Sprite();
+          // O pé do desenho é a última linha dos 16 pixels: a âncora vai lá,
+          // senão a criatura fica pairando um dedo acima da casa.
+          sprite.anchor.set(0.5, 0.97);
+          container.addChild(sprite);
           creatureLayer.addChild(container);
           slot = {
             container,
-            body,
-            face,
-            features: decodeFeatures(dna, creatures.species[i]!),
+            sprite,
             facing: 1,
             seen: frameId,
-            stage: -1,
+            step: (id % 4) * 0.7,
             blinkIn: 1 + (id % 7) * 0.5,
             blinking: 0,
             yawnIn: 6 + (id % 5) * 3,
@@ -1448,28 +1430,24 @@ export function createRenderer(options: RendererOptions): Renderer {
           creatureSlots.set(id, slot);
         }
 
-        const speciesIndex = creatures.species[i]!;
-        if (slot.stage !== stage) {
-          slot.body.texture = getBodyTexture(
-            dna,
-            { body: creatures.bodyColor[i]!, accent: creatures.accentColor[i]! },
-            stage,
-            speciesIndex,
-          );
-          slot.stage = stage;
-        }
+        // Passo: o ciclo avança com a DISTÂNCIA percorrida, não com o relógio.
+        // É o que faz o bicho lento arrastar os pés e o apressado trotar, sem
+        // nenhuma variável de velocidade na animação.
+        const travelled = Math.hypot(dx, dy);
+        const speed = travelled / Math.max(dt, 1 / 60);
+        if (moving) slot.step += travelled * 0.55;
 
-        // Piscar aleatório — só quando os olhos estão abertos.
+        // Piscar e bocejar continuam existindo como RITMO, mesmo sem quadro
+        // próprio na folha: o piscar vira um instante de olhos fechados
+        // (o quadro de dormir) e o bocejo, a boca aberta do espanto. São dois
+        // sinais de vida que custam um quadro e mudam a leitura da criatura.
         const eyesOpen = mood !== MOOD.sleepy && mood !== MOOD.loved;
         slot.blinkIn -= dt;
         if (slot.blinking > 0) slot.blinking -= dt;
         else if (slot.blinkIn <= 0 && eyesOpen) {
           slot.blinking = BLINK_DURATION;
-          // Sonolentas piscam devagar e com mais frequência.
           slot.blinkIn = (mood === MOOD.sleepy ? 1.2 : 2.5) + Math.random() * 4;
         }
-
-        // Bocejo: sonolentas e idosas bocejam de vez em quando.
         const canYawn = mood === MOOD.sleepy || stage === 2;
         slot.yawnIn -= dt;
         if (slot.yawning > 0) slot.yawning -= dt;
@@ -1478,25 +1456,21 @@ export function createRenderer(options: RendererOptions): Renderer {
           slot.yawnIn = (stage === 2 ? 8 : 14) + Math.random() * 10;
         }
 
-        // A dor manda no rosto: nada de piscar ou bocejar enquanto dói.
         const pose = creatures.pose[i]!;
-        const expression: Expression =
-          pose === POSE.hurt
-            ? 'hurt'
-            : slot.yawning > 0
-              ? 'yawn'
-              : slot.blinking > 0 && eyesOpen
-                ? 'blink'
-                : (EXPRESSIONS[mood] ?? 'neutral');
-        // As texturas são cacheadas: buscar todo quadro é só um lookup em Map.
-        const faceTexture = getFaceTexture(
-          expression,
-          creatures.eyeColor[i]!,
-          stage,
-          slot.features,
-          speciesIndex,
-        );
-        if (slot.face.texture !== faceTexture) slot.face.texture = faceTexture;
+        let frame = frameFor({
+          mood,
+          pose,
+          moving,
+          speed,
+          carrying: creatures.carrying[i] === 1,
+          step: slot.step,
+        });
+        if (!moving) {
+          if (slot.yawning > 0) frame = FRAME.surprised;
+          else if (slot.blinking > 0 && eyesOpen) frame = FRAME.sleeping;
+        }
+        const texture = tintimFrames[frame];
+        if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
 
         // O olhar acompanha o movimento; se parada e curiosa, olha para a mão.
         if (dx > 0.05) slot.facing = 1;
@@ -1505,7 +1479,9 @@ export function createRenderer(options: RendererOptions): Renderer {
           slot.facing = handWorld.x >= cx ? 1 : -1;
         }
 
-        const scale = size / 13;
+        // O desenho tem 16 pixels de altura onde o antigo tinha 32: a escala
+        // dobra para a criatura ocupar o mesmo espaço no jardim.
+        const scale = size / 6.5;
         const anim = animateBody(mood, elapsed, id, size, moving, stage);
         // A pose entra por cima do humor: o rosto segue contando a emoção,
         // o corpo passa a contar a ocupação.
@@ -1515,8 +1491,20 @@ export function createRenderer(options: RendererOptions): Renderer {
         // Bocejo empurra o corpo um pouco para trás, como um espreguiçar.
         const yawnTilt = slot.yawning > 0 ? -0.12 : 0;
 
-        slot.container.scale.set(slot.facing * scale * anim.squashX, scale * anim.squashY);
-        slot.container.rotation = (anim.tilt + yawnTilt) * slot.facing;
+        // Deformação contida.
+        //
+        // Quando a criatura era desenhada por código, esticar e girar o corpo
+        // era barato e ficava bem. Agora o desenho é pixel art feita à mão, e
+        // achatar ou inclinar demais desmancha a grade de pixels que dá a ela
+        // a cara que tem. O movimento continua — só que quase todo por
+        // POSIÇÃO (o pulinho, o tremor), que não distorce nada, e o resto
+        // entra por um terço.
+        const give = SQUASH_DAMPING;
+        slot.container.scale.set(
+          slot.facing * scale * (1 + (anim.squashX - 1) * give),
+          scale * (1 + (anim.squashY - 1) * give),
+        );
+        slot.container.rotation = (anim.tilt + yawnTilt) * give * slot.facing;
         const bodyX = cx + anim.jitter;
         const bodyY = cy;
         slot.container.position.set(
@@ -1525,9 +1513,6 @@ export function createRenderer(options: RendererOptions): Renderer {
         );
         slot.container.zIndex = isoDepth(cx, cy);
 
-        // O olhar segue a direção do movimento (deslocando o rosto 1 px).
-        const gaze = Math.hypot(dx, dy) > 0.05 ? 1 : 0;
-        slot.face.position.set(gaze * Math.sign(dx || 1) * slot.facing, gaze * Math.sign(dy) * 0.5);
         slot.seen = frameId;
 
         // Poeirinha dos passos.
@@ -1924,7 +1909,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       treeSprites.length = 0;
       reflections.length = 0;
       ripples.length = 0;
-      clearCreatureTextureCache();
+      for (const frame of tintimFrames) frame.destroy();
+      tintimFrames = [];
       if (app) {
         app.destroy(true, { children: true });
         app = null;
