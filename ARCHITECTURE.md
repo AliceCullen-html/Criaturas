@@ -170,6 +170,25 @@ há nenhuma conta de losango no renderer — o que dá a cara de piso é o
 acabamento das bordas, porque as duas bordas "da frente" do quadrado projetado
 viram as arestas iluminadas do losango.
 
+### Mirar no que está DESENHADO, não no chão
+
+O bug mais caro desta fase foi de mira, não de arrasto: não dava para pegar
+nada. O ponteiro devolve um ponto do **chão** — a casa onde o dedo pousou. Uma
+árvore, porém, não está deitada: ela sobe pela tela. Encostar no meio da copa
+devolvia um ponto do mundo uma casa e meia atrás da árvore, e a pergunta "que
+peça está aqui?" respondia *nenhuma*.
+
+A regra correta (`insideSprite`) desfaz a projeção: converte o ponto do mundo
+de volta para o deslocamento em TELA relativo ao pé da peça e compara com o
+retângulo que o sprite ocupa. Vale para qualquer zoom, porque sprite e mundo
+são ampliados pelo mesmo fator, e vale igual para objetos soltos. Está fixada
+em `rendering/picking.test.ts`, que roda sem navegador.
+
+O segundo motivo era o gesto: pegar exigia segurar **e mexer**. Quem apertava e
+esperava — o que todo mundo faz num celular — não levantava nada. Agora o
+relógio corre com o dedo parado (0,18s para um objeto, 0,45s para cenário), e a
+peça **treme** enquanto cede, para o jogador saber que vale continuar segurando.
+
 ### Invariantes de geração do mundo
 
 O jardim é sorteado, mas não pode sortear um mundo inviável. A geração

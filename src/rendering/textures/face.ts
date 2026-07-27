@@ -46,12 +46,13 @@ function layoutFor(stage: LifeStage, speciesIndex: number): Layout {
   const baby = stage === 0;
   const elder = stage === 2;
   return {
-    eyeX: p.headX + (baby ? 4.6 : 4.9),
-    eyeY: p.headY + (baby ? 2.2 : 1.6),
-    eyeRx: baby ? 3.5 : elder ? 2.7 : 3.1,
-    eyeRy: baby ? 4 : elder ? 2.9 : 3.5,
-    mouthY: p.headY + (baby ? 7.4 : 6.6),
-    cheekY: p.headY + (baby ? 4.4 : 3.8),
+    // Olhos ENORMES, quase encostando um no outro: é a marca da criatura.
+    eyeX: p.headX + (baby ? 4.4 : 4.5),
+    eyeY: p.headY + (baby ? 1.6 : 1),
+    eyeRx: baby ? 3.9 : elder ? 3.2 : 3.6,
+    eyeRy: baby ? 4.2 : elder ? 3.2 : 3.8,
+    mouthY: p.headY + (baby ? 7 : 6.4),
+    cheekY: p.headY + (baby ? 4.6 : 4.2),
   };
 }
 
@@ -76,20 +77,44 @@ export function makeFaceTexture(
     }
   };
 
+  /**
+   * O olho do Tintim: um bloco branco grande com a pupila dentro.
+   *
+   * Bloco, não bola. É a mesma decisão da cabeça — num sprite deste tamanho a
+   * quina é o que dá caráter, e é o olho quadrado e enorme que faz a criatura
+   * parecer que está OLHANDO, em vez de ter dois pontinhos.
+   */
   const openEye = (x: number, scale: number, pupilScale = 1): void => {
     const rx = layout.eyeRx * scale;
     const ry = layout.eyeRy * scale;
-    buffer.ellipse(x, layout.eyeY, rx, ry, WHITE);
-    buffer.ellipse(
+    const block = (
+      cx: number,
+      cy: number,
+      hw: number,
+      hh: number,
+      corner: number,
+      color: number,
+    ): void => {
+      for (let py = Math.floor(cy - hh); py <= cy + hh; py++) {
+        for (let px = Math.floor(cx - hw); px <= cx + hw; px++) {
+          const ox = Math.abs(px - cx) - (hw - corner);
+          const oy = Math.abs(py - cy) - (hh - corner);
+          if (ox > 0 && oy > 0 && ox * ox + oy * oy > corner * corner) continue;
+          buffer.set(px, py, color);
+        }
+      }
+    };
+    block(x, layout.eyeY, rx, ry, 1.2, WHITE);
+    block(
       x,
-      layout.eyeY + ry * 0.12,
-      rx * 0.62 * pupilScale,
-      ry * 0.66 * pupilScale,
+      layout.eyeY + ry * 0.14,
+      Math.max(1, rx * 0.42 * pupilScale),
+      Math.max(1, ry * 0.46 * pupilScale),
+      0.8,
       eyeColor,
     );
-    // Brilho: um ponto grande em cima e um pequeno embaixo.
-    buffer.disc(x - rx * 0.3, layout.eyeY - ry * 0.35, Math.max(1, rx * 0.28), shine);
-    buffer.set(x + rx * 0.3, layout.eyeY + ry * 0.35, shine);
+    // Brilho no canto de cima, onde bate a luz.
+    buffer.set(x - rx * 0.45, layout.eyeY - ry * 0.5, shine);
   };
 
   /** Sobrancelha: `tilt` positivo baixa a ponta interna (brava). */

@@ -25,33 +25,33 @@ const BASE_PROPORTIONS: Record<LifeStage, Proportions> = {
   0: {
     headX: 16,
     headY: 13,
-    headRx: 10,
-    headRy: 9.2,
+    headRx: 9.6,
+    headRy: 8.4,
     bodyY: 25,
     bodyRx: 4.8,
-    bodyRy: 4.2,
+    bodyRy: 3.6,
     footY: 29,
     lean: 0,
   },
   1: {
     headX: 16,
-    headY: 13,
-    headRx: 9,
-    headRy: 8.4,
-    bodyY: 24,
-    bodyRx: 6.8,
-    bodyRy: 5.4,
+    headY: 12.5,
+    headRx: 9.2,
+    headRy: 7.8,
+    bodyY: 23.5,
+    bodyRx: 6.4,
+    bodyRy: 5.2,
     footY: 29,
     lean: 0,
   },
   2: {
     headX: 16,
-    headY: 13.5,
-    headRx: 8.4,
-    headRy: 7.9,
-    bodyY: 24.5,
-    bodyRx: 6.4,
-    bodyRy: 5,
+    headY: 13,
+    headRx: 8.6,
+    headRy: 7.3,
+    bodyY: 24,
+    bodyRx: 6.2,
+    bodyRy: 4.8,
     footY: 29,
     lean: 1,
   },
@@ -93,6 +93,24 @@ class Mask {
 
   rect(x: number, y: number, w: number, h: number): void {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.add(x + i, y + j);
+  }
+
+  /**
+   * Retângulo de cantos arredondados — a forma do Tintim.
+   *
+   * É o que separa esta criatura de um bicho genérico: a cabeça não é uma
+   * bolinha, é um bloco com quinas suaves. Num sprite de 32 pixels a diferença
+   * entre elipse e bloco é a diferença entre "algum animalzinho" e ELE.
+   */
+  roundRect(cx: number, cy: number, rx: number, ry: number, corner: number): void {
+    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) {
+      for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const ox = Math.abs(x - cx) - (rx - corner);
+        const oy = Math.abs(y - cy) - (ry - corner);
+        if (ox > 0 && oy > 0 && ox * ox + oy * oy > corner * corner) continue;
+        this.add(x, y);
+      }
+    }
   }
 
   has(x: number, y: number): boolean {
@@ -178,6 +196,16 @@ export function makeBodyTexture(
   const buffer = new PixelBuffer(SPRITE_SIZE, SPRITE_SIZE);
   const lean = p.lean;
 
+  // ---- Macacão e antenas: as cores que fazem o Tintim ------------------
+  //
+  // O desenho é o mesmo para todo mundo; o que muda é a paleta, tirada do
+  // genoma. O Tintim amarelo de macacão vermelho é UM deles — os irmãos saem
+  // verdes, azuis, roxos, e continuam sendo a mesma criatura.
+  const overall = accent;
+  const overallDark = shade(overall, 0.7);
+  const trim = mix(accent, 0xff3ce0, 0.55);
+  const bulb = mix(0x6cf0ff, accent, 0.22);
+
   // ---- Silhueta (atrás) -----------------------------------------------
   if (features.bigTail) {
     // Cauda volumosa em curva, marca dos Rabudos.
@@ -209,10 +237,20 @@ export function makeBodyTexture(
     }
   }
 
-  mask.ellipse(p.headX, p.bodyY, p.bodyRx, p.bodyRy);
-  mask.ellipse(p.headX + lean, p.headY, p.headRx, p.headRy);
-  mask.ellipse(p.headX - p.bodyRx * 0.55, p.footY, 2.6, 1.9);
-  mask.ellipse(p.headX + p.bodyRx * 0.55, p.footY, 2.6, 1.9);
+  // Corpo e cabeça em blocos de canto redondo.
+  mask.roundRect(p.headX, p.bodyY, p.bodyRx, p.bodyRy, 2);
+  mask.roundRect(p.headX + lean, p.headY, p.headRx, p.headRy, 2);
+  mask.roundRect(p.headX - p.bodyRx * 0.55, p.footY, 2.4, 1.8, 1);
+  mask.roundRect(p.headX + p.bodyRx * 0.55, p.footY, 2.4, 1.8, 1);
+
+  // Antenas: dois talos curtos com uma bolinha na ponta. São a assinatura da
+  // espécie — entram na silhueta, não como enfeite pintado por cima.
+  const antennaTipY = p.headY - p.headRy - 4.2;
+  for (const dir of [-1, 1]) {
+    const ax = p.headX + dir * 3.5 + lean;
+    mask.rect(Math.round(ax), Math.round(p.headY - p.headRy - 4), 1, 5);
+    mask.roundRect(ax, antennaTipY, 2.2, 2, 1);
+  }
 
   // Orelhas.
   if (features.ears === 1) {
@@ -248,24 +286,31 @@ export function makeBodyTexture(
     mask.ellipse(p.headX + lean - 2, p.headY - p.headRy, 1.8, 1.8);
   }
 
-  // Pelagem felpuda: recorta bolinhas na borda para dar textura.
-  if (features.fluffy) {
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * Math.PI * 2;
-      mask.ellipse(
-        p.headX + Math.cos(angle) * p.headRx * 1.0 + lean,
-        p.headY + Math.sin(angle) * p.headRy * 1.0,
-        2.7,
-        2.7,
-      );
-    }
-  }
+  // A pelagem felpuda das versões antigas saiu daqui de propósito: ela
+  // recortava bolinhas na borda, e uma borda irregular desmancha justamente o
+  // que define esta criatura — a silhueta em BLOCO. O gene continua existindo
+  // e volta a aparecer em quem desenhar uma espécie de contorno macio.
 
   // ---- Pintura --------------------------------------------------------
+  //
+  // A silhueta é uma só, mas a pintura é por ALTURA: pele em cima, macacão
+  // embaixo, sapato no pé. É isso que faz um bloco de pixels virar um bicho
+  // vestido em vez de um bicho de duas cores.
+  const overallTop = p.bodyY - p.bodyRy;
   for (let y = 0; y < SPRITE_SIZE; y++) {
     for (let x = 0; x < SPRITE_SIZE; x++) {
       if (mask.has(x, y)) {
-        buffer.set(x, y, y > p.bodyY + 1 ? underside : skin);
+        const color =
+          y >= p.footY - 1
+            ? trim
+            : y >= overallTop
+              ? y > p.bodyY + 1
+                ? overallDark
+                : overall
+              : y > p.bodyY + 1
+                ? underside
+                : skin;
+        buffer.set(x, y, color);
       } else if (
         mask.has(x - 1, y) ||
         mask.has(x + 1, y) ||
@@ -286,15 +331,15 @@ export function makeBodyTexture(
     mix(skin, 0xffffff, 0.24),
   );
 
-  // Barriga na cor secundária.
+  // Peitilho do macacão e as duas alças. Detalhe pequeno, mas é o que dá a
+  // leitura de ROUPA: sem ele o corpo é só uma mancha vermelha.
+  const bibY = Math.round(overallTop);
+  buffer.rect(Math.round(p.headX) - 2, bibY, 4, 2, trim);
+  buffer.set(Math.round(p.headX) - 3, bibY, trim);
+  buffer.set(Math.round(p.headX) + 2, bibY, trim);
+  // Bolso: só quem herdou o gene o tem, e é onde a variedade sobrevive.
   if (features.belly) {
-    for (let y = p.bodyY - p.bodyRy; y <= p.footY; y++) {
-      for (let x = p.headX - p.bodyRx; x <= p.headX + p.bodyRx; x++) {
-        const dx = (x - p.headX) / (p.bodyRx * 0.72);
-        const dy = (y - (p.bodyY + 1)) / (p.bodyRy * 0.95);
-        if (dx * dx + dy * dy <= 1 && mask.has(x, y)) buffer.set(x, y, accent);
-      }
-    }
+    buffer.rect(Math.round(p.headX) - 1, Math.round(p.bodyY) + 1, 3, 2, trim);
   }
 
   // Manchas.
@@ -318,18 +363,11 @@ export function makeBodyTexture(
     }
   }
 
-  // Antenas com bolinha luminosa.
-  if (features.antennae) {
-    const tip = mix(accent, 0xffffff, 0.4);
-    for (const dir of [-1, 1]) {
-      const bx = Math.round(p.headX + dir * 3 + lean);
-      for (let i = 0; i < 3; i++) {
-        buffer.set(bx + dir * (i > 1 ? 1 : 0), p.headY - p.headRy - i, outline);
-      }
-      buffer.disc(bx + dir, p.headY - p.headRy - 4.2, 2.3, outline);
-      buffer.disc(bx + dir, p.headY - p.headRy - 4.2, 1.6, tip);
-      buffer.set(bx + dir - 1, p.headY - p.headRy - 4.8, mix(tip, 0xffffff, 0.7));
-    }
+  // As bolinhas das antenas acendem: são elas que dão o brilho da criatura.
+  for (const dir of [-1, 1]) {
+    const ax = p.headX + dir * 3.5 + lean;
+    buffer.ellipse(ax, antennaTipY, 2, 1.8, bulb);
+    buffer.set(ax - 0.6, antennaTipY - 0.6, mix(bulb, 0xffffff, 0.7));
   }
 
   // Folha brotando (Folhinhas).

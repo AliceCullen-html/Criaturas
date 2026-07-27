@@ -447,7 +447,7 @@ function animatePose(pose: number, t: number, elapsed: number, size: number, out
  * Onde fica o PÉ de cada peça, em fração da altura da textura. É por este
  * ponto que ela é plantada na casa — errar aqui faz a árvore pairar.
  */
-const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = { tree: 0.94, rock: 0.89, bush: 0.88 };
+const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = { tree: 0.94, rock: 0.88, bush: 0.87 };
 
 /** Uma muda não é uma árvore em miniatura: começa baixinha e engrossa depois. */
 const growthScale = (growth: number): number => 0.35 + growth * 0.65;
@@ -556,7 +556,15 @@ export function createRenderer(options: RendererOptions): Renderer {
   const treeSprites: Array<{ sprite: Sprite; phase: number; shake: number }> = [];
   /** Um por peça de cenário, na MESMA ordem de `sceneryList`: é o que permite
    *  levantar do chão exatamente a árvore que o dedo pegou. */
-  const sceneryEntries: Array<{ sprite: Sprite; scale: number; growth: number }> = [];
+  const sceneryEntries: Array<{
+    sprite: Sprite;
+    scale: number;
+    growth: number;
+    /** Retângulo que o sprite ocupa na tela, medido a partir do PÉ da peça. */
+    halfWidth: number;
+    up: number;
+    down: number;
+  }> = [];
   const reflections: Array<{ sprite: Sprite; phase: number; scale: number }> = [];
   const ripples: Array<{ x: number; y: number; life: number }> = [];
   let groundPropLayer: Container | null = null;
@@ -602,6 +610,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   let sceneryList: readonly ScenerySpot[] = [];
   /** Índice da peça de cenário que está na mão agora, ou null. */
   let draggedScenery: number | null = null;
+  /** A peça que estava tremendo, para poder devolvê-la ao lugar ao soltar. */
+  let lastLoosening: number | null = null;
   let dragX = 0;
   let dragY = 0;
   let waterProbe: ((x: number, y: number) => boolean) | null = null;
@@ -642,19 +652,56 @@ export function createRenderer(options: RendererOptions): Renderer {
     return best;
   }
 
+  /**
+   * O dedo está EM CIMA do desenho?
+   *
+   * Esta é a conta que faltava, e é a razão de arrastar não funcionar direito.
+   * O ponteiro devolve um ponto do CHÃO — a casa onde o dedo pousou. Mas uma
+   * árvore não está deitada no chão: ela sobe pela tela. Encostar no meio da
+   * copa devolve um ponto do mundo que fica lá atrás, uma casa e meia adiante,
+   * e o teste "que peça está nesse ponto?" respondia *nenhuma*.
+   *
+   * Aqui o ponto do mundo é convertido de volta para o deslocamento em TELA
+   * relativo ao pé da peça, e comparado com o retângulo que o sprite ocupa.
+   * Isso é exatamente o que o jogador enxerga, e não depende do zoom: sprite e
+   * mundo são ampliados pelo mesmo fator.
+   */
+  function insideSprite(
+    worldX: number,
+    worldY: number,
+    footX: number,
+    footY: number,
+    halfWidth: number,
+    up: number,
+    down: number,
+  ): boolean {
+    const dx = worldX - footX;
+    const dy = worldY - footY;
+    const screenX = dx - dy;
+    const screenY = (dx + dy) * ISO_SQUASH;
+    const slack = pickSlack();
+    return (
+      Math.abs(screenX) <= halfWidth * slack &&
+      screenY <= down * slack + 2 &&
+      screenY >= -up * slack
+    );
+  }
+
   function pickItem(worldX: number, worldY: number): number | null {
     const buffer = lastItems;
     const ids = lastItemIds;
     if (!buffer || !ids) return null;
     let best: number | null = null;
-    let bestDist = Infinity;
+    let bestDepth = -Infinity;
     for (let i = 0; i < buffer.count; i++) {
-      const dx = buffer.x[i]! - worldX;
-      const dy = buffer.y[i]! - worldY;
-      const dist = dx * dx + dy * dy;
-      const reach = Math.max(buffer.radius[i]! * 2.2, 12) * pickSlack();
-      if (dist <= reach * reach && dist < bestDist) {
-        bestDist = dist;
+      const x = buffer.x[i]!;
+      const y = buffer.y[i]!;
+      const half = Math.max(buffer.radius[i]! * 1.4, 8);
+      if (!insideSprite(worldX, worldY, x, y, half, half * 1.8, half * 0.7)) continue;
+      // Empate resolve pela frente: quem está mais perto de quem olha.
+      const depth = isoDepth(x, y);
+      if (depth > bestDepth) {
+        bestDepth = depth;
         best = ids[i]!;
       }
     }
@@ -664,36 +711,35 @@ export function createRenderer(options: RendererOptions): Renderer {
   /**
    * Árvore/pedra/arbusto sob o ponto.
    *
-   * Duas tentativas, nesta ordem. A CASA vem primeiro: o ponto cai numa casa
-   * do tabuleiro, e se há uma peça nela o alvo é ela — exato, sem folga, que é
-   * a promessa que a grade faz ao jogador.
-   *
-   * A segunda existe porque a copa não está na casa. Ela sobe pela tela, e o
-   * ponto do mundo debaixo do dedo, quando o dedo está na copa, é uma casa
-   * DIAGONALMENTE ATRÁS da árvore. Sem esta segunda tentativa, clicar na parte
-   * mais visível da árvore não pegaria a árvore.
+   * Duas tentativas. A primeira é o DESENHO: o tronco, a copa, a pedra inteira
+   * — tudo que o jogador vê é alvo, porque é isso que ele acha que está
+   * tocando. A segunda é a CASA, que pega o caso do dedo no chão em volta do
+   * pé, onde não há pixel de sprite mas há a promessa da grade.
    */
   function pickScenery(worldX: number, worldY: number): { kind: string; index: number } | null {
+    let best: { kind: string; index: number } | null = null;
+    let bestDepth = -Infinity;
+    for (let i = 0; i < sceneryList.length; i++) {
+      const piece = sceneryList[i]!;
+      const box = sceneryEntries[i];
+      if (!box) continue;
+      if (!insideSprite(worldX, worldY, piece.x, piece.y, box.halfWidth, box.up, box.down)) continue;
+      // Várias copas se sobrepõem: ganha a que está desenhada por cima.
+      const depth = isoDepth(piece.x, piece.y);
+      if (depth > bestDepth) {
+        bestDepth = depth;
+        best = { kind: piece.kind, index: i };
+      }
+    }
+    if (best) return best;
+
     const col = tileColOf(worldX);
     const row = tileRowOf(worldY);
     for (let i = 0; i < sceneryList.length; i++) {
       const piece = sceneryList[i]!;
       if (piece.col === col && piece.row === row) return { kind: piece.kind, index: i };
     }
-
-    let best: { kind: string; index: number } | null = null;
-    let bestDist = Infinity;
-    for (let i = 0; i < sceneryList.length; i++) {
-      const piece = sceneryList[i]!;
-      if (piece.kind !== 'tree') continue; // só a copa sobe o bastante para isso
-      // O volume da copa fica atrás e acima do pé, no eixo de profundidade.
-      const dist = Math.hypot(piece.x - 22 - worldX, piece.y - 22 - worldY);
-      if (dist <= TILE * 0.62 * pickSlack() && dist < bestDist) {
-        bestDist = dist;
-        best = { kind: piece.kind, index: i };
-      }
-    }
-    return best;
+    return null;
   }
 
   /** A casa está livre para receber a peça que está sendo arrastada? */
@@ -1155,7 +1201,15 @@ export function createRenderer(options: RendererOptions): Renderer {
         sprite.position.set(isoX(piece.x, piece.y), isoY(piece.x, piece.y));
         sprite.zIndex = isoDepth(piece.x, piece.y);
         decorationLayer.addChild(sprite);
-        sceneryEntries.push({ sprite, scale, growth: piece.growth });
+        const anchorY = FOOT_ANCHOR[piece.kind];
+        sceneryEntries.push({
+          sprite,
+          scale,
+          growth: piece.growth,
+          halfWidth: (texture.width * scale) / 2,
+          up: texture.height * scale * anchorY,
+          down: texture.height * scale * (1 - anchorY),
+        });
         if (piece.kind === 'tree') {
           treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
         }
@@ -1224,6 +1278,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         ...next,
         onGrabScenery: (index) => {
           draggedScenery = index;
+          // O alvo começa DEBAIXO DA MÃO. Sem esta linha, quem segura sem
+          // arrastar levanta a árvore para a casa (0,0) — ela some do mapa até
+          // o dedo se mexer, que foi exatamente o que aconteceu no teste.
+          dragX = handWorld.x;
+          dragY = handWorld.y;
           next.onGrabScenery(index);
         },
         onDragScenery: (index, x, y) => {
@@ -1606,8 +1665,37 @@ export function createRenderer(options: RendererOptions): Renderer {
         const piece = sceneryList[i];
         if (!piece || piece.growth === entry.growth) continue;
         entry.growth = piece.growth;
-        entry.scale = PIXEL_SCALE * growthScale(piece.growth);
+        const grown = PIXEL_SCALE * growthScale(piece.growth);
+        // A muda cresce e o ALVO cresce junto: se a caixa ficasse com o
+        // tamanho de quando ela nasceu, a árvore adulta seria clicável só no
+        // pedacinho onde a muda estava.
+        const ratio = grown / entry.scale;
+        entry.scale = grown;
+        entry.halfWidth *= ratio;
+        entry.up *= ratio;
+        entry.down *= ratio;
         if (i !== draggedScenery) entry.sprite.scale.set(entry.scale);
+      }
+
+      // Aviso de que a peça está cedendo: ela treme, cada vez mais forte, até
+      // sair do chão. Sem isto, segurar uma árvore é meio segundo de nada
+      // acontecendo — e ninguém segura até o fim uma coisa que não responde.
+      const loosening = gestures?.liftIndex ?? null;
+      if (loosening !== null && loosening !== lastLoosening) lastLoosening = loosening;
+      if (lastLoosening !== null) {
+        const entry = sceneryEntries[lastLoosening];
+        const piece = sceneryList[lastLoosening];
+        if (entry && piece) {
+          const grip = loosening === null ? 0 : (gestures?.liftProgress ?? 0);
+          const shiver = grip * grip * 2.2 * Math.sin(elapsed * 42);
+          entry.sprite.position.set(
+            isoX(piece.x, piece.y) + shiver,
+            isoY(piece.x, piece.y) - grip * 2,
+          );
+          if (grip === 0) lastLoosening = null;
+        } else {
+          lastLoosening = null;
+        }
       }
 
       // A peça que está na mão: sobe do chão, cresce um pouco e balança —

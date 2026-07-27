@@ -54,15 +54,16 @@ export interface WorldProbe {
 }
 
 const DOUBLE_CLICK_MS = 320;
-const HOLD_TO_GRAB_MS = 130;
+/** Segundos de dedo parado para um objeto solto vir na mão. */
+const HOLD_ITEM = 0.18;
 /**
- * Arrancar cenário custa mais que pegar uma fruta.
+ * Segundos de dedo parado para o cenário ceder.
  *
- * Uma árvore é pesada e o toque nela já significava outra coisa — sacudir. Se
- * ela saísse do chão com o mesmo tempo de uma maçã, ninguém conseguiria mais
- * sacudir uma árvore sem levá-la embora junto.
+ * Arrancar uma árvore custa mais que pegar uma fruta: ela é pesada, e o toque
+ * nela já significava outra coisa — sacudir. Se saísse do chão no mesmo tempo
+ * de uma maçã, ninguém conseguiria mais sacudir uma árvore sem levá-la junto.
  */
-const HOLD_TO_LIFT_MS = 340;
+const HOLD_LIFT = 0.45;
 const OBSERVE_MS = 700;
 const PET_SPEED_MAX = 260; // px/s no mundo: acima disso não é carinho
 const ROUGH_SPEED = 620;
@@ -94,6 +95,9 @@ export class GestureRecognizer {
    * mobília, e a única coisa que se faz com ela é pousá-la noutra casa.
    */
   private heldScenery: number | null = null;
+  /** Segundos de dedo apoiado, e o que está embaixo dele. */
+  private holdTime = 0;
+  private holdTarget: { kind: 'item' | 'scenery'; index: number } | null = null;
   private pettingId: number | null = null;
   private petTime = 0;
   private petRemembered = false;
@@ -119,11 +123,63 @@ export class GestureRecognizer {
     return this.heldItem;
   }
 
+  /**
+   * O quanto falta para o que está sob o dedo ceder, de 0 a 1.
+   *
+   * O renderer usa isto para fazer a peça TREMER enquanto solta. Sem esse
+   * aviso, segurar uma árvore é um segundo de nada acontecendo, e o jogador
+   * larga antes de descobrir que dava.
+   */
+  get liftProgress(): number {
+    if (!this.down || this.heldScenery !== null || this.heldItem !== null) return 0;
+    if (this.pettingId !== null || this.holdTarget === null) return 0;
+    return Math.min(1, this.holdTime / (this.holdTarget.kind === 'item' ? HOLD_ITEM : HOLD_LIFT));
+  }
+
+  /** O que vai ceder se o dedo continuar parado ali. */
+  get liftIndex(): number | null {
+    return this.liftProgress > 0 && this.holdTarget?.kind === 'scenery'
+      ? this.holdTarget.index
+      : null;
+  }
+
   /** Chamado a cada quadro para animações e carinho contínuo. */
   tick(dt: number): void {
     if (this.dropAnim > 0) {
       this.dropAnim -= dt;
       if (this.dropAnim <= 0 && this.state === 'dropping') this.state = 'open';
+    }
+
+    // Segurar parado também pega.
+    //
+    // Antes só o MOVIMENTO disparava a pegada: era preciso apertar e arrastar
+    // no mesmo gesto, e quem apertava e esperava — que é o que todo mundo faz
+    // num celular — não conseguia levantar nada. Agora o tempo conta sozinho,
+    // e o dedo pode ficar quieto.
+    if (this.down && this.heldItem === null && this.heldScenery === null) {
+      this.holdTime += dt;
+      if (this.holdTarget === null && this.pettingId === null) {
+        const item = this.probe.itemAt(this.downX, this.downY);
+        if (item !== null) this.holdTarget = { kind: 'item', index: item };
+        else {
+          const piece = this.probe.sceneryAt(this.downX, this.downY);
+          if (piece) this.holdTarget = { kind: 'scenery', index: piece.index };
+        }
+      }
+      const target = this.holdTarget;
+      if (target && this.pettingId === null) {
+        const needed = target.kind === 'item' ? HOLD_ITEM : HOLD_LIFT;
+        if (this.holdTime >= needed) {
+          if (target.kind === 'item') {
+            this.heldItem = target.index;
+            this.handlers.onGrab(target.index);
+          } else {
+            this.heldScenery = target.index;
+            this.handlers.onGrabScenery(target.index);
+          }
+          this.state = 'holding';
+        }
+      }
     }
 
     if (this.pettingId !== null && this.down) {
@@ -156,6 +212,8 @@ export class GestureRecognizer {
     this.observed = false;
     this.petTime = 0;
     this.petRemembered = false;
+    this.holdTime = 0;
+    this.holdTarget = null;
 
     // Duplo clique perto de uma criatura chama sua atenção.
     const creature = this.probe.creatureAt(x, y);
@@ -239,27 +297,9 @@ export class GestureRecognizer {
       return;
     }
 
-    // Segurou sobre um objeto por um instante: pegou.
-    if (this.moved && time - this.downTime > HOLD_TO_GRAB_MS) {
-      const item = this.probe.itemAt(this.downX, this.downY);
-      if (item !== null) {
-        this.heldItem = item;
-        this.state = 'holding';
-        this.handlers.onGrab(item);
-        return;
-      }
-    }
-
-    // Nada solto ali, mas há uma árvore ou pedra: segurando mais um pouco,
-    // ela cede e vem junto.
-    if (this.moved && time - this.downTime > HOLD_TO_LIFT_MS) {
-      const piece = this.probe.sceneryAt(this.downX, this.downY);
-      if (piece) {
-        this.heldScenery = piece.index;
-        this.state = 'holding';
-        this.handlers.onGrabScenery(piece.index);
-      }
-    }
+    // Pegar é assunto de `tick`: o relógio corre com o dedo parado ou andando,
+    // e é ele que decide. Aqui só sobrou a mão mostrando o que vai acontecer.
+    if (this.holdTarget !== null) this.state = 'closing';
   }
 
   pointerUp(x: number, y: number, time: number, button: number): void {
@@ -305,6 +345,8 @@ export class GestureRecognizer {
     this.down = false;
     this.pettingId = null;
     this.petTime = 0;
+    this.holdTime = 0;
+    this.holdTarget = null;
   }
 
   pointerLeave(): void {
@@ -317,6 +359,8 @@ export class GestureRecognizer {
     this.down = false;
     this.pettingId = null;
     this.state = 'open';
+    this.holdTime = 0;
+    this.holdTarget = null;
     this.handlers.onHandMove(0, 0, false);
   }
 
@@ -340,6 +384,8 @@ export class GestureRecognizer {
     }
     this.down = false;
     this.moved = false;
+    this.holdTime = 0;
+    this.holdTarget = null;
     this.pettingId = null;
     this.petTime = 0;
     this.speed = 0;
