@@ -85,6 +85,20 @@ export class CreatureMemory {
     return trace ? trace.valence * trace.strength : 0;
   }
 
+  /**
+   * Percorre os traços de um tipo de assunto (`creature:`, `place:`, ...).
+   *
+   * A memória guarda tudo num mapa fechado de propósito — ninguém de fora
+   * deveria mexer numa lembrança. Mas LER o conjunto é outra coisa: é assim
+   * que se descobre de quem esta criatura mais gosta, sem que a memória
+   * precise saber o que é amizade.
+   */
+  forEachAbout(prefix: string, visit: (subject: MemorySubject, trace: MemoryTrace) => void): void {
+    for (const [subject, trace] of this.traces) {
+      if (subject.startsWith(prefix)) visit(subject, trace);
+    }
+  }
+
   knows(subject: MemorySubject): boolean {
     return this.traces.has(subject);
   }

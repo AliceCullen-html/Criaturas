@@ -47,14 +47,22 @@ export function createUtilityBrain(): Brain {
 
       // ---- Dormir -------------------------------------------------------
       // Preguiçosas dormem mais cedo; sob medo, ninguém relaxa.
+      //
+      // E dorme EM CASA. Antes o alvo do sono era a própria posição — ela caía
+      // no sono onde estivesse, e o jardim virava um monte de bichos dormindo
+      // espalhados ao acaso. Agora o alvo é o ninho, quando ela já tem apego a
+      // um: é essa linha que faz a família dormir junta, porque os ninhos das
+      // amigas se aproximam sozinhos.
+      const home = perception.home;
+      const bed = home && home.attachment > 0.15 ? home : null;
       options.push(
         option(
           'sleep',
           (urgency(emotions.sleepiness) * 1.3 + urgency(1 - needs.energy)) *
             (1.25 - traits.activity * 0.5) *
             (1 - emotions.fear * 0.8),
-          self.x,
-          self.y,
+          bed ? bed.x : self.x,
+          bed ? bed.y : self.y,
           NO_TARGET,
           4,
         ),
@@ -366,6 +374,29 @@ export function createUtilityBrain(): Brain {
             ),
           );
         }
+      }
+
+      // ---- Andar com a melhor amiga -------------------------------------
+      //
+      // Não é "socializar com quem estiver perto": é procurar UMA criatura
+      // específica, a que ela mais gosta, e ficar por perto. É o que faz duas
+      // delas aparecerem juntas de novo e de novo, que é como o jogador
+      // percebe que existe uma amizade ali.
+      const friend = perception.friend;
+      if (friend && friend.distance > 26) {
+        options.push(
+          option(
+            'follow',
+            (0.35 + friend.strength * 1.15) *
+              (0.5 + emotions.loneliness * 0.9) *
+              traits.sociability *
+              (1 - emotions.fear * 0.7),
+            friend.x,
+            friend.y,
+            friend.id,
+            3,
+          ),
+        );
       }
 
       // ---- Explorar -----------------------------------------------------

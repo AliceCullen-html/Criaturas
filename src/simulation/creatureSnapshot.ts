@@ -7,6 +7,7 @@ import {
   Appearance,
   Attributes,
   Bio,
+  Bond,
   Creature,
   CreatureGenome,
   Emotions,
@@ -56,6 +57,12 @@ export interface CreatureSnapshot {
   trauma: number;
   /** Vínculo com o jogador: -1 (teme) … +1 (confia plenamente). */
   bond: number;
+  /**
+   * O nome de quem ela mais gosta, ou null. Vai para a ficha porque uma
+   * amizade que só existe dentro do código não é uma amizade — é um campo de
+   * dados. O jogador precisa poder saber de quem ela gosta.
+   */
+  friend: string | null;
   memories: Episode[];
   children: string[];
   friends: Array<{ name: string; affinity: number }>;
@@ -100,6 +107,7 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     isBaby: isBaby(bio),
     intent: mind.intent,
     story: storyOf(world, id),
+    friend: friendName(world, id),
     mood: mind.mood,
     needs: { ...needs },
     emotions: { ...emotions },
@@ -172,6 +180,13 @@ function formatDna(genome: Float32Array): string {
  * emociona. "levando comida para a Nina" conta mais sobre a vida dela do que
  * qualquer barra.
  */
+/** O nome de quem ela mais gosta, se o laço for forte o bastante para contar. */
+function friendName(world: World, id: number): string | null {
+  const bond = world.store(Bond).get(id);
+  if (!bond || bond.friend < 0 || bond.friendship < 0.25) return null;
+  return world.store(Identity).get(bond.friend)?.name ?? null;
+}
+
 function storyOf(world: World, id: number): string {
   const plan = world.store(Plan).get(id);
   if (!plan || plan.routine === ROUTINE.none) return '';

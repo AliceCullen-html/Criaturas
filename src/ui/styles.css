@@ -148,3 +148,12 @@ body {
   max-width: 210px;
   white-space: normal;
 }
+
+/* De quem ela gosta: mais apagado que a necessidade, porque é contexto e não
+   urgência — mas presente, porque é o que faz o bicho ter uma vida. */
+.card__friend {
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.75;
+}

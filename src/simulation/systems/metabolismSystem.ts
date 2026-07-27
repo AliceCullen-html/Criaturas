@@ -2,6 +2,7 @@ import { clamp01 } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Bio, Creature, Emotions, Mind, Needs } from '@creatures';
 import { TerrainResource, findNearestWater } from '@world';
+import { DeathsResource } from './socialSystem';
 import { growthScale } from '../age';
 
 const HUNGER_RATE = 0.011;
@@ -72,6 +73,11 @@ export const metabolismSystem: System = {
       if (needs.health <= 0 || bio.age >= bio.lifespan) deaths.push(entity);
     });
 
+    // Anuncia as mortes antes de apagar as entidades: quem fica precisa saber
+    // de quem se despedir, e depois da destruição não sobra nome nem lugar.
+    if (deaths.length > 0 && world.hasResource(DeathsResource)) {
+      world.getResource(DeathsResource).push(...deaths);
+    }
     for (let i = 0; i < deaths.length; i++) world.destroyEntity(deaths[i]!);
   },
 };

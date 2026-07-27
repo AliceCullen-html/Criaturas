@@ -110,7 +110,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Vista isométrica 2:1 e jardim maior (900×900), sem tocar na simulação        |
 | — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
-| D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
+| D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
 
@@ -215,6 +215,28 @@ A tradução de comportamento para quadro é `frameFor`, o único ponto onde a a
 encontra a simulação, e está coberta por `tintimFrames.test.ts`: a ordem de
 importância (dor antes do passo, sono antes do humor) é o que impede a criatura
 de mentir sobre o que está sentindo.
+
+### A vida social sai da memória, não de um sistema novo
+
+O grafo social já existia — espalhado dentro da memória associativa. Toda vez
+que duas criaturas brincam, dividem uma fruta ou brigam, uma grava uma opinião
+sobre a outra. A etapa D não inventou relacionamento nenhum: ela **lê** esse
+grafo (`Bond`, atualizado a cada três segundos) e deixa o mundo agir sobre ele.
+
+O **ninho** (`Nest`) segue a mesma ideia: não é construção nem objeto, é um
+LUGAR escolhido pelo uso. A criatura dorme onde se sente segura e o ninho anda
+devagar até ali; quem tem uma melhor amiga puxa o próprio ninho na direção do
+dela. É só disso que nascem as famílias dormindo juntas — em nenhum lugar está
+escrito "durmam em grupo". Medido em vinte minutos: ninhos de amigas a **52px**
+de distância, contra **235px** de um par qualquer do jardim.
+
+O **luto** é o único acontecimento do jogo que produz uma tristeza que não vem
+de uma necessidade: não dá para comer nem beber para curá-la. Quem tinha laço
+com quem morreu fica triste, guarda a lembrança e vai até onde aconteceu.
+
+Critério de aceitação (`social.test.ts`): o que se cobra não é que os laços
+EXISTAM — isso é só um número —, é que apareçam no comportamento. Com quem ela
+anda, onde ela dorme, e o que acontece com quem fica.
 
 ### Invariantes de geração do mundo
 

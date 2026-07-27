@@ -60,6 +60,15 @@ export interface Perception {
   hunch: { x: number; y: number; distance: number } | null;
   /** 0 = tempo bom, 1 = chovendo forte. */
   rain: number;
+  /**
+   * O ninho: o canto do jardim que ela chama de seu, e o quanto já é dela.
+   * É para lá que ela volta para dormir — e é por isso que as famílias
+   * acabam dormindo juntas, sem que nada mande "durmam em grupo".
+   */
+  home: { x: number; y: number; attachment: number } | null;
+  /** A melhor amiga e o maior desafeto, lidos da memória. */
+  friend: { id: number; x: number; y: number; distance: number; strength: number } | null;
+  rival: { id: number; strength: number } | null;
 }
 
 /** O que a criatura decidiu fazer. */

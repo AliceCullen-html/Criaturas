@@ -61,6 +61,8 @@ import {
   idleSystem,
   confinementSystem,
   planSystem,
+  socialSystem,
+  DeathsResource,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -95,6 +97,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   spawnCreatures(world, INITIAL_CREATURES);
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
+  world.setResource(DeathsResource, []);
   const terrain = world.getResource(TerrainResource);
   const scenery = world.getResource(SceneryResource);
   const ambient = world.getResource(AmbientResource);
@@ -107,6 +110,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(creatureIndexSystem)
     .add(emotionSystem)
     .add(handReactionSystem)
+    .add(socialSystem)
     .add(planSystem)
     .add(decisionSystem)
     .add(idleSystem)

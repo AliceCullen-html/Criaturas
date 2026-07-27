@@ -125,6 +125,47 @@ export interface Lineage {
 }
 export const Lineage = defineComponent<Lineage>('Lineage');
 
+/**
+ * O LAÇO SOCIAL, lido da memória e guardado aqui pronto.
+ *
+ * A amizade não é um sistema novo: ela já existia, espalhada, dentro da
+ * memória associativa — toda vez que duas criaturas brincam, dividem comida ou
+ * brigam, uma grava uma opinião sobre a outra. O que faltava era LER esse
+ * grafo. Procurar o laço mais forte a cada decisão custaria caro; então um
+ * sistema o resolve de tempos em tempos e deixa a resposta aqui.
+ *
+ * Guardar em vez de recalcular também dá estabilidade: uma melhor amiga que
+ * troca a cada tick não é uma melhor amiga.
+ */
+export interface Bond {
+  /** Entidade de quem ela mais gosta, ou -1. */
+  friend: number;
+  /** Força desse laço, 0..1. */
+  friendship: number;
+  /** Entidade de quem ela menos gosta, ou -1. */
+  rival: number;
+  rivalry: number;
+  /** Segundos até a próxima releitura da memória. */
+  recheck: number;
+}
+export const Bond = defineComponent<Bond>('Bond');
+
+/**
+ * O NINHO: o canto do jardim que esta criatura chama de seu.
+ *
+ * Não é uma construção — é um LUGAR, escolhido pelo uso. Ela dorme onde se
+ * sente segura, e o ninho vai lentamente até ali. Quem tem uma melhor amiga
+ * puxa o próprio ninho para perto do dela, e é só disso que nascem as famílias
+ * dormindo juntas: ninguém programou "durmam em grupo".
+ */
+export interface Nest {
+  x: number;
+  y: number;
+  /** 0..1 — o quanto aquele canto já é dela mesmo. */
+  attachment: number;
+}
+export const Nest = defineComponent<Nest>('Nest');
+
 /** Identidade dada pelo jogador. */
 export interface Identity {
   name: string;

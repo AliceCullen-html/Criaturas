@@ -3,6 +3,8 @@ import { Transform, Velocity, World } from '@engine';
 import { express, randomGenome, type Genome } from '@genetics';
 import {
   Behavior,
+  Bond,
+  Nest,
   Appearance,
   Attributes,
   Bio,
@@ -44,6 +46,8 @@ export function registerCreatureComponents(world: World): void {
   world.register(Identity);
   world.register(Mind);
   world.register(Behavior);
+  world.register(Bond);
+  world.register(Nest);
 }
 
 /** Cria uma criatura em (x, y), expressando o genoma dado (ou um aleatório). */

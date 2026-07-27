@@ -1,6 +1,17 @@
 import { clamp, subjects } from '@core';
 import { Transform, Velocity, type System } from '@engine';
-import { Attributes, Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
+import {
+  Attributes,
+  Bio,
+  Bond,
+  Creature,
+  Emotions,
+  Memory,
+  Mind,
+  Needs,
+  Nest,
+  Personality,
+} from '@creatures';
 import type { PerceivedCreature, PerceivedFood, Perception } from '@ai';
 import {
   AmbientResource,
@@ -55,6 +66,8 @@ export const decisionSystem: System = {
   update(world, dt) {
     const creatures = world.store(Creature);
     const transforms = world.store(Transform);
+    const nests = world.store(Nest);
+    const bonds = world.store(Bond);
     const velocities = world.store(Velocity);
     const needsStore = world.store(Needs);
     const emotionsStore = world.store(Emotions);
@@ -204,6 +217,24 @@ export const decisionSystem: System = {
         // sabe atravessar o jardim até o lago.
         const reach = attributes.vision + needs.thirst * THIRST_MEMORY;
         const water = findNearestWater(terrain, transform.x, transform.y, reach);
+
+        // Laço e ninho: lidos prontos dos componentes que o sistema social
+        // mantém, para a decisão não ter de varrer a memória a cada tick.
+        const nest = nests.get(entity);
+        const bond = bonds.get(entity);
+        let friendView: Perception['friend'] = null;
+        if (bond && bond.friend >= 0) {
+          const there = transforms.get(bond.friend);
+          if (there) {
+            friendView = {
+              id: bond.friend,
+              x: there.x,
+              y: there.y,
+              distance: Math.hypot(there.x - transform.x, there.y - transform.y),
+              strength: bond.friendship,
+            };
+          }
+        }
         const playerDistance = player.present
           ? Math.hypot(player.x - transform.x, player.y - transform.y)
           : Infinity;
@@ -236,6 +267,9 @@ export const decisionSystem: System = {
           shelter: nearestTree(scenery, transform.x, transform.y),
           hunch: nearestHunch(transform.x, transform.y, attributes.vision),
           rain: weather.intensity,
+          home: nest ? { x: nest.x, y: nest.y, attachment: nest.attachment } : null,
+          friend: friendView,
+          rival: bond && bond.rival >= 0 ? { id: bond.rival, strength: bond.rivalry } : null,
         };
 
         const decision = brain.decide(perception);

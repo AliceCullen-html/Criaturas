@@ -102,6 +102,9 @@ export function CreatureCard() {
       {/* Se há uma história em curso, ela vem no lugar da necessidade: contar
           que ela está levando comida para alguém vale mais que "fome". */}
       <div className="card__need">{creature.story || mainNeed(creature)}</div>
+      {/* De quem ela gosta. Só aparece quando existe: uma linha vazia dizendo
+          "sem amigos" seria uma acusação, não uma informação. */}
+      {creature.friend && <div className="card__friend">amiga de {creature.friend}</div>}
     </div>
   );
 }

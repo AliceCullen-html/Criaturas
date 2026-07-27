@@ -20,6 +20,7 @@ export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { idleSystem } from './systems/idleSystem';
 export { confinementSystem } from './systems/confinementSystem';
 export { planSystem, Plan } from './systems/planSystem';
+export { socialSystem, DeathsResource } from './systems/socialSystem';
 export { ROUTINE, ROUTINE_NAMES, carriedBy, dropCarried } from './routines';
 export { solids } from './solids';
 export {
