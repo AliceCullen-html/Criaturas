@@ -1,4 +1,4 @@
-import { CreatureMemory } from '@core';
+import { CreatureMemory, Lexicon } from '@core';
 import { Transform, Velocity, World } from '@engine';
 import { express, randomGenome, type Genome } from '@genetics';
 import {
@@ -18,6 +18,7 @@ import {
   Mind,
   Needs,
   Personality,
+  Words,
 } from './components';
 import { CREATURE_NAMES } from './names';
 
@@ -54,6 +55,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Behavior);
   world.register(Bond);
   world.register(Nest);
+  world.register(Words);
 }
 
 /** Cria uma criatura em (x, y), expressando o genoma dado (ou um aleatório). */
@@ -120,6 +122,7 @@ export function spawnCreature(
   });
 
   world.store(Memory).set(entity, new CreatureMemory());
+  world.store(Words).set(entity, new Lexicon());
   world.store(Lineage).set(entity, {
     generation: options.generation ?? 1,
     parentA: options.parentA ?? null,

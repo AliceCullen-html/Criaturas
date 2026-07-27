@@ -13,6 +13,7 @@ import { solids } from './solids';
 import { Plan } from './systems/planSystem';
 import { Order } from './orders';
 import { Budding } from './species';
+import { Chatter } from './systems/teachingSystem';
 
 /**
  * A que distância da água uma criatura pode começar a vida.
@@ -46,6 +47,8 @@ export function spawnCreatures(world: World, count: number, group: SpawnGroup = 
   world.register(Order);
   // Progresso de duplicação: existe só enquanto a espécie é assexuada.
   world.register(Budding);
+  // Ritmo da fala: quem sabe uma palavra a repete de tempos em tempos.
+  world.register(Chatter);
   const terrain = world.getResource(TerrainResource);
   // Nem na água, nem debaixo de uma pedra grande.
   solids.rebuild(world);

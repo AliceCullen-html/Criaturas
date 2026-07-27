@@ -32,6 +32,8 @@ export const ORDER = {
   eat: 2,
   /** Beba ali. */
   drink: 3,
+  /** Vá até o computador e fique aprendendo. */
+  learn: 4,
 } as const;
 
 export type OrderKind = (typeof ORDER)[keyof typeof ORDER];
@@ -49,6 +51,8 @@ export const Order = defineComponent<Order>('Order');
 
 /** Quanto tempo a criatura persegue uma ordem antes de voltar à própria vida. */
 const PATIENCE = 22;
+/** Quanto tempo ela fica diante da máquina quando você a manda estudar. */
+const STUDY_PATIENCE = 70;
 /** Chegou: a partir daqui a ordem de andar está cumprida. */
 const ARRIVED = 18;
 /** Acima disto ela tem problema próprio e a ordem não se sustenta. */
@@ -94,7 +98,15 @@ export function issueOrder(
     return 'refused';
   }
 
-  world.store(Order).set(id, { kind, x, y, item, patience: PATIENCE });
+  // Uma aula é mais longa que um recado. Mandar estudar e a criatura desistir
+  // em vinte segundos seria mandar dar uma olhadinha.
+  world.store(Order).set(id, {
+    kind,
+    x,
+    y,
+    item,
+    patience: kind === ORDER.learn ? STUDY_PATIENCE : PATIENCE,
+  });
   // Obedecer é um ato de confiança, e ele se paga: fazer o que você pediu e
   // dar certo aproxima os dois.
   memory.record(subjects.player(), 0.25, 0.06);
@@ -165,6 +177,19 @@ export const orderSystem = {
         mind.targetX = spot.x;
         mind.targetY = spot.y;
         mind.targetEntity = order.item;
+        mind.commitment = 2;
+        return;
+      }
+
+      // Estudar é a única ordem que não termina ao chegar: ela fica ali até a
+      // paciência acabar. É o que dá sentido a mandar alguém aprender — se a
+      // ordem se cumprisse na chegada, a criatura daria meia-volta antes da
+      // primeira palavra aparecer na tela.
+      if (order.kind === ORDER.learn) {
+        mind.intent = 'study';
+        mind.targetX = order.x;
+        mind.targetY = order.y;
+        mind.targetEntity = -1;
         mind.commitment = 2;
         return;
       }

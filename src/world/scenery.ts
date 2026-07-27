@@ -12,7 +12,16 @@ import {
 import { defineResource } from '@engine';
 import { isWaterAt, type Terrain } from './terrain';
 
-export type SceneryKind = 'tree' | 'rock' | 'bush';
+/**
+ * O que pode ocupar uma casa do tabuleiro.
+ *
+ * O computador é o único item ARTIFICIAL do jardim — a máquina que ensina
+ * palavras. Ele entra aqui, junto das árvores e pedras, porque no tabuleiro ele
+ * é a mesma coisa que elas: ocupa uma casa, tem sombra, e o jogador pode pegá-lo
+ * e mudá-lo de lugar. Onde ele fica é decisão de quem joga — perto do lago, no
+ * meio do ninho, longe de tudo — e isso muda quem aprende a falar.
+ */
+export type SceneryKind = 'tree' | 'rock' | 'bush' | 'computer';
 
 export interface SceneryPiece {
   kind: SceneryKind;
@@ -28,6 +37,10 @@ export interface SceneryPiece {
   y: number;
   /** Só árvores: tempo até soltar a próxima fruta madura. */
   fruitTimer: number;
+  /** Só o computador: a palavra que está na tela agora. */
+  word: number;
+  /** Só o computador: segundos até a tela trocar de palavra. */
+  wordTimer: number;
   /** Variante visual: árvore comum, florida, frutífera ou com ninho. */
   variant: number;
   /**
@@ -121,7 +134,67 @@ export function makePiece(
     fruitTimer,
     variant,
     growth,
+    word: 0,
+    wordTimer: 0,
   };
+}
+
+/**
+ * Põe o computador no jardim.
+ *
+ * Uma máquina só, e no MEIO do mundo — não porque o centro seja bonito, mas
+ * porque ele é o lugar que toda criatura acaba atravessando. Se a máquina
+ * nascesse num canto, a espécie inteira poderia viver e morrer sem nunca
+ * esbarrar nela, e a linguagem seria um sistema que existe e nunca acontece.
+ *
+ * A partir daí quem manda é o jogador: o computador se arrasta como qualquer
+ * peça, e mudá-lo de lugar é decidir quem vai aprender a falar.
+ */
+export function placeComputer(
+  pieces: SceneryPiece[],
+  terrain: Terrain,
+  width: number,
+  height: number,
+): SceneryPiece | null {
+  const cols = tileCols(width);
+  const rows = tileRows(height);
+  const midCol = (cols - 1) / 2;
+  const midRow = (rows - 1) / 2;
+
+  // A mesma regra de vizinhança do resto do tabuleiro: nada encosta em nada.
+  // A máquina não é exceção — encostada numa árvore ela vira parede, e ainda
+  // por cima uma parede onde as criaturas precisam parar para ler.
+  const free = (col: number, row: number): boolean =>
+    tileOnLand(terrain, col, row) && !pieceAtTile(pieces, col, row);
+  const isolated = (col: number, row: number): boolean =>
+    !pieceAtTile(pieces, col - 1, row) &&
+    !pieceAtTile(pieces, col + 1, row) &&
+    !pieceAtTile(pieces, col, row - 1) &&
+    !pieceAtTile(pieces, col, row + 1);
+
+  /** A casa livre mais próxima do centro, exigindo ou não vizinhança limpa. */
+  const search = (demanding: boolean): { col: number; row: number } | null => {
+    let best: { col: number; row: number; distance: number } | null = null;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (!free(col, row)) continue;
+        if (demanding && !isolated(col, row)) continue;
+        const distance = Math.hypot(col - midCol, row - midRow);
+        if (!best || distance < best.distance) best = { col, row, distance };
+      }
+    }
+    return best;
+  };
+
+  // Duas passadas: a casa ideal é livre E isolada; se o jardim estiver cheio
+  // demais para isso, aceita-se qualquer casa livre — melhor uma máquina
+  // apertada entre duas árvores que um mundo sem linguagem nenhuma.
+  const best = search(true) ?? search(false);
+  if (!best) return null;
+
+  const machine = makePiece('computer', best.col, best.row, 0, 0);
+  pieces.push(machine);
+  return machine;
 }
 
 export function generateScenery(

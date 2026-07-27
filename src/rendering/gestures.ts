@@ -49,8 +49,24 @@ export interface GestureHandlers {
   onMarquee: (x1: number, y1: number, x2: number, y2: number) => void;
   /** Soltou o retângulo: seleciona quem estiver dentro. */
   onMarqueeEnd: (x1: number, y1: number, x2: number, y2: number) => void;
-  /** Ordem no ponto (botão direito, ou toque com alguém já selecionado). */
-  onOrder: (x: number, y: number) => void;
+  /**
+   * Ordem no ponto (botão direito, ou toque com alguém já selecionado).
+   *
+   * O alvo vai junto porque uma ordem mira no que o jogador VIU, não no ponto
+   * do chão em que o clique caiu. Uma fruta é desenhada acima do seu ponto no
+   * mundo; procurá-la por raio ali embaixo não a encontrava, e mandar comer
+   * virava mandar andar. Quem sabe onde as coisas estão NA TELA é esta camada,
+   * então é ela que responde.
+   */
+  onOrder: (x: number, y: number, target: OrderTarget) => void;
+}
+
+/** O que estava sob o dedo quando a ordem foi dada. */
+export interface OrderTarget {
+  /** Objeto solto (fruta, bugiganga), ou null. */
+  item: number | null;
+  /** Peça do cenário (árvore, pedra, computador), ou null. */
+  scenery: { kind: string; index: number } | null;
 }
 
 export interface WorldProbe {
@@ -254,7 +270,12 @@ export class GestureRecognizer {
 
   /** Botão direito: ordem para quem estiver selecionado. */
   secondaryDown(x: number, y: number): void {
-    this.handlers.onOrder(x, y);
+    this.handlers.onOrder(x, y, this.targetAt(x, y));
+  }
+
+  /** O que há sob o ponto, pelos mesmos testes de acerto que a mão usa. */
+  private targetAt(x: number, y: number): OrderTarget {
+    return { item: this.probe.itemAt(x, y), scenery: this.probe.sceneryAt(x, y) };
   }
 
   pointerMove(x: number, y: number, time: number): void {
@@ -382,7 +403,7 @@ export class GestureRecognizer {
       // Com um grupo selecionado, tocar o mundo é MANDAR. É o que faz o
       // comando funcionar no celular, onde não existe botão direito.
       if (this.probe.hasSelection()) {
-        this.handlers.onOrder(x, y);
+        this.handlers.onOrder(x, y, this.targetAt(x, y));
         this.state = 'open';
         this.down = false;
         this.holdTime = 0;

@@ -105,6 +105,17 @@ export function CreatureCard() {
       {/* De quem ela gosta. Só aparece quando existe: uma linha vazia dizendo
           "sem amigos" seria uma acusação, não uma informação. */}
       {creature.friend && <div className="card__friend">amiga de {creature.friend}</div>}
+      {/* O que ela sabe dizer. É a única coisa da ficha que o jogador CONSTRÓI:
+          o resto ele observa, isto ele ensinou. */}
+      {creature.words.length > 0 && (
+        <div className="card__words">
+          {creature.words.map((word) => (
+            <span key={word} className="card__word">
+              {word}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

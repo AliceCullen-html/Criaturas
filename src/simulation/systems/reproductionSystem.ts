@@ -11,6 +11,7 @@ import {
   Memory,
   Mind,
   Needs,
+  Words,
   spawnCreature,
 } from '@creatures';
 import { countIn } from '@world';
@@ -160,6 +161,18 @@ export const reproductionSystem: System = {
       );
 
       // Herança cultural: o filhote já nasce sabendo o que os pais aprenderam.
+      //
+      // Inclusive as palavras — mas pela metade, e sempre abaixo do que os pais
+      // sabem. Um filhote nasce com o começo da língua da família na cabeça e
+      // precisa terminar de aprendê-la ouvindo; se herdasse pronto, a segunda
+      // geração já falaria tudo e ensinar deixaria de existir.
+      const childWords = world.store(Words).get(child);
+      if (childWords) {
+        for (const parent of [birth.parentA, birth.parentB]) {
+          const parentWords = world.store(Words).get(parent);
+          if (parentWords) childWords.inheritFrom(parentWords, CULTURAL_INHERITANCE);
+        }
+      }
       const childMemory = memories.get(child);
       if (childMemory) {
         for (const parent of [birth.parentA, birth.parentB]) {

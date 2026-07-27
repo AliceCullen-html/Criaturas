@@ -66,6 +66,14 @@ export interface Perception {
    * acabam dormindo juntas, sem que nada mande "durmam em grupo".
    */
   home: { x: number; y: number; attachment: number } | null;
+  /**
+   * O computador, quando está à vista.
+   *
+   * A única coisa do jardim que não é natureza. Uma criatura não sabe o que ele
+   * é — o que ela tem é curiosidade por uma luz que pisca, e é só disso que a
+   * linguagem precisa para começar.
+   */
+  machine: { x: number; y: number; distance: number } | null;
   /** A melhor amiga e o maior desafeto, lidos da memória. */
   friend: { id: number; x: number; y: number; distance: number; strength: number } | null;
   rival: { id: number; strength: number } | null;
