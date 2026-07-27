@@ -95,6 +95,9 @@ const POSE_PERK = 16;
 const POSE_DIG = 12;
 const POSE_STRETCH = 2;
 
+/** Acima disto o passo vira corrida, em pixels de mundo por segundo. */
+export const RUN_SPEED = 42;
+
 export interface FrameChoice {
   mood: number;
   pose: number;
@@ -127,8 +130,10 @@ export function frameFor(choice: FrameChoice): number {
   if (carrying) return FRAME.carry;
 
   if (moving) {
-    // Correr é passo rápido: acima de 34 px/s a criatura troca o ciclo.
-    const cycle = speed > 34 ? RUN_CYCLE : WALK_CYCLE;
+    // Correr é passo rápido. As criaturas andam entre 20 e 52 px/s conforme o
+    // genoma, então o corte fica em 42: a maioria caminha, e só as ligeiras —
+    // ou quem está fugindo — entram no ciclo de corrida.
+    const cycle = speed > RUN_SPEED ? RUN_CYCLE : WALK_CYCLE;
     return cycle[Math.floor(step) % cycle.length]!;
   }
 

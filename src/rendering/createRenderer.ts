@@ -441,6 +441,18 @@ const HIDDEN_FLAG = 256;
 const TALL_PROP_KINDS = new Set([0, 6, 9]);
 const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
 
+/**
+ * Um quadro de passo a cada tantos pixels andados. Sete dá uma passada por
+ * meio segundo numa criatura de velocidade média — o bastante para ler como
+ * caminhada, sem virar corridinha de desenho animado.
+ */
+const STEPS_PER_PIXEL = 1 / 7;
+/**
+ * A que distância do centro do corpo fica a sola do pé, em fração do tamanho.
+ * É o mesmo número que posiciona a sombra: os dois têm de bater, senão a
+ * criatura descola do chão.
+ */
+const GROUND_CONTACT = 0.42;
 /** O quanto das deformações do corpo sobra, agora que o desenho é à mão. */
 const SQUASH_DAMPING = 0.34;
 const BLINK_DURATION = 0.11;
@@ -460,6 +472,9 @@ interface CreatureSlot {
   seen: number;
   /** Relógio do ciclo de passos, avança com a distância percorrida. */
   step: number;
+  /** Onde ela estava no quadro anterior, para medir o passo de verdade. */
+  lastX: number;
+  lastY: number;
   blinkIn: number;
   blinking: number;
   yawnIn: number;
@@ -1401,8 +1416,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         const cx = px + (creatures.x[i]! - px) * input.alpha;
         const cy = py + (creatures.y[i]! - py) * input.alpha;
         const size = creatures.size[i]!;
+        // Só o eixo x interessa agora, e só para saber para que lado ela olha.
         const dx = creatures.x[i]! - px;
-        const dy = creatures.y[i]! - py;
         const moving = creatures.moving[i] === 1;
         const mood = creatures.mood[i]!;
         const stage = creatures.stage[i]!;
@@ -1411,9 +1426,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         if (!slot) {
           const container = new Container();
           const sprite = new Sprite();
-          // O pé do desenho é a última linha dos 16 pixels: a âncora vai lá,
-          // senão a criatura fica pairando um dedo acima da casa.
-          sprite.anchor.set(0.5, 0.97);
+          // Âncora no pé do desenho — e num valor REDONDO. Com 0,97 a âncora
+          // caía em 15,52 de 16 pixels, e meio pixel de deslocamento borra
+          // pixel art ampliada.
+          sprite.anchor.set(0.5, 1);
           container.addChild(sprite);
           creatureLayer.addChild(container);
           slot = {
@@ -1422,6 +1438,8 @@ export function createRenderer(options: RendererOptions): Renderer {
             facing: 1,
             seen: frameId,
             step: (id % 4) * 0.7,
+            lastX: cx,
+            lastY: cy,
             blinkIn: 1 + (id % 7) * 0.5,
             blinking: 0,
             yawnIn: 6 + (id % 5) * 3,
@@ -1433,9 +1451,18 @@ export function createRenderer(options: RendererOptions): Renderer {
         // Passo: o ciclo avança com a DISTÂNCIA percorrida, não com o relógio.
         // É o que faz o bicho lento arrastar os pés e o apressado trotar, sem
         // nenhuma variável de velocidade na animação.
-        const travelled = Math.hypot(dx, dy);
-        const speed = travelled / Math.max(dt, 1 / 60);
-        if (moving) slot.step += travelled * 0.55;
+        //
+        // A distância é medida entre o QUADRO ANTERIOR e este, na posição já
+        // interpolada. A primeira versão usava `x - prevX`, que é o passo de um
+        // TICK da simulação (20 por segundo) enquanto o desenho roda a 60: a
+        // conta saía três vezes maior, toda criatura parecia estar correndo, e
+        // o ciclo trocava de quadro a cada quadro — de longe, isso não lê como
+        // andar, lê como tremer parado. Era o que estava acontecendo.
+        const movedNow = Math.hypot(cx - slot.lastX, cy - slot.lastY);
+        slot.lastX = cx;
+        slot.lastY = cy;
+        const speed = movedNow / Math.max(dt, 1 / 240);
+        if (moving) slot.step += movedNow * STEPS_PER_PIXEL;
 
         // Piscar e bocejar continuam existindo como RITMO, mesmo sem quadro
         // próprio na folha: o piscar vira um instante de olhos fechados
@@ -1505,11 +1532,19 @@ export function createRenderer(options: RendererOptions): Renderer {
           scale * (1 + (anim.squashY - 1) * give),
         );
         slot.container.rotation = (anim.tilt + yawnTilt) * give * slot.facing;
+        // O PÉ NO CHÃO.
+        //
+        // A posição da criatura no mundo é o centro do corpo, não a sola do
+        // pé — é com o centro que a simulação faz colisão. A sombra sempre foi
+        // desenhada embaixo desse centro, à distância do raio do corpo. Faltava
+        // baixar o desenho a mesma distância: sem isso a criatura ficava com os
+        // pés acima da própria sombra, e era exatamente isso que dava a
+        // impressão de que ela flutuava.
         const bodyX = cx + anim.jitter;
         const bodyY = cy;
         slot.container.position.set(
           isoX(bodyX, bodyY),
-          isoY(bodyX, bodyY) - anim.bob + anim.yOffset,
+          isoY(bodyX, bodyY) + size * GROUND_CONTACT * ISO_SQUASH - anim.bob + anim.yOffset,
         );
         slot.container.zIndex = isoDepth(cx, cy);
 
@@ -1517,11 +1552,11 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         // Poeirinha dos passos.
         if (moving && dustTimer <= 0) {
-          spawnDust(cx, cy + size * 0.42, size);
+          spawnDust(cx, cy + size * GROUND_CONTACT, size);
         }
 
         // Sombra suave.
-        shadowG.ellipse(cx, cy + size * 0.42, size * 0.62, size * 0.26).fill({
+        shadowG.ellipse(cx, cy + size * GROUND_CONTACT, size * 0.62, size * 0.26).fill({
           color: SHADOW_COLOR,
           alpha: 0.24,
         });
