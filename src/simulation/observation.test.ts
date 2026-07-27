@@ -41,13 +41,13 @@ import { PlayerResource } from './player';
  * ordens, e nenhum sistema novo conserta isso.
  */
 
-const WORLD = { width: 600, height: 600 };
+const WORLD = { width: 900, height: 900 };
 const DT = 1 / 20;
 const OBSERVED_MINUTES = 5;
 
 function makeGarden(seed: number): World {
   const world = createWorld(WORLD, seed);
-  spawnCreatures(world, 18);
+  spawnCreatures(world, 34);
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   return world;

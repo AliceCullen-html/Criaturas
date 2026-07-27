@@ -107,6 +107,7 @@ personalidade própria. Nada entra se não servir a isso.
 | B ✅  | Microcomportamentos: canal de **pose** separado do humor, 17 gestos ociosos |
 | — ✅  | Celular: toque, dois dedos para câmera, layout responsivo; pedras que prendem |
 | C ✅  | Pequenas histórias: camada de **rotinas** encadeadas; criaturas carregam objetos |
+| — ✅  | Vista isométrica 2:1 e jardim maior (900×900), sem tocar na simulação        |
 | D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
@@ -123,6 +124,26 @@ Critérios de aceitação da fase, verificados por teste:
   criatura por cinco minutos, escreve a vida dela em frases e cobra variedade —
   e compara o terço mais preguiçoso com o terço mais agitado do jardim para
   provar que a personalidade aparece no comportamento, não só na ficha.
+
+### A vista isométrica mora só no renderer
+
+A simulação continua num plano cartesiano visto de cima: `Transform` guarda
+`x`/`y` do mundo, distâncias são euclidianas, colisão é círculo contra círculo.
+Nada disso muda por causa da perspectiva. A projeção (`rendering/iso.ts`) é uma
+troca de eixos aplicada na hora de desenhar, e o desenho se divide em duas
+famílias:
+
+- **o chão** (grama, areia, água, sombras, poças) num container com a matriz
+  isométrica — quadrados viram losangos de graça;
+- **o que fica em pé** (criaturas, árvores, objetos) num container sem
+  transformação, onde só a _posição_ é projetada. Um sprite inclinado 45° não
+  seria isométrico, seria uma criatura tombada.
+
+Duas consequências valem o registro. A profundidade passa a ser `x + y`, não
+`y` — é o que impede a árvore do fundo de cobrir a criatura da frente, e por
+isso o cenário virou parte da mesma camada ordenada das criaturas. E o clique
+precisa do inverso exato da projeção (`unIso`): sem ele o jogador acerta um
+lugar e o jogo entende outro.
 
 ### Invariantes de geração do mundo
 

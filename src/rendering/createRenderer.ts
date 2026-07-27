@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Sprite, TilingSprite, type Texture } from 'pixi.js';
+import { Application, Container, Graphics, Matrix, Sprite, TilingSprite, type Texture } from 'pixi.js';
 import { POSE, clamp, createRng, lerp } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
 import {
@@ -26,6 +26,7 @@ import { makeHandTextures, type HandState } from './textures/hand';
 import { makeAmbientTextures, makeRainTextures } from './textures/ambient';
 import { makePropTextures } from './textures/props';
 import { GestureRecognizer, type GestureHandlers } from './gestures';
+import { ISO_MATRIX, ISO_SQUASH, isoDepth, isoX, isoY, unIso } from './iso';
 
 export interface RendererOptions {
   worldWidth: number;
@@ -496,7 +497,16 @@ export function createRenderer(options: RendererOptions): Renderer {
   let leafTextures: Texture[] = [];
   let scenery: SceneryTextures | null = null;
 
-  const camera = { x: options.worldWidth / 2, y: options.worldHeight / 2, zoom: 1 };
+  /**
+   * A câmera vive em coordenadas JÁ PROJETADAS. Guardá-la em cartesiano faria
+   * o arrasto andar na diagonal errada: o jogador puxa para a direita e o mundo
+   * desce.
+   */
+  const camera = {
+    isoX: isoX(options.worldWidth / 2, options.worldHeight / 2),
+    isoY: isoY(options.worldWidth / 2, options.worldHeight / 2),
+    zoom: 1,
+  };
   let fitZoom = 1;
   let cameraReady = false;
 
@@ -543,7 +553,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     sprite.anchor.set(0.5);
     sprite.alpha = 0.5;
     sprite.scale.set(size / 22);
-    sprite.position.set(x, y);
+    sprite.position.set(isoX(x, y), isoY(x, y));
     particleLayer.addChild(sprite);
     dust.push({ sprite, life: 0.45, vx: (Math.random() - 0.5) * 6, vy: -4 - Math.random() * 4 });
   }
@@ -563,8 +573,15 @@ export function createRenderer(options: RendererOptions): Renderer {
   let touchMode = false;
   const pickSlack = (): number => (touchMode ? 1.7 : 1);
 
-  const screenToWorldX = (sx: number, sw: number): number => (sx - sw / 2) / camera.zoom + camera.x;
-  const screenToWorldY = (sy: number, sh: number): number => (sy - sh / 2) / camera.zoom + camera.y;
+  /**
+   * Tela → mundo, desfazendo a câmera E a projeção isométrica.
+   *
+   * Sem o segundo passo o clique cai num lugar e a criatura está em outro: a
+   * mão do jogador deixaria de coincidir com o que ele enxerga, e todo o jogo
+   * (que é só gesto) desmoronaria.
+   */
+  const screenToWorld = (sx: number, sy: number, sw: number, sh: number): { x: number; y: number } =>
+    unIso((sx - sw / 2) / camera.zoom + camera.isoX, (sy - sh / 2) / camera.zoom + camera.isoY);
 
   function pickCreature(worldX: number, worldY: number): number | null {
     const buffer = lastCreatures;
@@ -651,19 +668,23 @@ export function createRenderer(options: RendererOptions): Renderer {
     const toWorld = (event: PointerEvent): { x: number; y: number } => {
       const rect = canvas.getBoundingClientRect();
       return {
-        x: screenToWorldX(event.clientX - rect.left, app?.screen.width ?? 0),
-        y: screenToWorldY(event.clientY - rect.top, app?.screen.height ?? 0),
+        ...screenToWorld(
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          app?.screen.width ?? 0,
+          app?.screen.height ?? 0,
+        ),
       };
     };
 
     /** Zoom mantendo fixo o ponto do mundo sob (sx, sy) na tela. */
     const zoomAt = (sx: number, sy: number, factor: number): void => {
       if (!app) return;
-      const worldX = screenToWorldX(sx, app.screen.width);
-      const worldY = screenToWorldY(sy, app.screen.height);
+      const anchorX = (sx - app.screen.width / 2) / camera.zoom + camera.isoX;
+      const anchorY = (sy - app.screen.height / 2) / camera.zoom + camera.isoY;
       camera.zoom = clamp(camera.zoom * factor, fitZoom * 0.8, fitZoom * 10);
-      camera.x = worldX - (sx - app.screen.width / 2) / camera.zoom;
-      camera.y = worldY - (sy - app.screen.height / 2) / camera.zoom;
+      camera.isoX = anchorX - (sx - app.screen.width / 2) / camera.zoom;
+      camera.isoY = anchorY - (sy - app.screen.height / 2) / camera.zoom;
     };
 
     const startPinch = (): void => {
@@ -700,8 +721,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         panning = true;
         panStartX = event.clientX;
         panStartY = event.clientY;
-        panCamX = camera.x;
-        panCamY = camera.y;
+        panCamX = camera.isoX;
+        panCamY = camera.isoY;
         return;
       }
 
@@ -728,8 +749,8 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     canvas.addEventListener('pointermove', (event) => {
       if (panning) {
-        camera.x = panCamX - (event.clientX - panStartX) / camera.zoom;
-        camera.y = panCamY - (event.clientY - panStartY) / camera.zoom;
+        camera.isoX = panCamX - (event.clientX - panStartX) / camera.zoom;
+        camera.isoY = panCamY - (event.clientY - panStartY) / camera.zoom;
         return;
       }
 
@@ -744,8 +765,8 @@ export function createRenderer(options: RendererOptions): Renderer {
 
           // Arrastar com dois dedos move a câmera...
           if (app) {
-            camera.x -= (midX - pinchMidX) / camera.zoom;
-            camera.y -= (midY - pinchMidY) / camera.zoom;
+            camera.isoX -= (midX - pinchMidX) / camera.zoom;
+            camera.isoY -= (midY - pinchMidY) / camera.zoom;
           }
           // ...e afastá-los ou juntá-los dá zoom, ancorado no meio deles.
           if (pinchDistance > 0 && distance > 0) zoomAt(midX, midY, distance / pinchDistance);
@@ -868,8 +889,6 @@ export function createRenderer(options: RendererOptions): Renderer {
       const water = new Container();
       const reflections = new Container();
       const hiddenItems = new Container();
-      const decorations = new Container();
-      decorations.sortableChildren = true;
       const resources = new Container();
       const groundProps = new Container();
       const ripplesG = new Graphics();
@@ -887,7 +906,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       const particles = new Container();
       const hand = new Sprite(handTextures.open);
       hand.anchor.set(0.25, 0.15);
-      root.addChild(
+      // O CHÃO recebe a matriz isométrica: tudo que for desenhado aqui usa
+      // coordenadas cartesianas e sai projetado em losango, de graça.
+      const ground = new Container();
+      ground.setFromMatrix(
+        new Matrix(ISO_MATRIX.a, ISO_MATRIX.b, ISO_MATRIX.c, ISO_MATRIX.d, 0, 0),
+      );
+      ground.addChild(
         grassTile,
         patches,
         sand,
@@ -895,22 +920,20 @@ export function createRenderer(options: RendererOptions): Renderer {
         reflections,
         ripplesG,
         puddles,
-        groundProps,
-        hiddenItems,
-        decorations,
-        resources,
         shadows,
         selection,
-        creatures,
-        itemsLayer,
-        ambient,
-        particles,
-        rain,
-        tint,
-        glow,
-        rainbow,
-        hand,
       );
+
+      // O QUE FICA EM PÉ não é inclinado — só a POSIÇÃO é projetada. Uma
+      // criatura girada 45 graus não é isométrica, é uma criatura tombada.
+      const upright = new Container();
+      upright.sortableChildren = true;
+      // Cenário e criaturas na MESMA camada ordenada. Em vista isométrica, uma
+      // árvore que está atrás não pode ser desenhada por cima de quem está na
+      // frente — e com camadas separadas isso era inevitável.
+      upright.addChild(groundProps, hiddenItems, resources, creatures, itemsLayer);
+
+      root.addChild(ground, upright, ambient, particles, rain, tint, glow, rainbow, hand);
       instance.stage.addChild(root);
 
       // Partículas de folhas.
@@ -949,7 +972,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       worldLayer = root;
       sandLayer = sand;
       waterLayer = water;
-      decorationLayer = decorations;
+      // `decorations` deixou de ser camada própria: aponta para a ordenada.
+      decorationLayer = creatures;
       resourceLayer = resources;
       shadowG = shadows;
       selectionG = selection;
@@ -1043,8 +1067,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         // Âncora no pé do tronco: é em torno dele que a árvore balança.
         sprite.anchor.set(0.5, 0.95);
         sprite.scale.set(PIXEL_SCALE);
-        sprite.position.set(piece.x, piece.y);
-        sprite.zIndex = piece.y;
+        sprite.position.set(isoX(piece.x, piece.y), isoY(piece.x, piece.y));
+        sprite.zIndex = isoDepth(piece.x, piece.y);
         decorationLayer.addChild(sprite);
         if (piece.kind === 'tree') {
           treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
@@ -1075,11 +1099,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         if (!variants || variants.length === 0) continue;
         const sprite = new Sprite(variants[prop.variant % variants.length]!);
         sprite.anchor.set(0.5, 0.9);
-        sprite.position.set(prop.x, prop.y);
+        sprite.position.set(isoX(prop.x, prop.y), isoY(prop.x, prop.y));
         if (isTall(prop.kind)) {
           // Vegetação alta divide camada com as criaturas: quem está mais
           // abaixo na tela aparece na frente. É o que dá volume ao mundo.
-          sprite.zIndex = prop.y;
+          sprite.zIndex = isoDepth(prop.x, prop.y);
           creatureLayer.addChild(sprite);
           tallProps.push({ sprite, view: prop });
         } else {
@@ -1119,7 +1143,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (!particleLayer || !feedbackTextures || feedback.length > 40) return;
       const sprite = new Sprite(feedbackTextures[kind]);
       sprite.anchor.set(0.5, 1);
-      sprite.position.set(worldX, worldY);
+      sprite.position.set(isoX(worldX, worldY), isoY(worldX, worldY));
       particleLayer.addChild(sprite);
       feedback.push({ sprite, life: 1.4, maxLife: 1.4 });
     },
@@ -1150,7 +1174,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       const screenHeight = app.screen.height;
 
       if (!cameraReady) {
-        fitZoom = Math.min(screenWidth / options.worldWidth, screenHeight / options.worldHeight);
+        // Projetado, o mundo mede 2×largura por (largura+altura)/2 — não cabe
+        // pela mesma conta de antes.
+        const spanX = (options.worldWidth + options.worldHeight) * 1;
+        const spanY = (options.worldWidth + options.worldHeight) * ISO_SQUASH;
+        fitZoom = Math.min(screenWidth / spanX, screenHeight / spanY);
         camera.zoom = fitZoom * 2.4;
         cameraReady = true;
       }
@@ -1159,8 +1187,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         const buffer = input.creatures;
         for (let i = 0; i < buffer.count; i++) {
           if (buffer.id[i] === input.followId) {
-            camera.x = lerp(buffer.prevX[i]!, buffer.x[i]!, input.alpha);
-            camera.y = lerp(buffer.prevY[i]!, buffer.y[i]!, input.alpha);
+            const followX = lerp(buffer.prevX[i]!, buffer.x[i]!, input.alpha);
+            const followY = lerp(buffer.prevY[i]!, buffer.y[i]!, input.alpha);
+            camera.isoX = isoX(followX, followY);
+            camera.isoY = isoY(followX, followY);
             break;
           }
         }
@@ -1168,8 +1198,8 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       worldLayer.scale.set(camera.zoom);
       worldLayer.position.set(
-        screenWidth / 2 - camera.x * camera.zoom,
-        screenHeight / 2 - camera.y * camera.zoom,
+        screenWidth / 2 - camera.isoX * camera.zoom,
+        screenHeight / 2 - camera.isoY * camera.zoom,
       );
 
       // Água animada. Cada célula anda no seu próprio compasso: sem isso o
@@ -1196,10 +1226,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         sprite.texture = resourceTextures[variant]!;
         const px = plants.prevX[i]!;
         const py = plants.prevY[i]!;
-        sprite.position.set(
-          px + (plants.x[i]! - px) * input.alpha,
-          py + (plants.y[i]! - py) * input.alpha,
-        );
+        const plantX = px + (plants.x[i]! - px) * input.alpha;
+        const plantY = py + (plants.y[i]! - py) * input.alpha;
+        sprite.position.set(isoX(plantX, plantY), isoY(plantX, plantY));
+        sprite.zIndex = isoDepth(plantX, plantY);
         sprite.scale.set(clamp(plants.radius[i]! * 0.16, 0.35, 1.15));
         sprite.visible = true;
       }
@@ -1323,7 +1353,13 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         slot.container.scale.set(slot.facing * scale * anim.squashX, scale * anim.squashY);
         slot.container.rotation = (anim.tilt + yawnTilt) * slot.facing;
-        slot.container.position.set(cx + anim.jitter, cy - anim.bob + anim.yOffset);
+        const bodyX = cx + anim.jitter;
+        const bodyY = cy;
+        slot.container.position.set(
+          isoX(bodyX, bodyY),
+          isoY(bodyX, bodyY) - anim.bob + anim.yOffset,
+        );
+        slot.container.zIndex = isoDepth(cx, cy);
 
         // O olhar segue a direção do movimento (deslocando o rosto 1 px).
         const gaze = Math.hypot(dx, dy) > 0.05 ? 1 : 0;
@@ -1362,8 +1398,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (selectedScreenCb) {
         if (selFound) {
           selectedScreenCb(
-            selX * camera.zoom + screenWidth / 2 - camera.x * camera.zoom,
-            (selY - selSize * 2.4) * camera.zoom + screenHeight / 2 - camera.y * camera.zoom,
+            isoX(selX, selY) * camera.zoom + screenWidth / 2 - camera.isoX * camera.zoom,
+            (isoY(selX, selY) - selSize * 2.4) * camera.zoom +
+              screenHeight / 2 -
+              camera.isoY * camera.zoom,
             true,
           );
         } else {
@@ -1394,10 +1432,9 @@ export function createRenderer(options: RendererOptions): Renderer {
           sprite.texture = resourceTextures[items.variant[i]! % resourceTextures.length]!;
           const px = items.prevX[i]!;
           const py = items.prevY[i]!;
-          sprite.position.set(
-            px + (items.x[i]! - px) * input.alpha,
-            py + (items.y[i]! - py) * input.alpha,
-          );
+          const itemX = px + (items.x[i]! - px) * input.alpha;
+          const itemY = py + (items.y[i]! - py) * input.alpha;
+          sprite.position.set(isoX(itemX, itemY), isoY(itemX, itemY));
           sprite.scale.set(clamp(items.radius[i]! * 0.14, 0.4, 1.2));
           // Frutas passadas escurecem: dá para ver que estão apodrecendo.
           const packed = items.color[i]!;
@@ -1430,7 +1467,10 @@ export function createRenderer(options: RendererOptions): Renderer {
           // Tamanho constante na tela, independente do zoom.
           handSprite.scale.set(1 / camera.zoom);
           const wobble = state === 'petting' ? Math.sin(elapsed * 9) * 1.5 : 0;
-          handSprite.position.set(handWorld.x, handWorld.y + wobble / camera.zoom);
+          handSprite.position.set(
+            isoX(handWorld.x, handWorld.y),
+            isoY(handWorld.x, handWorld.y) + wobble / camera.zoom,
+          );
         }
       }
 
@@ -1526,7 +1566,10 @@ export function createRenderer(options: RendererOptions): Renderer {
           // Pousado = asas fechadas; voando = bate asas.
           const frame = being.resting > 0 ? 1 : Math.sin(being.phase) > 0 ? 0 : 1;
           sprite.texture = frames[frame]!;
-          sprite.position.set(being.x, being.y - (being.resting > 0 ? 0 : 3));
+          sprite.position.set(
+            isoX(being.x, being.y),
+            isoY(being.x, being.y) - (being.resting > 0 ? 0 : 3),
+          );
           sprite.visible = true;
           // Na chuva os insetos se recolhem; vaga-lumes só aparecem à noite,
           // pulsando devagar.
@@ -1623,7 +1666,7 @@ export function createRenderer(options: RendererOptions): Renderer {
           leaf.y = -8;
           leaf.x = Math.random() * options.worldWidth;
         }
-        leaf.sprite.position.set(drawX, leaf.y);
+        leaf.sprite.position.set(isoX(drawX, leaf.y), isoY(drawX, leaf.y));
         leaf.sprite.rotation += leaf.spin * dt;
       }
     },

@@ -35,8 +35,8 @@ import { PlayerResource } from './player';
  * nenhuma história social tem como acontecer.
  */
 
-const WORLD = { width: 600, height: 600 };
-const CREATURES = 18;
+const WORLD = { width: 900, height: 900 };
+const CREATURES = 34;
 const DT = 1 / 20;
 const MINUTES = 30;
 
@@ -127,7 +127,10 @@ describe('o jardim se sustenta', () => {
       // vale momentâneo num jardim que volta a 30 não é colapso — o que este
       // teste tem de pegar é o mundo que MORRE.
       expect(lowest, `extinção — ${report}`).toBeGreaterThanOrEqual(6);
-      expect(highest, `superpopulação — ${report}`).toBeLessThanOrEqual(40);
+      // O teto acompanha o tamanho do mundo, como todo o resto: um jardim de
+      // 900×900 sustenta mais bicho que um de 600×600, e um número fixo aqui
+      // só denunciaria que o teste envelheceu junto com o mundo.
+      expect(highest, `superpopulação — ${report}`).toBeLessThanOrEqual(CREATURES * 2);
       expect(company, `solidão — ${report}`).toBeGreaterThan(0.7);
     });
   }
