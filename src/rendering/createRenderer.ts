@@ -1556,6 +1556,23 @@ export function createRenderer(options: RendererOptions): Renderer {
         screenHeight / 2 - camera.isoY * camera.zoom,
       );
 
+      // O PEDAÇO DE MUNDO QUE ESTÁ NA TELA, em coordenadas desta camada.
+      //
+      // Existe por causa de um defeito que só aparecia à noite: a escuridão era
+      // um retângulo de (0,0) até (largura, altura) do mundo — coordenadas NÃO
+      // projetadas. Depois que a vista virou isométrica, o mundo desenhado é um
+      // losango que vai de -altura a +largura no eixo X, e aquele retângulo
+      // passou a cobrir um pedaço torto da tela: metade do jardim anoitecia e a
+      // outra metade ficava em pleno dia, separadas por uma linha reta.
+      //
+      // Nada que cobre a tela — a noite, a chuva — pertence a um lugar do
+      // mundo. Essas coisas se desenham AQUI, na vista, e por isso continuam
+      // certas em qualquer zoom e em qualquer canto para onde a câmera vá.
+      const viewWidth = screenWidth / camera.zoom;
+      const viewHeight = screenHeight / camera.zoom;
+      const viewLeft = camera.isoX - viewWidth / 2;
+      const viewTop = camera.isoY - viewHeight / 2;
+
       // Água animada. Cada célula anda no seu próprio compasso: sem isso o
       // lago inteiro pisca junto e vira uma bandeira listrada.
       if (waterFrames.length > 0 && waterSprites.length > 0) {
@@ -2066,8 +2083,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         const daylight = 1 - input.darkness;
         if (input.rainbow > 0.01 && daylight > 0.25) {
           const colors = [0xef6b6b, 0xf0a94a, 0xf2e05a, 0x6fc46a, 0x5aa8e0, 0x9a7ad6];
-          const cx = options.worldWidth * 0.5;
-          const cy = options.worldHeight * 0.78;
+          // No meio do jardim PROJETADO. Com as coordenadas cruas do mundo o
+          // arco nascia fora do losango, como acontecia com a noite.
+          const cx = isoX(options.worldWidth / 2, options.worldHeight / 2);
+          const cy = isoY(options.worldWidth * 0.72, options.worldHeight * 0.72);
           // Círculo achatado: desenhamos meia circunferência e esprememos o Y.
           rainbowG.scale.set(1, RAINBOW_SQUASH);
           rainbowG.position.set(0, cy * (1 - RAINBOW_SQUASH));
@@ -2128,8 +2147,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         }
       }
 
-      // Chuva: gotas caindo + escurecimento do mundo.
-      if (rainLayer && weatherTint && rainTextures.length > 0) {
+      // Chuva: gotas caindo na frente da câmera, não num quadrado do mapa.
+      if (rainLayer && rainTextures.length > 0) {
         const wanted = Math.round(input.rain * 170);
         while (rainDrops.length < wanted) {
           const sprite = new Sprite(rainTextures[rainDrops.length % rainTextures.length]!);
@@ -2137,8 +2156,8 @@ export function createRenderer(options: RendererOptions): Renderer {
           rainLayer.addChild(sprite);
           rainDrops.push({
             sprite,
-            x: Math.random() * options.worldWidth,
-            y: Math.random() * options.worldHeight,
+            x: viewLeft + Math.random() * viewWidth,
+            y: viewTop + Math.random() * viewHeight,
             speed: 420 + Math.random() * 260,
           });
         }
@@ -2150,21 +2169,35 @@ export function createRenderer(options: RendererOptions): Renderer {
         for (const drop of rainDrops) {
           drop.y += drop.speed * dt;
           drop.x += 40 * dt;
-          if (drop.y > options.worldHeight) {
-            drop.y = -10;
-            drop.x = Math.random() * options.worldWidth;
+          // Saiu da vista — caiu embaixo, ou a câmera andou e deixou a gota
+          // para trás: volta pelo topo. Chuva é o que se vê chovendo.
+          const out =
+            drop.y > viewTop + viewHeight ||
+            drop.x > viewLeft + viewWidth ||
+            drop.x < viewLeft ||
+            drop.y < viewTop - viewHeight;
+          if (out) {
+            drop.y = viewTop - 10;
+            drop.x = viewLeft + Math.random() * viewWidth;
           }
           drop.sprite.position.set(drop.x, drop.y);
         }
+      }
 
-        // A noite e a chuva escurecem o mundo pela mesma camada. A noite tem de
-        // ser noite de verdade: sem isso os vaga-lumes não aparecem.
+      // A NOITE. Escurece a tela inteira, junto com a chuva, pela mesma camada.
+      //
+      // Fica fora do bloco da chuva de propósito: antes a escuridão só era
+      // desenhada quando havia textura de gota carregada, então um tropeço no
+      // carregamento das gotas levava junto o dia e a noite do jogo.
+      if (weatherTint) {
         weatherTint.clear();
         const nightAlpha = input.darkness * 0.78;
         const rainAlpha = input.rain * 0.4;
         if (nightAlpha + rainAlpha > 0.01) {
+          // Uma margem de folga: a vista é recalculada por quadro, e sem ela um
+          // arredondamento deixaria um fio de dia na borda da tela.
           weatherTint
-            .rect(0, 0, options.worldWidth, options.worldHeight)
+            .rect(viewLeft - 8, viewTop - 8, viewWidth + 16, viewHeight + 16)
             .fill({ color: NIGHT_COLOR, alpha: Math.min(0.84, nightAlpha + rainAlpha) });
         }
       }

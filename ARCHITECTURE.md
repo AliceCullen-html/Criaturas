@@ -208,6 +208,26 @@ isso o cenário virou parte da mesma camada ordenada das criaturas. E o clique
 precisa do inverso exato da projeção (`unIso`): sem ele o jogador acerta um
 lugar e o jogo entende outro.
 
+### O que cobre a tela não pertence ao mundo
+
+A contrapartida da vista isométrica, aprendida com um defeito que só aparecia à
+noite: **a escuridão da noite era um retângulo desenhado de (0,0) até (largura,
+altura) do mundo**, em coordenadas não projetadas. Depois da projeção, o que se
+vê é um losango que vai de `-altura` a `+largura` no eixo X — e aquele retângulo
+passou a cobrir um pedaço torto da tela. Metade do jardim anoitecia; a outra
+metade ficava em pleno dia; entre as duas, uma linha reta vertical.
+
+A regra que saiu daí: o que existe **num lugar** do mundo (uma poça, uma sombra)
+se desenha em coordenadas do mundo; o que **cobre a tela** (a noite, a chuva) se
+desenha na VISTA — o retângulo que a câmera enxerga, recalculado por quadro a
+partir do zoom e do centro. Assim continua certo em qualquer zoom e em qualquer
+canto para onde a câmera vá.
+
+Pela mesma razão, as gotas de chuva deixaram de nascer num quadrado do mapa e
+passam a cair na frente da câmera, e o arco-íris nasce no centro PROJETADO do
+jardim. Medido depois da correção: ao meio-dia com chuva a tela escurece 28%; à
+meia-noite, 54% — uniformemente, sem costura.
+
 ### O jardim é um tabuleiro
 
 O chão é feito de casas quadradas de 50 pixels (`core/grid.ts`), e cada árvore,
