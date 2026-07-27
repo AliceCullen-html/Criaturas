@@ -52,6 +52,18 @@ export class World {
     return store as ComponentStore<T>;
   }
 
+  /**
+   * O componente chegou a ser registrado neste mundo?
+   *
+   * Um mundo recém-gerado tem terreno, plantas e cenário, mas ainda não tem
+   * criaturas — elas entram depois, com `spawnCreatures`. Comandos que só
+   * querem AVISAR as criaturas (uma pedra caindo, uma muda nascendo) precisam
+   * poder perguntar antes, em vez de estourar num mundo legítimo.
+   */
+  hasComponent<T>(type: ComponentType<T>): boolean {
+    return this.stores.has(type.name);
+  }
+
   store<T>(type: ComponentType<T>): ComponentStore<T> {
     const store = this.stores.get(type.name);
     if (!store) {

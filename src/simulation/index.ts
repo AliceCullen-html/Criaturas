@@ -46,4 +46,6 @@ export {
   attractBirds,
 } from './worldActions';
 export type { PokeResult } from './worldActions';
+export { dropScenery, plantSeed, removeScenery } from './sceneryActions';
+export type { SceneryDrop, SceneryDropKind } from './sceneryActions';
 export { isBaby, isElder, lifeStage, growthScale } from './age';

@@ -21,9 +21,18 @@ export {
   BOULDER_RADIUS,
 } from './items';
 export type { ItemKind } from './items';
-export { SceneryResource, generateScenery } from './scenery';
+export {
+  SceneryResource,
+  generateScenery,
+  tileOnLand,
+  pieceAtTile,
+  tileAt,
+  placeOnTile,
+  makePiece,
+} from './scenery';
 export type { SceneryPiece, SceneryKind } from './scenery';
 export { itemSystem } from './systems/itemSystem';
+export { sceneryGrowthSystem } from './systems/sceneryGrowthSystem';
 export { PROP, PropsResource, generateProps, propSystem, isTallProp, swayPropsNear } from './props';
 export type { Prop, PropKind } from './props';
 export { WeatherResource, createWeather, weatherSystem } from './weather';

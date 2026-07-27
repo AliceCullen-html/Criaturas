@@ -33,6 +33,12 @@ export interface GestureHandlers {
   onHandMove: (x: number, y: number, inside: boolean) => void;
   /** Clique numa árvore/pedra/arbusto do cenário. */
   onPokeScenery: (kind: string, index: number) => void;
+  /** Segurou e arrastou uma peça do cenário: ela saiu do chão. */
+  onGrabScenery: (index: number) => void;
+  /** A peça do cenário acompanha a mão. */
+  onDragScenery: (index: number, x: number, y: number) => void;
+  /** Largou a peça: ela procura uma casa livre onde pousar. */
+  onDropScenery: (index: number, x: number, y: number) => void;
   /** Clique no chão: sacode a vegetação dali. */
   onPokeGround: (x: number, y: number) => void;
   /** Clique na água: ondas e peixes fugindo. */
@@ -49,6 +55,14 @@ export interface WorldProbe {
 
 const DOUBLE_CLICK_MS = 320;
 const HOLD_TO_GRAB_MS = 130;
+/**
+ * Arrancar cenário custa mais que pegar uma fruta.
+ *
+ * Uma árvore é pesada e o toque nela já significava outra coisa — sacudir. Se
+ * ela saísse do chão com o mesmo tempo de uma maçã, ninguém conseguiria mais
+ * sacudir uma árvore sem levá-la embora junto.
+ */
+const HOLD_TO_LIFT_MS = 340;
 const OBSERVE_MS = 700;
 const PET_SPEED_MAX = 260; // px/s no mundo: acima disso não é carinho
 const ROUGH_SPEED = 620;
@@ -74,6 +88,12 @@ export class GestureRecognizer {
   private moved = false;
 
   private heldItem: number | null = null;
+  /**
+   * Peça do cenário na mão. Separada de `heldItem` de propósito: um objeto é
+   * uma entidade do mundo e pode ser arremessado ou oferecido; uma árvore é
+   * mobília, e a única coisa que se faz com ela é pousá-la noutra casa.
+   */
+  private heldScenery: number | null = null;
   private pettingId: number | null = null;
   private petTime = 0;
   private petRemembered = false;
@@ -183,6 +203,13 @@ export class GestureRecognizer {
 
     if (Math.hypot(x - this.downX, y - this.downY) > DRAG_THRESHOLD) this.moved = true;
 
+    // Já carregando cenário: a árvore ou pedra acompanha a mão.
+    if (this.heldScenery !== null) {
+      this.state = 'holding';
+      this.handlers.onDragScenery(this.heldScenery, x, y);
+      return;
+    }
+
     // Já carregando: o objeto acompanha a mão.
     if (this.heldItem !== null) {
       this.state = 'holding';
@@ -219,6 +246,18 @@ export class GestureRecognizer {
         this.heldItem = item;
         this.state = 'holding';
         this.handlers.onGrab(item);
+        return;
+      }
+    }
+
+    // Nada solto ali, mas há uma árvore ou pedra: segurando mais um pouco,
+    // ela cede e vem junto.
+    if (this.moved && time - this.downTime > HOLD_TO_LIFT_MS) {
+      const piece = this.probe.sceneryAt(this.downX, this.downY);
+      if (piece) {
+        this.heldScenery = piece.index;
+        this.state = 'holding';
+        this.handlers.onGrabScenery(piece.index);
       }
     }
   }
@@ -226,7 +265,12 @@ export class GestureRecognizer {
   pointerUp(x: number, y: number, time: number, button: number): void {
     if (button !== 0) return;
 
-    if (this.heldItem !== null) {
+    if (this.heldScenery !== null) {
+      this.handlers.onDropScenery(this.heldScenery, x, y);
+      this.heldScenery = null;
+      this.state = 'dropping';
+      this.dropAnim = 0.25;
+    } else if (this.heldItem !== null) {
       this.handlers.onRelease(this.heldItem, x, y, this.velX, this.velY);
       this.heldItem = null;
       this.state = 'dropping';
@@ -264,6 +308,12 @@ export class GestureRecognizer {
   }
 
   pointerLeave(): void {
+    // Sair da tela carregando uma árvore a pousaria em lugar nenhum: ela é
+    // largada onde o cursor passou por último, e a casa decide o resto.
+    if (this.heldScenery !== null) {
+      this.handlers.onDropScenery(this.heldScenery, this.lastX, this.lastY);
+      this.heldScenery = null;
+    }
     this.down = false;
     this.pettingId = null;
     this.state = 'open';
@@ -281,6 +331,12 @@ export class GestureRecognizer {
     if (this.heldItem !== null) {
       this.handlers.onRelease(this.heldItem, this.lastX, this.lastY, 0, 0);
       this.heldItem = null;
+    }
+    // A árvore também é pousada, não abandonada no ar: o segundo dedo vira
+    // câmera, e o que estava na mão precisa terminar em algum lugar.
+    if (this.heldScenery !== null) {
+      this.handlers.onDropScenery(this.heldScenery, this.lastX, this.lastY);
+      this.heldScenery = null;
     }
     this.down = false;
     this.moved = false;

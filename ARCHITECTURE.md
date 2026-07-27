@@ -108,6 +108,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Celular: toque, dois dedos para câmera, layout responsivo; pedras que prendem |
 | C ✅  | Pequenas histórias: camada de **rotinas** encadeadas; criaturas carregam objetos |
 | — ✅  | Vista isométrica 2:1 e jardim maior (900×900), sem tocar na simulação        |
+| — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
 | D     | Vida social e ninhos: amigos, desafetos, esperar, dormir junto, luto      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
@@ -145,6 +146,30 @@ isso o cenário virou parte da mesma camada ordenada das criaturas. E o clique
 precisa do inverso exato da projeção (`unIso`): sem ele o jogador acerta um
 lugar e o jogo entende outro.
 
+### O jardim é um tabuleiro
+
+O chão é feito de casas quadradas de 50 pixels (`core/grid.ts`), e cada árvore,
+pedra ou moita ocupa **uma casa inteira**. A grade mora em `@core` pela mesma
+razão que as poses: é o único vocabulário que a simulação e o renderer têm de
+ler igual, e nenhum dos dois pode importar o outro.
+
+A grade governa só o cenário. As criaturas continuam contínuas — andam em ponto
+flutuante, cortam casas pelo meio e não sabem que elas existem. Nada ficou
+sólido por causa da grade: uma árvore não é parede.
+
+O que a casa habilita é a MOBÍLIA. Segurando um instante a mais que o necessário
+para sacudir, a árvore ou a pedra sai do chão, acompanha a mão e pousa noutra
+casa; se a casa estiver ocupada ou molhada, a peça volta para onde estava. E uma
+semente pousada com cuidado numa casa vazia vira muda — atirada, continua sendo
+semente rolando pelo chão, porque plantar é um gesto, não um resultado. A muda
+leva dois minutos e meio para crescer e só então dá fruta.
+
+Do lado do desenho, o tabuleiro sai de graça: as casas são **quadrados**
+desenhados dentro do container do chão, que já carrega a matriz isométrica. Não
+há nenhuma conta de losango no renderer — o que dá a cara de piso é o
+acabamento das bordas, porque as duas bordas "da frente" do quadrado projetado
+viram as arestas iluminadas do losango.
+
 ### Invariantes de geração do mundo
 
 O jardim é sorteado, mas não pode sortear um mundo inviável. A geração
@@ -155,7 +180,24 @@ O jardim é sorteado, mas não pode sortear um mundo inviável. A geração
   pode consumir a área dela mesma; se desconectasse um pedaço, ela não vai ali.
   Encurralar continua possível — mas só com as mãos de quem joga.
 - **Ninguém nasce em ilha** (`spawnCreatures`): criaturas só surgem na maior
-  região contínua.
+  região contínua, e a até 200 pixels de água.
+- **Uma peça por casa** (`scenery.ts`): o cenário nasce alinhado à grade, nunca
+  dentro do lago, nunca encostado noutra peça.
+
+### A sede precisa de memória, não só de vista
+
+Um achado que vale ficar registrado, porque quase não aparecia. A criatura só
+recebia a opção de beber quando havia água **dentro do campo de visão**. Como o
+lago fica longe da maior parte do jardim, uma criatura com sede máxima
+simplesmente não tinha "beber" na lista de opções — e morria brincando, com o
+lago a duzentos pixels. Medido em cinco minutos de simulação: **28 das 34
+criaturas iniciais** morriam de sede sem jamais terem ido à água.
+
+O alcance da água passou a ser `visão + sede × 700`. Bicho nenhum precisa VER o
+bebedouro para saber onde ele fica; satisfeita, a criatura só repara na água à
+vista; morrendo de sede, ela sabe atravessar o jardim. Com isso o jardim deixou
+de encolher no primeiro minuto: a população **cresce** de 34 para ~60 em trinta
+minutos, e a companhia subiu de 92% para 96–99%.
 
 ### Rumo à v1.0
 

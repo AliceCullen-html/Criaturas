@@ -7,6 +7,16 @@ export * from './vector2';
 export * from './math';
 export { SpatialHash } from './spatialHash';
 export { CreatureMemory, subjects } from './memory';
+export {
+  TILE,
+  tileColOf,
+  tileRowOf,
+  tileCenterX,
+  tileCenterY,
+  tileCols,
+  tileRows,
+  tileIndex,
+} from './grid';
 export { POSE, POSE_COUNT, POSE_DURATION, POSE_NAMES } from './poses';
 export type { PoseId } from './poses';
 export type { MemorySubject, MemoryTrace, Episode, EpisodeInput } from './memory';

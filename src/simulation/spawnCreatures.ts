@@ -1,9 +1,33 @@
 import type { World } from '@engine';
 import { registerCreatureComponents, spawnCreature } from '@creatures';
-import { BOULDER_RADIUS, Item, TerrainResource, makeMainlandTest, type Blocker } from '@world';
+import {
+  BOULDER_RADIUS,
+  Item,
+  TerrainResource,
+  findNearestWater,
+  makeMainlandTest,
+  type Blocker,
+} from '@world';
 import { Transform } from '@engine';
 import { solids } from './solids';
 import { Plan } from './systems/planSystem';
+
+/**
+ * A que distância da água uma criatura pode começar a vida.
+ *
+ * Antes ela nascia em qualquer ponto do jardim, e num mundo de 900×900 isso
+ * significava nascer a trezentos pixels do lago mais próximo. A sede vai de
+ * zero a mortal em pouco mais de um minuto; andando, são quase dez segundos
+ * por cem pixels. O resultado media-se: em cinco minutos de simulação, VINTE E
+ * OITO das trinta e quatro criaturas iniciais morriam de sede — o jogador
+ * abria o jogo e assistia a uma chacina antes de qualquer coisa acontecer.
+ *
+ * Duzentos pixels é a ida e a volta com folga. Não muda nenhuma regra do corpo:
+ * muda só onde a vida começa, que é decisão de mundo, não de metabolismo. E tem
+ * um efeito colateral bem-vindo — todo mundo começa em volta da água, então
+ * todo mundo se encontra.
+ */
+const WATER_REACH = 200;
 
 /** Registra os componentes de criatura e povoa o mundo com `count` criaturas em solo. */
 export function spawnCreatures(world: World, count: number): void {
@@ -34,6 +58,11 @@ export function spawnCreatures(world: World, count: number): void {
     const x = world.rng.range(0, world.config.width);
     const y = world.rng.range(0, world.config.height);
     if (solids.blocked(terrain, x, y) || !onMainland(x, y)) continue;
+    // Bicho nasce perto de água. Enquanto a maior parte das tentativas ainda
+    // resta, exige-se o bebedouro por perto; no fim, aceita-se qualquer chão
+    // firme, para um mundo de lago pequeno não ficar sem população.
+    const demanding = attempts < maxAttempts * 0.7;
+    if (demanding && !findNearestWater(terrain, x, y, WATER_REACH)) continue;
     spawnCreature(world, x, y);
     placed++;
   }

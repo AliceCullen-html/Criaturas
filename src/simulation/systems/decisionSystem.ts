@@ -23,6 +23,8 @@ const perceivedFood: PerceivedFood[] = [];
 const hiddenSpots: Array<{ x: number; y: number }> = [];
 const hunch = { x: 0, y: 0, distance: 0 };
 const WANDER_RANGE = 150;
+/** O quanto a sede estende o alcance da água além do que a vista enxerga. */
+const THIRST_MEMORY = 700;
 /** Segundos batendo no mesmo obstáculo antes de desistir do alvo. */
 const GIVE_UP_AFTER = 1.6;
 /** A que distância ela vai dar a volta ao desistir. */
@@ -188,7 +190,20 @@ export const decisionSystem: System = {
           });
         }
 
-        const water = findNearestWater(terrain, transform.x, transform.y, attributes.vision);
+        // Água: enxerga até onde a vista alcança, e LEMBRA muito além disso.
+        //
+        // Antes o alcance era só a visão. Como o lago fica longe na maior parte
+        // do jardim, a criatura com sede máxima simplesmente não tinha a opção
+        // de beber na lista — e morria brincando, com o lago a duzentos pixels.
+        // Medido: 28 das 34 criaturas iniciais morriam de sede nos primeiros
+        // dois minutos, sem nunca terem ido à água uma única vez.
+        //
+        // Bicho nenhum precisa VER o bebedouro para saber onde ele fica. Este
+        // termo é essa lembrança, e ela cresce com a sede: satisfeita, a
+        // criatura só repara na água que está à vista; morrendo de sede, ela
+        // sabe atravessar o jardim até o lago.
+        const reach = attributes.vision + needs.thirst * THIRST_MEMORY;
+        const water = findNearestWater(terrain, transform.x, transform.y, reach);
         const playerDistance = player.present
           ? Math.hypot(player.x - transform.x, player.y - transform.y)
           : Infinity;

@@ -11,100 +11,79 @@ const WATER_LIGHT = 0x6fb0dd;
 const SAND = 0xcdb789;
 
 /**
- * Tile de grama.
+ * Casas do tabuleiro.
  *
- * A versão antiga era ruído aleatório pixel a pixel: de perto some, de longe
- * vira um carpete verde chapado e estático. Grama de verdade tem MANCHAS —
- * áreas mais escuras onde é densa, mais claras onde o sol bate — e é a mancha,
- * não o chuvisco, que dá vida ao chão.
+ * Cada uma é um QUADRADO de `TILE` pixels desenhado dentro do container do
+ * chão — e, como aquele container carrega a matriz isométrica, o quadrado sai
+ * losango de graça. É daí que vem a cara de tabuleiro: não há nenhuma conta de
+ * losango neste arquivo, só quadrados.
  *
- * As manchas vêm de senóides sobrepostas em vez de ruído, porque a soma delas
- * é contínua e **fecha nas bordas do tile**: sem isso aparece uma grade de
- * costuras a cada 45 pixels.
+ * O que faz a grade aparecer é o acabamento das bordas. Projetadas, a borda
+ * direita e a de baixo do quadrado viram as duas arestas DA FRENTE do losango —
+ * as que pegariam luz se a casa tivesse espessura. Escurecendo as duas, cada
+ * casa ganha um beiral e o chão deixa de ser um lençol verde: vira piso.
+ *
+ * As variantes existem porque um tabuleiro de casas idênticas é uma planilha.
+ * Elas diferem só no tom e nos fiapos de grama — o suficiente para o olho ver
+ * um gramado dividido em canteiros, não um xadrez.
  */
-export function makeGrassTexture(seed: number): Texture {
-  const rng = createRng(seed);
-  const size = 48;
-  const buffer = new PixelBuffer(size, size);
+export function makeTileTextures(size: number): Texture[] {
+  const rng = createRng(0x7113);
   const TAU = Math.PI * 2;
-
-  // Três ondas de períodos inteiros: casam nas bordas, então o tile repete sem
-  // emenda visível.
-  const bands = [
-    { fx: 1, fy: 1, phase: rng.range(0, TAU), weight: 0.55 },
-    { fx: 2, fy: 1, phase: rng.range(0, TAU), weight: 0.3 },
-    { fx: 1, fy: 3, phase: rng.range(0, TAU), weight: 0.25 },
+  const tones = [
+    GRASS_BASE,
+    mix(GRASS_BASE, GRASS_LIGHT, 0.45),
+    GRASS_DARK,
+    mix(GRASS_BASE, GRASS_DARK, 0.5),
+    mix(GRASS_LIGHT, 0xd8e88a, 0.18),
+    GRASS_BASE,
   ];
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      let value = 0;
-      for (const band of bands) {
-        value +=
-          Math.sin((x / size) * TAU * band.fx + band.phase) *
-          Math.cos((y / size) * TAU * band.fy + band.phase * 0.7) *
-          band.weight;
-      }
-      // Uma pitada de granulado por cima, só para não ficar liso demais.
-      value += (rng.next() - 0.5) * 0.35;
-
-      const color =
-        value < -0.35
-          ? shade(GRASS_DARK, 0.94)
-          : value < 0
-            ? GRASS_DARK
-            : value < 0.38
-              ? GRASS_BASE
-              : GRASS_LIGHT;
-      buffer.set(x, y, color);
-    }
-  }
-
-  // Fiapos de grama em pé, seguindo as manchas claras.
-  for (let i = 0; i < 40; i++) {
-    const x = rng.int(size);
-    const y = rng.int(size);
-    const blade = mix(GRASS_LIGHT, 0xffffff, 0.12);
-    buffer.set(x, y, blade);
-    buffer.set(x, y - 1, GRASS_LIGHT);
-  }
-  return buffer.toTexture();
-}
-
-/**
- * Manchões suaves de grama, desenhados por cima do tile.
- *
- * O tile resolve a textura de perto; isto resolve a de longe. São elipses
- * grandes e translúcidas de verdes vizinhos que quebram a repetição — o olho
- * deixa de enxergar a grade e passa a enxergar um campo.
- */
-export function makeGrassPatchTextures(): Texture[] {
-  const rng = createRng(0x6a55);
-  const tones = [shade(GRASS_DARK, 0.9), GRASS_DARK, GRASS_LIGHT, mix(GRASS_LIGHT, 0xd8e88a, 0.35)];
-
-  return tones.map((tone) => {
-    const size = 64;
+  return tones.map((tone, index) => {
     const buffer = new PixelBuffer(size, size);
-    const center = (size - 1) / 2;
-    // Borda irregular: um manchão com contorno de elipse perfeita vira bolha.
-    const waves = [
-      { freq: 2 + rng.int(2), phase: rng.range(0, Math.PI * 2), depth: 0.2 },
-      { freq: 5 + rng.int(3), phase: rng.range(0, Math.PI * 2), depth: 0.1 },
-    ];
+    const phase = rng.range(0, TAU);
+
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        const dx = (x - center) / center;
-        const dy = (y - center) / center;
-        const distance = Math.hypot(dx, dy);
-        const angle = Math.atan2(dy, dx);
-        let edge = 1;
-        for (const wave of waves) edge += Math.sin(angle * wave.freq + wave.phase) * wave.depth;
-        if (distance > edge) continue;
-        // Desbota até sumir na borda: sem contorno duro, sem "adesivo".
-        const fade = 1 - distance / edge;
-        buffer.set(x, y, tone, Math.round(150 * fade * fade));
+        // Ondulação suave dentro da casa: sem ela o quadrado é um adesivo de
+        // cor chapada, e o gramado inteiro fica plástico.
+        const value =
+          Math.sin((x / size) * TAU + phase) * Math.cos((y / size) * TAU * 2 - phase) * 0.5 +
+          (rng.next() - 0.5) * 0.3;
+        buffer.set(x, y, value < -0.25 ? shade(tone, 0.94) : value > 0.3 ? shade(tone, 1.06) : tone);
       }
     }
+
+    // Fiapos de grama em pé, longe das bordas para não sujar o contorno.
+    for (let i = 0; i < Math.round(size * 0.5); i++) {
+      const x = 3 + rng.int(size - 6);
+      const y = 3 + rng.int(size - 6);
+      buffer.set(x, y, mix(tone, 0xffffff, 0.16));
+      buffer.set(x, y - 1, shade(tone, 1.1));
+    }
+
+    // O beiral: duas bordas escuras e uma clara na quina de trás. Projetado,
+    // isso lê como um degrauzinho de terra entre uma casa e a seguinte.
+    const lip = shade(tone, 0.7);
+    const rim = shade(tone, 0.82);
+    for (let i = 0; i < size; i++) {
+      buffer.set(size - 1, i, lip);
+      buffer.set(size - 2, i, rim);
+      buffer.set(i, size - 1, lip);
+      buffer.set(i, size - 2, rim);
+      buffer.set(0, i, shade(tone, 1.08));
+      buffer.set(i, 0, shade(tone, 1.08));
+    }
+
+    // Uma casa em cada seis ganha uma pedrinha ou um tufo mais forte, para o
+    // olho ter onde parar quando corre o campo.
+    if (index === 5) {
+      const x = 12 + rng.int(size - 24);
+      const y = 12 + rng.int(size - 24);
+      buffer.ellipse(x, y, 3, 2, shade(0x9aa0ab, 0.9));
+      buffer.ellipse(x - 0.5, y - 0.5, 2.2, 1.4, 0x9aa0ab);
+    }
+
     return buffer.toTexture();
   });
 }
@@ -422,99 +401,202 @@ export interface SceneryTextures {
   bush: Texture[];
 }
 
-/** Cenário decorativo (não interativo): árvore, pedra, arbusto — com sombra. */
+/**
+ * Sombra elíptica no pé da peça.
+ *
+ * Achatada em 3:1 porque, na vista isométrica, o chão que ela toca já está
+ * inclinado: uma sombra redonda pareceria um disco de pé encostado na árvore.
+ */
+function groundShadow(b: PixelBuffer, cx: number, cy: number, rx: number): void {
+  b.ellipse(cx, cy, rx, rx / 3, 0x1a1e12, 55);
+  b.ellipse(cx, cy, rx * 0.62, rx / 4.4, 0x1a1e12, 45);
+}
+
+/**
+ * Cenário: árvore, pedra e moita — cada um do tamanho de uma casa.
+ *
+ * A escala aqui não é gosto, é regra do tabuleiro. A peça precisa preencher a
+ * casa em que está (senão a grade não significa nada) e precisa ser MUITO
+ * maior que uma criatura de 22 pixels — é a diferença de tamanho entre o bicho
+ * e a árvore que dá escala ao mundo inteiro. As versões antigas tinham 38×46 e
+ * 20×16: do tamanho das criaturas, e o jardim parecia uma maquete.
+ */
 export function makeSceneryTextures(rng: Rng): SceneryTextures {
   /**
-   * Árvore com tronco, galhos visíveis e copa em camadas. `decor` acrescenta
-   * flores, frutos ou um ninho — a árvore deixa de ser enfeite e passa a
-   * contar o que está acontecendo nela.
+   * Árvore: tronco grosso com raiz aparente, galhos e copa em volumes. `decor`
+   * acrescenta flores, frutos ou um ninho — a árvore deixa de ser enfeite e
+   * passa a contar o que está acontecendo nela.
    */
   const tree = (decor: 'plain' | 'flowers' | 'fruit' | 'nest'): Texture => {
-    const b = new PixelBuffer(38, 46);
+    const b = new PixelBuffer(64, 84);
     const bark = 0x6b4a2b;
-    const barkLight = shade(bark, 1.2);
+    const barkDark = shade(bark, 0.72);
+    const barkLight = shade(bark, 1.25);
     const leaf = 0x4f9440;
+    const leafDark = shade(leaf, 0.74);
+    const leafLight = mix(leaf, 0xd8e88a, 0.3);
 
-    bakeShadow(b, 19, 43, 11, 3.5);
+    groundShadow(b, 32, 79, 19);
 
-    // Tronco com leve alargamento na base.
-    b.rect(17, 26, 5, 16, bark);
-    b.rect(17, 26, 1, 16, barkLight);
-    b.rect(15, 40, 9, 2, shade(bark, 0.85));
-    b.rect(16, 38, 7, 2, shade(bark, 0.92));
-
-    // Galhos saindo do tronco para a copa.
-    for (const [dx, dy, len] of [
-      [-1, -1, 7],
-      [1, -1, 7],
-      [-1, -1, 4],
+    // Tronco: alarga para baixo e termina em raízes que agarram o chão.
+    for (let y = 40; y < 78; y++) {
+      const spread = Math.round(((y - 40) / 38) ** 2 * 6);
+      b.rect(28 - spread, y, 8 + spread * 2, 1, bark);
+      b.rect(28 - spread, y, 2, 1, barkLight);
+      b.rect(34 + spread - 1, y, 1, 1, barkDark);
+    }
+    // Raízes espalhadas na terra, o que planta a árvore no lugar.
+    for (const [dx, len] of [
+      [-1, 9],
+      [1, 9],
+      [-1, 5],
+      [1, 6],
     ] as const) {
-      let bx = 19;
-      let by = 28;
+      let x = 32 + dx * 5;
+      let y = 74;
+      for (let i = 0; i < len; i++) {
+        x += dx;
+        y += i % 2 === 0 ? 1 : 0;
+        b.set(x, y, shade(bark, 0.85));
+        b.set(x, y + 1, barkDark);
+      }
+    }
+    // Textura de casca: estrias verticais irregulares.
+    for (let i = 0; i < 26; i++) {
+      const x = 29 + rng.int(6);
+      const y = 44 + rng.int(30);
+      b.set(x, y, barkDark);
+      b.set(x, y + 1, barkDark);
+    }
+
+    // Galhos saindo do tronco para dentro da copa.
+    for (const [dx, dy, len] of [
+      [-1, -1, 11],
+      [1, -1, 11],
+      [-1, -1, 6],
+      [1, -1, 5],
+    ] as const) {
+      let bx = 32;
+      let by = 46;
       for (let i = 0; i < len; i++) {
         bx += dx;
         by += dy;
         b.set(bx, by, bark);
-        b.set(bx, by + 1, shade(bark, 0.8));
+        b.set(bx, by + 1, barkDark);
       }
     }
 
-    // Copa em três volumes, com brilho no topo.
-    b.disc(19, 18, 11.5, shade(leaf, 0.8));
-    b.disc(13, 16, 8, leaf);
-    b.disc(25, 17, 8, leaf);
-    b.disc(19, 12, 8.5, mix(leaf, 0xffffff, 0.14));
-    for (let i = 0; i < 20; i++) {
-      b.set(8 + rng.int(23), 6 + rng.int(20), mix(leaf, 0xffffff, 0.26));
+    // Copa em cinco volumes: base larga e escura, laterais, e um topo claro
+    // onde o sol bate. É a sobreposição dos discos que dá a silhueta fofa —
+    // um disco só vira pirulito.
+    b.disc(32, 33, 19, leafDark);
+    b.disc(18, 28, 13, shade(leaf, 0.86));
+    b.disc(46, 29, 13, shade(leaf, 0.86));
+    b.disc(32, 26, 18, leaf);
+    b.disc(26, 18, 12, leafLight);
+    b.disc(40, 20, 10, mix(leaf, leafLight, 0.6));
+    // Folhas soltas na borda: contorno irregular, sem "bolha".
+    for (let i = 0; i < 46; i++) {
+      const angle = rng.range(0, Math.PI * 2);
+      const radius = 17 + rng.range(0, 3.5);
+      b.set(
+        32 + Math.cos(angle) * radius,
+        30 + Math.sin(angle) * radius * 0.92,
+        rng.chance(0.5) ? leaf : leafDark,
+      );
+    }
+    for (let i = 0; i < 34; i++) {
+      b.set(15 + rng.int(35), 10 + rng.int(28), mix(leaf, 0xffffff, 0.22));
     }
 
     if (decor === 'flowers') {
       const petal = 0xf2b8d0;
-      for (let i = 0; i < 16; i++) {
-        b.disc(9 + rng.int(21), 7 + rng.int(18), 1.2, petal);
+      for (let i = 0; i < 34; i++) {
+        const angle = rng.range(0, Math.PI * 2);
+        const radius = rng.range(0, 16);
+        b.disc(32 + Math.cos(angle) * radius, 28 + Math.sin(angle) * radius * 0.95, 1.5, petal);
       }
-      b.disc(14, 10, 1.4, mix(petal, 0xffffff, 0.5));
+      b.disc(24, 18, 2, mix(petal, 0xffffff, 0.5));
+      b.disc(41, 24, 1.8, mix(petal, 0xffffff, 0.4));
     } else if (decor === 'fruit') {
-      // Frutos amadurecendo nos galhos, antes de caírem.
-      for (let i = 0; i < 7; i++) {
-        const fx = 10 + rng.int(19);
-        const fy = 12 + rng.int(14);
-        b.disc(fx, fy, 1.8, 0xb8352f);
-        b.disc(fx, fy, 1.2, 0xd6473f);
-        b.set(fx - 1, fy - 1, 0xef7a72);
+      // Maçãs maduras nos galhos, antes de caírem. São elas que anunciam de
+      // longe onde há comida no jardim.
+      for (let i = 0; i < 11; i++) {
+        const angle = rng.range(0, Math.PI * 2);
+        const radius = rng.range(4, 16);
+        const fx = 32 + Math.cos(angle) * radius;
+        const fy = 28 + Math.sin(angle) * radius * 0.95;
+        b.disc(fx, fy, 3, 0x8f2822);
+        b.disc(fx, fy - 0.4, 2.4, 0xd6473f);
+        b.disc(fx - 0.9, fy - 1, 1, 0xef7a72);
       }
     } else if (decor === 'nest') {
       const straw = 0xa8814a;
-      b.ellipse(24, 13, 4, 2.4, shade(straw, 0.8));
-      b.ellipse(24, 12.4, 3.4, 1.9, straw);
-      b.ellipse(24, 12.6, 2.2, 1.1, shade(straw, 0.65));
+      b.ellipse(43, 20, 6.5, 4, shade(straw, 0.78));
+      b.ellipse(43, 18.8, 5.6, 3.2, straw);
+      b.ellipse(43, 19, 3.6, 1.8, shade(straw, 0.62));
+      for (let i = 0; i < 10; i++) b.set(38 + rng.int(11), 16 + rng.int(6), shade(straw, 0.9));
       // Ovinhos.
-      b.set(23, 12, 0xeaf0f5);
-      b.set(25, 12, 0xeaf0f5);
+      b.ellipse(41.5, 18.6, 1.4, 1.1, 0xeaf0f5);
+      b.ellipse(44.5, 18.6, 1.4, 1.1, 0xeaf0f5);
     }
 
     return b.toTexture();
   };
-  const rock = (): Texture => {
-    const b = new PixelBuffer(20, 16);
-    bakeShadow(b, 10, 13, 7, 2);
-    b.disc(10, 9, 6, shade(0x8b8f99, 0.8));
-    b.disc(9, 8, 5, 0x9aa0ab);
-    b.disc(7, 6, 2, mix(0x9aa0ab, 0xffffff, 0.35));
+
+  /**
+   * Pedra: uma massa pesada com face iluminada em cima e sombra funda embaixo.
+   * Precisa parecer que custa a empurrar, porque agora ela se empurra mesmo.
+   */
+  const rock = (variant: number): Texture => {
+    const b = new PixelBuffer(52, 44);
+    const stone = variant === 0 ? 0x8d8f95 : 0x9a958c;
+    groundShadow(b, 26, 39, 17);
+
+    b.ellipse(26, 26, 18, 12, shade(stone, 0.58));
+    b.ellipse(26, 23, 17.5, 11.5, shade(stone, 0.8));
+    b.ellipse(25, 20, 15, 9.5, stone);
+    b.ellipse(22, 16, 10, 6, mix(stone, 0xffffff, 0.2));
+    b.ellipse(19, 13, 5.5, 3.2, mix(stone, 0xffffff, 0.36));
+
+    // Facetas: duas rachaduras retas transformam a bolha em rocha.
+    for (let i = 0; i < 13; i++) b.set(30 + i * 0.5, 16 + i, shade(stone, 0.5));
+    for (let i = 0; i < 8; i++) b.set(31 + i, 24 + i * 0.3, shade(stone, 0.5));
+    for (let i = 0; i < 9; i++) b.set(14 + i * 0.4, 22 + i, shade(stone, 0.62));
+
+    // Musgo no pé, do lado da sombra: pedra de jardim, não bola de boliche.
+    b.ellipse(34, 30, 5, 2.6, 0x6f9a5e);
+    b.ellipse(15, 29, 4, 2.2, 0x6f9a5e);
+    for (let i = 0; i < 14; i++) {
+      b.set(10 + rng.int(33), 26 + rng.int(7), rng.chance(0.5) ? 0x7fac6a : shade(stone, 0.66));
+    }
     return b.toTexture();
   };
-  const bush = (): Texture => {
-    const b = new PixelBuffer(20, 16);
-    bakeShadow(b, 10, 13, 7, 2);
-    b.disc(7, 9, 4, shade(0x4e8c3f, 0.85));
-    b.disc(13, 9, 4, shade(0x4e8c3f, 0.85));
-    b.disc(10, 7, 4.5, 0x59a049);
+
+  const bush = (variant: number): Texture => {
+    const b = new PixelBuffer(46, 34);
+    const green = variant === 0 ? 0x4e8c3f : 0x568f4a;
+    groundShadow(b, 23, 30, 15);
+    b.disc(13, 21, 9, shade(green, 0.8));
+    b.disc(33, 21, 9, shade(green, 0.8));
+    b.disc(23, 20, 11, shade(green, 0.9));
+    b.disc(19, 14, 8, green);
+    b.disc(29, 15, 7, mix(green, 0xd8e88a, 0.2));
+    for (let i = 0; i < 26; i++) {
+      b.set(8 + rng.int(31), 6 + rng.int(20), mix(green, 0xffffff, 0.2));
+    }
+    // Frutinhas: é onde as criaturas vão procurar quando ninguém está olhando.
+    for (let i = 0; i < 5; i++) {
+      b.disc(11 + rng.int(25), 12 + rng.int(13), 1.6, 0x8f2822);
+      b.set(11 + rng.int(25), 12 + rng.int(13), 0xd6473f);
+    }
     return b.toTexture();
   };
+
   return {
     tree: [tree('plain'), tree('flowers'), tree('fruit'), tree('nest')],
-    rock: [rock(), rock()],
-    bush: [bush(), bush()],
+    rock: [rock(0), rock(1)],
+    bush: [bush(0), bush(1)],
   };
 }
 

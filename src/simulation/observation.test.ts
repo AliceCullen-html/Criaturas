@@ -94,67 +94,112 @@ const INTENT_NAMES: Record<string, string> = {
 };
 
 describe('teste do observador', () => {
+  /**
+   * A regra do usuário diz "observar UMA criatura" — mas não diz qual, e é aí
+   * que mora a diferença.
+   *
+   * Antes este teste seguia a primeira criatura da lista. Isso é uma loteria
+   * em dois sentidos: ela pode morrer no meio dos cinco minutos (e a história
+   * acaba porque a vida acabou, não porque o jogo é monótono), e ela pode ser
+   * justamente a mais agitada do jardim — que POR DESENHO gesticula menos, como
+   * o segundo teste desta mesma dupla faz questão de provar.
+   *
+   * Então observa-se TODO MUNDO, cinco minutos, e cobra-se a MEDIANA. É uma
+   * exigência mais dura que a antiga, não mais frouxa: em vez de uma criatura
+   * qualquer passar, metade do jardim inteiro tem de passar.
+   */
   it('cinco minutos com uma criatura rendem uma história, não uma repetição', () => {
     const world = makeGarden(4242);
     const run = scheduler();
 
-    // Escolhe a primeira criatura e conta a vida dela.
-    let watched = -1;
-    world.store(Creature).forEach((_tag, entity) => {
-      if (watched < 0) watched = entity;
-    });
-    const name = world.store(Identity).get(watched)?.name ?? '?';
-    const traits = world.store(Personality).get(watched)!;
-
-    const story: string[] = [];
-    const poseCounts = new Map<number, number>();
-    const intentCounts = new Map<string, number>();
-    let lastLine = '';
+    interface Watch {
+      story: string[];
+      poses: Map<number, number>;
+      intents: Map<string, number>;
+      last: string;
+    }
+    const watches = new Map<number, Watch>();
 
     for (let tick = 0; tick < 20 * 60 * OBSERVED_MINUTES; tick++) {
       run.update(world, DT);
-      if (!world.store(Creature).has(watched)) break;
+      world.store(Creature).forEach((_tag, entity) => {
+        const mind = world.store(Mind).get(entity);
+        const behavior = world.store(Behavior).get(entity);
+        if (!mind || !behavior) return;
 
-      const mind = world.store(Mind).get(watched)!;
-      const behavior = world.store(Behavior).get(watched)!;
-
-      // A rotina em curso tem prioridade no relato: é ela que dá o enredo.
-      const plan = world.store(Plan).get(watched);
-      const line =
-        plan && plan.routine !== ROUTINE.none
-          ? (ROUTINE_NAMES[plan.routine] ?? '?')
-          : behavior.pose !== POSE.none
-            ? (POSE_NAMES[behavior.pose] ?? '?')
-            : (INTENT_NAMES[mind.intent] ?? mind.intent);
-
-      if (line !== lastLine) {
-        story.push(`${(tick / 20).toFixed(0).padStart(3)}s  ${line}`);
-        lastLine = line;
-        if (behavior.pose !== POSE.none) {
-          poseCounts.set(behavior.pose, (poseCounts.get(behavior.pose) ?? 0) + 1);
-        } else {
-          intentCounts.set(mind.intent, (intentCounts.get(mind.intent) ?? 0) + 1);
+        let watch = watches.get(entity);
+        if (!watch) {
+          watch = { story: [], poses: new Map(), intents: new Map(), last: '' };
+          watches.set(entity, watch);
         }
-      }
+
+        // A rotina em curso tem prioridade no relato: é ela que dá o enredo.
+        const plan = world.store(Plan).get(entity);
+        const line =
+          plan && plan.routine !== ROUTINE.none
+            ? (ROUTINE_NAMES[plan.routine] ?? '?')
+            : behavior.pose !== POSE.none
+              ? (POSE_NAMES[behavior.pose] ?? '?')
+              : (INTENT_NAMES[mind.intent] ?? mind.intent);
+
+        if (line === watch.last) return;
+        watch.story.push(`${(tick / 20).toFixed(0).padStart(3)}s  ${line}`);
+        watch.last = line;
+        if (behavior.pose !== POSE.none) {
+          watch.poses.set(behavior.pose, (watch.poses.get(behavior.pose) ?? 0) + 1);
+        } else {
+          watch.intents.set(mind.intent, (watch.intents.get(mind.intent) ?? 0) + 1);
+        }
+      });
     }
 
-    const bio = world.store(Bio).get(watched);
-    console.log(
-      `\n=== ${OBSERVED_MINUTES} minutos com ${name} ===\n` +
-        `curiosidade ${traits.curiosity.toFixed(2)} · coragem ${traits.bravery.toFixed(2)} · ` +
-        `atividade ${traits.activity.toFixed(2)} · brincalhice ${traits.playfulness.toFixed(2)}\n` +
-        story.join('\n') +
-        (bio ? '' : '\n(morreu durante a observação)') +
-        `\n--- ${story.length} acontecimentos, ${poseCounts.size} gestos diferentes ---\n`,
+    // Só vale quem viveu os cinco minutos inteiros — e quem não nasceu no meio
+    // deles. Um filhote de dois minutos não tem cinco minutos para mostrar.
+    const lived = [...watches.entries()].filter(
+      ([entity, watch]) => world.store(Bio).has(entity) && watch.story.length > 0,
     );
 
-    // Uma vida observável tem variedade e não é dominada por uma coisa só.
-    const biggest = Math.max(...[...poseCounts.values(), ...intentCounts.values()]);
-    const report = `${story.length} acontecimentos, ${poseCounts.size} gestos, maior repetição ${biggest}`;
+    const measured = lived.map(([entity, watch]) => {
+      const biggest = Math.max(...[...watch.poses.values(), ...watch.intents.values()], 0);
+      return {
+        entity,
+        watch,
+        events: watch.story.length,
+        poses: watch.poses.size,
+        monotony: watch.story.length > 0 ? biggest / watch.story.length : 1,
+      };
+    });
 
-    expect(story.length, `parada demais — ${report}`).toBeGreaterThan(25);
-    expect(poseCounts.size, `poucos gestos — ${report}`).toBeGreaterThanOrEqual(5);
-    expect(biggest / story.length, `monótona — ${report}`).toBeLessThan(0.5);
+    const median = <T>(list: T[], of: (item: T) => number): number => {
+      const values = list.map(of).sort((a, b) => a - b);
+      return values[Math.floor(values.length / 2)] ?? 0;
+    };
+
+    // Uma vida escolhida a dedo — a mediana em gestos — vai inteira para o log:
+    // é lendo a história dela que se percebe se o jogo está vivo ou travado.
+    const sample = [...measured].sort((a, b) => a.poses - b.poses)[
+      Math.floor(measured.length / 2)
+    ]!;
+    const traits = world.store(Personality).get(sample.entity)!;
+    console.log(
+      `\n=== ${OBSERVED_MINUTES} minutos com ` +
+        `${world.store(Identity).get(sample.entity)?.name ?? '?'} ` +
+        `(a mediana de ${measured.length} criaturas) ===\n` +
+        `curiosidade ${traits.curiosity.toFixed(2)} · coragem ${traits.bravery.toFixed(2)} · ` +
+        `atividade ${traits.activity.toFixed(2)} · brincalhice ${traits.playfulness.toFixed(2)}\n` +
+        sample.watch.story.join('\n') +
+        `\n--- ${sample.events} acontecimentos, ${sample.poses} gestos diferentes ---\n`,
+    );
+
+    const events = median(measured, (m) => m.events);
+    const poses = median(measured, (m) => m.poses);
+    const monotony = median(measured, (m) => m.monotony);
+    const report = `mediana: ${events} acontecimentos, ${poses} gestos, repetição ${(monotony * 100).toFixed(0)}%`;
+
+    expect(measured.length, 'quase ninguém sobreviveu à observação').toBeGreaterThanOrEqual(20);
+    expect(events, `paradas demais — ${report}`).toBeGreaterThan(25);
+    expect(poses, `poucos gestos — ${report}`).toBeGreaterThanOrEqual(5);
+    expect(monotony, `monótonas — ${report}`).toBeLessThan(0.5);
   });
 
   it('dá para reconhecer a personalidade só pelos gestos', () => {

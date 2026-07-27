@@ -29,6 +29,8 @@ export const itemSystem: System = {
     if (loose(world) < cap) {
       for (const piece of scenery) {
         if (piece.kind !== 'tree') continue;
+        // Muda não dá fruta. É o que faz plantar valer a pena esperar.
+        if (piece.growth < 1) continue;
         piece.fruitTimer -= dt;
         if (piece.fruitTimer <= 0) {
           piece.fruitTimer = rng.range(TREE_MIN_INTERVAL, TREE_MAX_INTERVAL);

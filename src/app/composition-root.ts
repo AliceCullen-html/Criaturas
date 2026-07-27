@@ -23,6 +23,8 @@ import {
   WATER,
   PropsResource,
   propSystem,
+  sceneryGrowthSystem,
+  swayPropsNear,
   WeatherResource,
   weatherSystem,
   DayNightResource,
@@ -53,6 +55,8 @@ import {
   reproductionSystem,
   roughGesture,
   attractBirds,
+  dropScenery,
+  plantSeed,
   searchSystem,
   idleSystem,
   confinementSystem,
@@ -118,7 +122,8 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(ambientSystem)
     .add(propSystem)
     .add(plantGrowthSystem)
-    .add(plantSpreadSystem);
+    .add(plantSpreadSystem)
+    .add(sceneryGrowthSystem);
 
   const plantBuffer = new RenderBuffer(PLANT_CAPACITY);
   const itemBuffer = new RenderBuffer(ITEM_CAPACITY);
@@ -277,6 +282,14 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       onGrab: (itemId) => grabItem(world, itemId),
       onDragHeld: (itemId, x, y) => moveHeldItem(world, itemId, x, y),
       onRelease: (itemId, x, y, vx, vy) => {
+        // Uma semente pousada com cuidado numa casa vazia vira muda. Atirada,
+        // continua sendo semente rolando pelo chão — e semente no chão chama
+        // pássaro. O mesmo objeto, dois destinos, decididos pelo gesto.
+        if (plantSeed(world, itemId, x, y, Math.hypot(vx, vy))) {
+          renderer.setScenery(scenery);
+          activeRenderer?.emit('star', x, y - 12);
+          return;
+        }
         // Sementes largadas no chão chamam os pássaros.
         if (world.store(ItemComponent).get(itemId)?.kind === 'seed') attractBirds(world, x, y);
         const drop = releaseItem(world, itemId, vx, vy);
@@ -330,6 +343,27 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           if (spot.kind !== 'none') activeRenderer?.emit('question', spot.x, spot.y - 14);
         } else {
           pokeProps(world, 0, 0);
+        }
+      },
+      // Arrastar o jardim: árvore e pedra saem do chão e pousam noutra casa.
+      onGrabScenery: (index) => {
+        // O chão em volta treme quando aquilo se solta da terra.
+        const piece = scenery[index];
+        if (piece) swayPropsNear(props, piece.x, piece.y, 44);
+      },
+      // Enquanto está no ar, quem cuida da peça é o renderer: para o mundo ela
+      // continua exatamente onde estava até ser largada.
+      onDragScenery: () => {},
+      onDropScenery: (index, x, y) => {
+        const drop = dropScenery(world, index, x, y);
+        // Sempre redesenha: mesmo recusada, a peça precisa voltar ao chão.
+        renderer.setScenery(scenery);
+        if (drop.kind === 'moved') {
+          activeRenderer?.emit('star', drop.x, drop.y - 14);
+          rememberPleasantPlace(world, drop.x, drop.y, 120);
+        } else if (drop.kind !== 'none') {
+          // Água ou casa ocupada: a peça volta, e o sinal diz por quê.
+          activeRenderer?.emit('question', drop.x, drop.y - 14);
         }
       },
       onPokeGround: (x, y) => pokeProps(world, x, y),

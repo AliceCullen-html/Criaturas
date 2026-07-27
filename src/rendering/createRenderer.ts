@@ -1,5 +1,17 @@
-import { Application, Container, Graphics, Matrix, Sprite, TilingSprite, type Texture } from 'pixi.js';
-import { POSE, clamp, createRng, lerp } from '@core';
+import { Application, Container, Graphics, Matrix, Sprite, type Texture } from 'pixi.js';
+import {
+  POSE,
+  TILE,
+  clamp,
+  createRng,
+  lerp,
+  tileCenterX,
+  tileCenterY,
+  tileColOf,
+  tileCols,
+  tileRowOf,
+  tileRows,
+} from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
 import {
   clearCreatureTextureCache,
@@ -12,8 +24,7 @@ import {
 } from './textures/creature';
 import {
   makeDustTexture,
-  makeGrassTexture,
-  makeGrassPatchTextures,
+  makeTileTextures,
   makeLeafTextures,
   makeResourceTextures,
   makeSandTexture,
@@ -83,9 +94,14 @@ export interface Renderer {
 
 export interface ScenerySpot {
   kind: 'tree' | 'rock' | 'bush';
+  /** A casa do tabuleiro em que a peça está plantada. */
+  col: number;
+  row: number;
   x: number;
   y: number;
   variant: number;
+  /** 0 a 1 — uma muda recém-plantada é uma árvore pequena. */
+  growth: number;
 }
 
 /** Um detalhe do jardim, como o renderer precisa vê-lo. */
@@ -427,6 +443,23 @@ function animatePose(pose: number, t: number, elapsed: number, size: number, out
  * Bit de "escondido" que a simulação empacota junto do frescor, no campo
  * `color` do buffer de itens. Cópia local: o renderer não importa @simulation.
  */
+/**
+ * Onde fica o PÉ de cada peça, em fração da altura da textura. É por este
+ * ponto que ela é plantada na casa — errar aqui faz a árvore pairar.
+ */
+const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = { tree: 0.94, rock: 0.89, bush: 0.88 };
+
+/** Uma muda não é uma árvore em miniatura: começa baixinha e engrossa depois. */
+const growthScale = (growth: number): number => 0.35 + growth * 0.65;
+
+/** Cores do losango que mostra onde a peça arrastada vai pousar. */
+const TILE_CURSOR_OK = 0xfff2a8;
+const TILE_CURSOR_NO = 0xe06060;
+/** Quanto a peça sobe do chão enquanto está na mão, em pixels de tela. */
+const LIFT_HEIGHT = 26;
+/** Erguida, ela passa na frente de tudo — está mais perto de quem olha. */
+const LIFT_DEPTH_BONUS = 100000;
+
 const HIDDEN_FLAG = 256;
 
 /** Props altos dividem camada com as criaturas (grama alta, tronco, junco). */
@@ -521,9 +554,13 @@ export function createRenderer(options: RendererOptions): Renderer {
   let propTextures: Texture[][] = [];
   const tallProps: Array<{ sprite: Sprite; view: PropView }> = [];
   const treeSprites: Array<{ sprite: Sprite; phase: number; shake: number }> = [];
-  const reflections: Array<{ sprite: Sprite; phase: number }> = [];
+  /** Um por peça de cenário, na MESMA ordem de `sceneryList`: é o que permite
+   *  levantar do chão exatamente a árvore que o dedo pegou. */
+  const sceneryEntries: Array<{ sprite: Sprite; scale: number; growth: number }> = [];
+  const reflections: Array<{ sprite: Sprite; phase: number; scale: number }> = [];
   const ripples: Array<{ x: number; y: number; life: number }> = [];
   let groundPropLayer: Container | null = null;
+  let tileCursorG: Graphics | null = null;
   let rippleG: Graphics | null = null;
   let rainbowG: Graphics | null = null;
   let ambientTextures: Texture[][] = [];
@@ -563,6 +600,10 @@ export function createRenderer(options: RendererOptions): Renderer {
   let lastItems: RenderBuffer | null = null;
   let lastItemIds: Int32Array | null = null;
   let sceneryList: readonly ScenerySpot[] = [];
+  /** Índice da peça de cenário que está na mão agora, ou null. */
+  let draggedScenery: number | null = null;
+  let dragX = 0;
+  let dragY = 0;
   let waterProbe: ((x: number, y: number) => boolean) | null = null;
   const handWorld = { x: 0, y: 0, inside: false };
   /**
@@ -620,17 +661,61 @@ export function createRenderer(options: RendererOptions): Renderer {
     return best;
   }
 
-  /** Árvore/pedra/arbusto sob o ponto (com folga generosa, para ser clicável). */
+  /**
+   * Árvore/pedra/arbusto sob o ponto.
+   *
+   * Duas tentativas, nesta ordem. A CASA vem primeiro: o ponto cai numa casa
+   * do tabuleiro, e se há uma peça nela o alvo é ela — exato, sem folga, que é
+   * a promessa que a grade faz ao jogador.
+   *
+   * A segunda existe porque a copa não está na casa. Ela sobe pela tela, e o
+   * ponto do mundo debaixo do dedo, quando o dedo está na copa, é uma casa
+   * DIAGONALMENTE ATRÁS da árvore. Sem esta segunda tentativa, clicar na parte
+   * mais visível da árvore não pegaria a árvore.
+   */
   function pickScenery(worldX: number, worldY: number): { kind: string; index: number } | null {
+    const col = tileColOf(worldX);
+    const row = tileRowOf(worldY);
     for (let i = 0; i < sceneryList.length; i++) {
       const piece = sceneryList[i]!;
-      const reach = (piece.kind === 'tree' ? 20 : 14) * pickSlack();
-      // O tronco fica abaixo do centro do sprite: o alvo acompanha isso.
-      if (Math.hypot(piece.x - worldX, piece.y - worldY - 6) <= reach) {
-        return { kind: piece.kind, index: i };
+      if (piece.col === col && piece.row === row) return { kind: piece.kind, index: i };
+    }
+
+    let best: { kind: string; index: number } | null = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < sceneryList.length; i++) {
+      const piece = sceneryList[i]!;
+      if (piece.kind !== 'tree') continue; // só a copa sobe o bastante para isso
+      // O volume da copa fica atrás e acima do pé, no eixo de profundidade.
+      const dist = Math.hypot(piece.x - 22 - worldX, piece.y - 22 - worldY);
+      if (dist <= TILE * 0.62 * pickSlack() && dist < bestDist) {
+        bestDist = dist;
+        best = { kind: piece.kind, index: i };
       }
     }
-    return null;
+    return best;
+  }
+
+  /** A casa está livre para receber a peça que está sendo arrastada? */
+  function tileAcceptsDrop(col: number, row: number, ignoreIndex: number): boolean {
+    if (col < 0 || row < 0 || col >= tileCols(options.worldWidth)) return false;
+    if (row >= tileRows(options.worldHeight)) return false;
+    // Água na casa: o renderer sabe disso pelo mesmo mapa que desenha o lago.
+    const probe = waterProbe;
+    if (probe) {
+      for (let sy = 0; sy < 3; sy++) {
+        for (let sx = 0; sx < 3; sx++) {
+          const x = col * TILE + ((sx + 0.5) / 3) * TILE;
+          const y = row * TILE + ((sy + 0.5) / 3) * TILE;
+          if (probe(x, y)) return false;
+        }
+      }
+    }
+    for (let i = 0; i < sceneryList.length; i++) {
+      if (i === ignoreIndex) continue;
+      if (sceneryList[i]!.col === col && sceneryList[i]!.row === row) return false;
+    }
+    return true;
   }
 
   /**
@@ -857,34 +942,29 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       const root = new Container();
       root.sortableChildren = false;
-      const grassTexture = makeGrassTexture(1);
-      const grassTile = new TilingSprite({
-        texture: grassTexture,
-        width: options.worldWidth,
-        height: options.worldHeight,
-      });
-      // Escala 1: a 0.7 o tile repetia a cada 22px e a grade ficava evidente.
-      grassTile.tileScale.set(1);
 
-      // Manchões por cima, para o campo não parecer um papel de parede.
-      const patchTextures = makeGrassPatchTextures();
-      const patches = new Container();
-      const patchRng = createRng(0x9e11);
-      const patchCount = Math.round((options.worldWidth * options.worldHeight) / 5200);
-      for (let i = 0; i < patchCount; i++) {
-        const sprite = new Sprite(patchTextures[patchRng.int(patchTextures.length)]!);
-        sprite.anchor.set(0.5);
-        sprite.position.set(
-          patchRng.range(0, options.worldWidth),
-          patchRng.range(0, options.worldHeight),
-        );
-        // Tamanhos e achatamentos variados: nada de bolhas iguais.
-        const scale = patchRng.range(0.9, 2.6);
-        sprite.scale.set(scale * patchRng.range(0.8, 1.3), scale * patchRng.range(0.7, 1.2));
-        sprite.rotation = patchRng.range(0, Math.PI * 2);
-        sprite.alpha = patchRng.range(0.45, 0.9);
-        patches.addChild(sprite);
+      // O TABULEIRO.
+      //
+      // Um sprite quadrado por casa, desenhado no container do chão — que
+      // carrega a matriz isométrica. Ou seja: aqui só existem quadrados, e é o
+      // Pixi que os entrega em losango. As variantes são sorteadas com semente
+      // fixa, então o mesmo mundo tem sempre o mesmo gramado.
+      const tileTextures = makeTileTextures(TILE);
+      const tiles = new Container();
+      const tileRng = createRng(0x7a11e);
+      const gridCols = tileCols(options.worldWidth);
+      const gridRows = tileRows(options.worldHeight);
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          const sprite = new Sprite(tileTextures[tileRng.int(tileTextures.length)]!);
+          sprite.position.set(col * TILE, row * TILE);
+          tiles.addChild(sprite);
+        }
       }
+
+      // Onde a peça arrastada vai pousar. Desenhado como quadrado, some como
+      // losango aceso em volta da casa.
+      const tileCursor = new Graphics();
       const sand = new Container();
       const water = new Container();
       const reflections = new Container();
@@ -913,13 +993,13 @@ export function createRenderer(options: RendererOptions): Renderer {
         new Matrix(ISO_MATRIX.a, ISO_MATRIX.b, ISO_MATRIX.c, ISO_MATRIX.d, 0, 0),
       );
       ground.addChild(
-        grassTile,
-        patches,
+        tiles,
         sand,
         water,
         reflections,
         ripplesG,
         puddles,
+        tileCursor,
         shadows,
         selection,
       );
@@ -970,6 +1050,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       puddleG = puddles;
       weatherTint = tint;
       worldLayer = root;
+      tileCursorG = tileCursor;
       sandLayer = sand;
       waterLayer = water;
       // `decorations` deixou de ser camada própria: aponta para a ordenada.
@@ -1059,17 +1140,22 @@ export function createRenderer(options: RendererOptions): Renderer {
       reflectionLayer?.removeChildren();
       treeSprites.length = 0;
       reflections.length = 0;
+      sceneryEntries.length = 0;
       sceneryList = pieces;
       for (const piece of pieces) {
         const variants = scenery[piece.kind];
         const texture = variants[piece.variant % variants.length]!;
         const sprite = new Sprite(texture);
-        // Âncora no pé do tronco: é em torno dele que a árvore balança.
-        sprite.anchor.set(0.5, 0.95);
-        sprite.scale.set(PIXEL_SCALE);
+        // Âncora no PÉ da peça, não no meio: é o pé que encosta na casa, e é
+        // em torno dele que a árvore balança. Cada tipo tem o seu, porque a
+        // sombra está desenhada em alturas diferentes nas texturas.
+        sprite.anchor.set(0.5, FOOT_ANCHOR[piece.kind]);
+        const scale = PIXEL_SCALE * growthScale(piece.growth);
+        sprite.scale.set(scale);
         sprite.position.set(isoX(piece.x, piece.y), isoY(piece.x, piece.y));
         sprite.zIndex = isoDepth(piece.x, piece.y);
         decorationLayer.addChild(sprite);
+        sceneryEntries.push({ sprite, scale, growth: piece.growth });
         if (piece.kind === 'tree') {
           treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
         }
@@ -1078,13 +1164,13 @@ export function createRenderer(options: RendererOptions): Renderer {
         // está na beira: reflexo em cima da grama não seria reflexo nenhum.
         if (reflectionLayer && waterProbe?.(piece.x, piece.y + REFLECTION_PROBE)) {
           const mirror = new Sprite(texture);
-          mirror.anchor.set(0.5, 0.95);
-          mirror.scale.set(PIXEL_SCALE, -PIXEL_SCALE);
+          mirror.anchor.set(0.5, FOOT_ANCHOR[piece.kind]);
+          mirror.scale.set(scale, -scale);
           mirror.position.set(piece.x, piece.y);
           mirror.tint = REFLECTION_TINT;
           mirror.alpha = 0.45;
           reflectionLayer.addChild(mirror);
-          reflections.push({ sprite: mirror, phase: (piece.x - piece.y) * 0.04 });
+          reflections.push({ sprite: mirror, phase: (piece.x - piece.y) * 0.04, scale });
         }
       }
     },
@@ -1131,7 +1217,26 @@ export function createRenderer(options: RendererOptions): Renderer {
     },
 
     setHandlers(next: GestureHandlers): void {
-      gestures = new GestureRecognizer(next, {
+      // O renderer se intromete no arrasto do cenário porque a peça na mão é
+      // um assunto SÓ dele: a simulação não precisa saber que uma árvore está
+      // no ar por dois segundos — precisa saber apenas onde ela pousou.
+      const watched: GestureHandlers = {
+        ...next,
+        onGrabScenery: (index) => {
+          draggedScenery = index;
+          next.onGrabScenery(index);
+        },
+        onDragScenery: (index, x, y) => {
+          dragX = x;
+          dragY = y;
+          next.onDragScenery(index, x, y);
+        },
+        onDropScenery: (index, x, y) => {
+          draggedScenery = null;
+          next.onDropScenery(index, x, y);
+        },
+      };
+      gestures = new GestureRecognizer(watched, {
         creatureAt: pickCreature,
         itemAt: pickItem,
         sceneryAt: pickScenery,
@@ -1490,6 +1595,51 @@ export function createRenderer(options: RendererOptions): Renderer {
         signal.sprite.scale.set(0.8 + t * 0.4);
       }
 
+      // Mudas crescendo.
+      //
+      // `sceneryList` é a MESMA lista que o mundo edita, então a muda plantada
+      // engorda aqui sozinha, um pouquinho por quadro. Reconstruir o cenário
+      // inteiro a cada quadro só para ver uma árvore crescer seria caro e sem
+      // motivo — o que muda é uma escala.
+      for (let i = 0; i < sceneryEntries.length; i++) {
+        const entry = sceneryEntries[i]!;
+        const piece = sceneryList[i];
+        if (!piece || piece.growth === entry.growth) continue;
+        entry.growth = piece.growth;
+        entry.scale = PIXEL_SCALE * growthScale(piece.growth);
+        if (i !== draggedScenery) entry.sprite.scale.set(entry.scale);
+      }
+
+      // A peça que está na mão: sobe do chão, cresce um pouco e balança —
+      // e o losango da casa embaixo diz, antes de largar, se ali dá.
+      if (tileCursorG) {
+        tileCursorG.clear();
+        const entry = draggedScenery === null ? null : sceneryEntries[draggedScenery];
+        if (draggedScenery !== null && entry) {
+          const col = tileColOf(dragX);
+          const row = tileRowOf(dragY);
+          const fits = tileAcceptsDrop(col, row, draggedScenery);
+          const anchorX = tileCenterX(col);
+          const anchorY = tileCenterY(row);
+
+          // No ar, pousada sobre a casa apontada. O balanço é o peso dela.
+          const swing = Math.sin(elapsed * 5) * 2.5;
+          entry.sprite.position.set(
+            isoX(anchorX, anchorY) + swing,
+            isoY(anchorX, anchorY) - LIFT_HEIGHT,
+          );
+          entry.sprite.zIndex = isoDepth(anchorX, anchorY) + LIFT_DEPTH_BONUS;
+          entry.sprite.scale.set(entry.scale * 1.08);
+          entry.sprite.alpha = fits ? 1 : 0.65;
+
+          // O losango: um quadrado no container do chão já sai assim.
+          tileCursorG
+            .rect(col * TILE + 1, row * TILE + 1, TILE - 2, TILE - 2)
+            .fill({ color: fits ? TILE_CURSOR_OK : TILE_CURSOR_NO, alpha: 0.22 })
+            .stroke({ width: 2, color: fits ? TILE_CURSOR_OK : TILE_CURSOR_NO, alpha: 0.9 });
+        }
+      }
+
       // Vento na copa das árvores; sacudir soma um tranco por cima.
       for (const tree of treeSprites) {
         if (tree.shake > 0) tree.shake = Math.max(0, tree.shake - dt * 2.2);
@@ -1501,7 +1651,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       for (const mirror of reflections) {
         const wobble = Math.sin(elapsed * 1.7 + mirror.phase);
         mirror.sprite.skew.x = wobble * 0.09;
-        mirror.sprite.scale.y = -PIXEL_SCALE * (0.86 + Math.sin(elapsed * 1.1 + mirror.phase) * 0.06);
+        mirror.sprite.scale.y =
+          -mirror.scale * (0.86 + Math.sin(elapsed * 1.1 + mirror.phase) * 0.06);
         mirror.sprite.alpha = 0.42 + wobble * 0.06;
       }
 

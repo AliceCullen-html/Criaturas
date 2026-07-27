@@ -14,6 +14,8 @@ import {
   propSystem,
   spawnFruit,
   weatherSystem,
+  isWaterAt,
+  TerrainResource,
 } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { foodIndexSystem } from './foodIndex';
@@ -75,6 +77,37 @@ const full = (): SystemScheduler =>
     .add(plantGrowthSystem)
     .add(plantSpreadSystem);
 
+/**
+ * Um palco seco.
+ *
+ * Estas cenas precisam de uns setenta pixels de chão livre lado a lado. Antes
+ * o palco era "onde a primeira criatura tiver nascido", e isso funcionava por
+ * acaso: as criaturas nasciam em qualquer lugar, então quase sempre havia
+ * terra à direita delas. Desde que passaram a nascer perto da água, esse
+ * "à direita" cai dentro do lago com frequência — a fruta aparecia boiando e a
+ * história não podia acontecer. O palco agora é PROCURADO, não presumido.
+ */
+function dryStage(world: World, span = 80): { x: number; y: number } {
+  const terrain = world.getResource(TerrainResource);
+  const dry = (x: number, y: number): boolean =>
+    x > 20 &&
+    y > 20 &&
+    x < world.config.width - 20 &&
+    y < world.config.height - 20 &&
+    !isWaterAt(terrain, x, y);
+
+  for (let y = 60; y < world.config.height - 60; y += 20) {
+    for (let x = 60; x < world.config.width - 60 - span; x += 20) {
+      let clear = true;
+      for (let step = 0; step <= span && clear; step += 10) {
+        if (!dry(x + step, y) || !dry(x + step, y + 12)) clear = false;
+      }
+      if (clear) return { x, y };
+    }
+  }
+  throw new Error('nenhum trecho seco no jardim — o mundo virou lago');
+}
+
 const ids = (world: World): number[] => {
   const out: number[] = [];
   world.store(Creature).forEach((_tag, entity) => out.push(entity));
@@ -98,11 +131,14 @@ describe('pequenas histórias', () => {
     // E gosta de quem vai receber.
     world.store(Memory).get(giver)!.record(subjects.creature(hungry), 1, 1);
 
+    const stage = dryStage(world);
     const spot = world.store(Transform).get(giver)!;
+    spot.x = stage.x;
+    spot.y = stage.y;
     const theirs = world.store(Transform).get(hungry)!;
-    theirs.x = spot.x + 70;
-    theirs.y = spot.y;
-    spawnFruit(world, spot.x + 25, spot.y + 10, { toxic: false, variant: 0 });
+    theirs.x = stage.x + 70;
+    theirs.y = stage.y;
+    spawnFruit(world, stage.x + 25, stage.y + 10, { toxic: false, variant: 0 });
 
     const scheduler = full();
     let carried = false;
@@ -247,10 +283,13 @@ describe('pequenas histórias', () => {
     world.store(Memory).get(giver)!.record(subjects.creature(other), 1, 1);
     world.store(Needs).get(other)!.hunger = 0.6;
 
+    const stage = dryStage(world);
     const spot = world.store(Transform).get(giver)!;
-    world.store(Transform).get(other)!.x = spot.x + 70;
-    world.store(Transform).get(other)!.y = spot.y;
-    spawnFruit(world, spot.x + 25, spot.y, { toxic: false, variant: 0 });
+    spot.x = stage.x;
+    spot.y = stage.y;
+    world.store(Transform).get(other)!.x = stage.x + 70;
+    world.store(Transform).get(other)!.y = stage.y;
+    spawnFruit(world, stage.x + 25, stage.y, { toxic: false, variant: 0 });
 
     const scheduler = full();
     for (let tick = 0; tick < 20 * 20; tick++) {
