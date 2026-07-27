@@ -4,7 +4,7 @@ import sheetUrl from '../../assets/tintim.png';
 /**
  * A FOLHA DE SPRITES DO TINTIM.
  *
- * Desenhada à mão, 512×192, oito colunas por três linhas de células de 64×64.
+ * Desenhada à mão, 512×384, oito colunas por seis linhas de células de 64×64.
  * Dentro de cada célula o desenho tem 16×16 pixels de verdade, ampliados
  * quatro vezes — verificado pixel a pixel: a folha é um upscale 4× exato, sem
  * meio-tom nem antialiasing. Por isso a leitura aqui **desfaz a ampliação** e
@@ -21,7 +21,17 @@ export const ART = 16;
 /** Lado da célula na folha (o desenho ampliado 4×). */
 const CELL = 64;
 const COLS = 8;
-const COUNT = 20;
+/**
+ * Quadros que a folha traz. Os vinte primeiros são os estados que o jogo já
+ * sabe usar; os vinte e dois seguintes são desenhos novos ainda sem nome — a
+ * folha chegou sem a ficha que dizia o que cada um representa. Eles são
+ * recortados e ficam prontos, mas nenhum comportamento aponta para eles: dar
+ * um significado errado a um quadro faz a criatura MENTIR sobre o que está
+ * sentindo, que é pior do que não usá-lo.
+ */
+const COUNT = 42;
+/** Destes o jogo já sabe o significado. */
+export const NAMED = 20;
 
 /**
  * Os vinte quadros, na ordem em que estão na folha.
