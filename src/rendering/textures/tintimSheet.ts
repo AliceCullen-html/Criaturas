@@ -82,18 +82,44 @@ const MOOD_FRAME: readonly number[] = [
   FRAME.happy, // brincalhona
 ];
 
-/** Poses que têm quadro próprio na folha. As outras deixam o humor falar. */
+/**
+ * Cada microcomportamento tem um quadro.
+ *
+ * São dezenove gestos ociosos e vinte desenhos, então vários dividem o mesmo
+ * quadro — e tudo bem: o que separa "se coçar" de "cheirar uma flor" é o
+ * MOVIMENTO do corpo, que a pose comanda, não a cara. O que não pode acontecer
+ * é um gesto cair no quadro de repouso, porque aí ele deixa de existir para
+ * quem olha. Antes, sete dos dezenove caíam.
+ *
+ * Índices espelham `POSE` em @core — o renderer não importa o núcleo da
+ * simulação, mas os dois combinaram este vocabulário.
+ */
+const POSE_FRAME: readonly number[] = [
+  FRAME.idle, // 0 nada
+  FRAME.look, // 1 se coça
+  FRAME.jump, // 2 espreguiça
+  FRAME.sleeping, // 3 senta
+  FRAME.sleeping, // 4 deita
+  FRAME.look, // 5 olha o céu
+  FRAME.push, // 6 cheira uma flor
+  FRAME.look, // 7 para e escuta
+  FRAME.look, // 8 olha a água
+  FRAME.surprised, // 9 se sacode
+  FRAME.jump, // 10 rola no chão
+  FRAME.curious, // 11 se limpa
+  FRAME.push, // 12 cava
+  FRAME.surprised, // 13 escorrega
+  FRAME.curious, // 14 fica pensando
+  FRAME.happy, // 15 brinca com uma folha
+  FRAME.happy, // 16 se anima
+  FRAME.sleeping, // 17 suspira
+  FRAME.sad, // 18 encolhida de dor
+];
+
+const POSE_NONE = 0;
 const POSE_HURT = 18;
 const POSE_SIT = 3;
 const POSE_LIE = 4;
-const POSE_LOOK_UP = 5;
-const POSE_LOOK_DOWN = 8;
-const POSE_LISTEN = 7;
-const POSE_PONDER = 14;
-const POSE_PLAY = 15;
-const POSE_PERK = 16;
-const POSE_DIG = 12;
-const POSE_STRETCH = 2;
 
 /** Acima disto o passo vira corrida, em pixels de mundo por segundo. */
 export const RUN_SPEED = 42;
@@ -137,25 +163,8 @@ export function frameFor(choice: FrameChoice): number {
     return cycle[Math.floor(step) % cycle.length]!;
   }
 
-  // Parada, o gesto em curso manda no quadro.
-  switch (pose) {
-    case POSE_LOOK_UP:
-    case POSE_LOOK_DOWN:
-    case POSE_LISTEN:
-      return FRAME.look;
-    case POSE_PONDER:
-      return FRAME.curious;
-    case POSE_PLAY:
-    case POSE_PERK:
-      return FRAME.happy;
-    case POSE_DIG:
-      return FRAME.push;
-    case POSE_STRETCH:
-      return FRAME.jump;
-    default:
-      break;
-  }
-
+  // Parada, o gesto em curso manda no quadro; sem gesto, fala o humor.
+  if (pose !== POSE_NONE) return POSE_FRAME[pose] ?? FRAME.idle;
   return MOOD_FRAME[mood] ?? FRAME.idle;
 }
 

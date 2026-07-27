@@ -252,9 +252,15 @@ export class GestureRecognizer {
     this.handlers.onHandMove(x, y, true);
 
     if (!this.down) {
-      // Mão fecha os dedos quando há algo agarrável sob ela.
+      // A mão avisa o que está sob ela: fecha os dedos sobre qualquer coisa
+      // com que dê para interagir. Sem esse aviso o jogador não descobre onde
+      // pode tocar — e um jogo que é só gesto vira um jogo sem alvos.
       if (this.heldItem === null && this.dropAnim <= 0) {
-        this.state = this.probe.itemAt(x, y) !== null ? 'closing' : 'open';
+        const alvo =
+          this.probe.itemAt(x, y) !== null ||
+          this.probe.creatureAt(x, y) !== null ||
+          this.probe.sceneryAt(x, y) !== null;
+        this.state = alvo ? 'closing' : 'open';
       }
       return;
     }

@@ -13,7 +13,7 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { FRAME, frameFor, loadTintimFrames } from './textures/tintimSheet';
+import { ART, FRAME, frameFor, loadTintimFrames } from './textures/tintimSheet';
 import {
   makeDustTexture,
   makeTileTextures,
@@ -447,6 +447,8 @@ const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
  * caminhada, sem virar corridinha de desenho animado.
  */
 const STEPS_PER_PIXEL = 1 / 7;
+/** Divisor do tamanho que dá a escala do sprite de 16 pixels. */
+const CREATURE_SCALE = 6.5;
 /**
  * A que distância do centro do corpo fica a sola do pé, em fração do tamanho.
  * É o mesmo número que posiciona a sombra: os dois têm de bater, senão a
@@ -455,6 +457,8 @@ const STEPS_PER_PIXEL = 1 / 7;
 const GROUND_CONTACT = 0.42;
 /** O quanto das deformações do corpo sobra, agora que o desenho é à mão. */
 const SQUASH_DAMPING = 0.34;
+/** Num gesto deliberado, quase tudo: é o movimento que conta o gesto. */
+const POSE_GIVE = 0.85;
 const BLINK_DURATION = 0.11;
 const DUST_INTERVAL = 0.22;
 
@@ -633,18 +637,35 @@ export function createRenderer(options: RendererOptions): Renderer {
   const screenToWorld = (sx: number, sy: number, sw: number, sh: number): { x: number; y: number } =>
     unIso((sx - sw / 2) / camera.zoom + camera.isoX, (sy - sh / 2) / camera.zoom + camera.isoY);
 
+  /**
+   * A criatura sob o ponto.
+   *
+   * Aqui estava o motivo de "o mouse não faz nada nelas". O alvo era um
+   * círculo em volta do PONTO DO MUNDO da criatura — o centro do corpo, que
+   * fica no chão. Só que o desenho sobe da tela a partir dali: clicar na
+   * cabeça, que é a parte que o jogador enxerga e mira, caía a trinta pixels
+   * de mundo do centro, fora de um alcance de vinte e dois. O clique só pegava
+   * se acertasse exatamente os pés.
+   *
+   * Agora o alvo é o RETÂNGULO DO DESENHO, a mesma conta que já valia para as
+   * árvores e os objetos: qualquer pixel da criatura que esteja na tela é
+   * clicável, que é o que qualquer um espera.
+   */
   function pickCreature(worldX: number, worldY: number): number | null {
     const buffer = lastCreatures;
     if (!buffer) return null;
     let best: number | null = null;
-    let bestDist = Infinity;
+    let bestDepth = -Infinity;
     for (let i = 0; i < buffer.count; i++) {
-      const dx = buffer.x[i]! - worldX;
-      const dy = buffer.y[i]! - worldY;
-      const dist = dx * dx + dy * dy;
-      const reach = Math.max(buffer.size[i]! * 1.7, 16) * pickSlack();
-      if (dist <= reach * reach && dist < bestDist) {
-        bestDist = dist;
+      const x = buffer.x[i]!;
+      const y = buffer.y[i]!;
+      const size = buffer.size[i]!;
+      const box = creatureBox(size);
+      if (!insideSprite(worldX, worldY, x, y, box.halfWidth, box.up, box.down)) continue;
+      // Duas coladas: ganha a da frente, que é a que está desenhada por cima.
+      const depth = isoDepth(x, y);
+      if (depth > bestDepth) {
+        bestDepth = depth;
         best = buffer.id[i]!;
       }
     }
@@ -684,6 +705,20 @@ export function createRenderer(options: RendererOptions): Renderer {
       screenY <= down * slack + 2 &&
       screenY >= -up * slack
     );
+  }
+
+  /**
+   * O retângulo que a criatura ocupa na tela, medido a partir do seu ponto no
+   * mundo. Uma conta só, usada pelo clique e por quem precisar mirar nela.
+   */
+  function creatureBox(size: number): { halfWidth: number; up: number; down: number } {
+    const height = ART * (size / CREATURE_SCALE);
+    const foot = size * GROUND_CONTACT * ISO_SQUASH;
+    return {
+      halfWidth: Math.max(height / 2.4, 9),
+      up: Math.max(height - foot, 12),
+      down: Math.max(foot, 4),
+    };
   }
 
   function pickItem(worldX: number, worldY: number): number | null {
@@ -1182,7 +1217,20 @@ export function createRenderer(options: RendererOptions): Renderer {
     /** Desenha o cenário que o MUNDO possui (as árvores que dão frutas). */
     setScenery(pieces: readonly ScenerySpot[]): void {
       if (!decorationLayer || !scenery) return;
-      decorationLayer.removeChildren();
+
+      // Tira da camada SÓ o que este método pôs ali.
+      //
+      // Aqui morava um bug feio: a chamada era `removeChildren()`, e desde que
+      // a vista virou isométrica esta camada é a MESMA das criaturas — cenário
+      // e bicho precisam se intercalar por profundidade, senão a árvore de trás
+      // cobre quem está na frente. Limpar tudo arrancava as criaturas junto.
+      // Enquanto o cenário só era desenhado uma vez, no início, ninguém via.
+      // Quando as árvores e pedras passaram a ser arrastáveis, cada arrasto
+      // fazia o rebanho inteiro sumir e deixar só as sombras no chão.
+      for (const entry of sceneryEntries) {
+        decorationLayer.removeChild(entry.sprite);
+        entry.sprite.destroy();
+      }
       reflectionLayer?.removeChildren();
       treeSprites.length = 0;
       reflections.length = 0;
@@ -1508,7 +1556,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         // O desenho tem 16 pixels de altura onde o antigo tinha 32: a escala
         // dobra para a criatura ocupar o mesmo espaço no jardim.
-        const scale = size / 6.5;
+        const scale = size / CREATURE_SCALE;
         const anim = animateBody(mood, elapsed, id, size, moving, stage);
         // A pose entra por cima do humor: o rosto segue contando a emoção,
         // o corpo passa a contar a ocupação.
@@ -1526,7 +1574,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         // a cara que tem. O movimento continua — só que quase todo por
         // POSIÇÃO (o pulinho, o tremor), que não distorce nada, e o resto
         // entra por um terço.
-        const give = SQUASH_DAMPING;
+        // O gesto pode se mexer mais que a respiração.
+        //
+        // Com vinte quadros para dezenove gestos, é o MOVIMENTO que separa
+        // "se coçar" de "cheirar uma flor". Conter tudo no mesmo terço deixou
+        // os dois iguais — e foi o que tirou a vida das criaturas paradas. A
+        // respiração de fundo continua discreta; o gesto deliberado recupera
+        // quase toda a amplitude.
+        const give = pose !== POSE.none ? POSE_GIVE : SQUASH_DAMPING;
         slot.container.scale.set(
           slot.facing * scale * (1 + (anim.squashX - 1) * give),
           scale * (1 + (anim.squashY - 1) * give),

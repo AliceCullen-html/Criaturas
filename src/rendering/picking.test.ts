@@ -54,6 +54,58 @@ function worldUnderScreen(
   return { x: footX + (sum + screenDx) / 2, y: footY + (sum - screenDx) / 2 };
 }
 
+/**
+ * A criatura como o jogo a desenha: 16 pixels de altura escalados por
+ * `tamanho / 6,5`, com o pé abaixo do ponto do mundo pela mesma distância que
+ * a sombra.
+ */
+const GROUND_CONTACT = 0.42;
+function creatureBox(size: number): { halfWidth: number; up: number; down: number } {
+  const height = 16 * (size / 6.5);
+  const foot = size * GROUND_CONTACT * ISO_SQUASH;
+  return {
+    halfWidth: Math.max(height / 2.4, 9),
+    up: Math.max(height - foot, 12),
+    down: Math.max(foot, 4),
+  };
+}
+
+describe('clicar na criatura', () => {
+  const size = 13;
+  const box = creatureBox(size);
+  const footX = 400;
+  const footY = 400;
+
+  it('a cabeça é clicável — era ali que o clique se perdia', () => {
+    // O desenho tem 32 pixels de altura; a cabeça fica a uns 24 do pé.
+    const head = worldUnderScreen(footX, footY, 0, -24);
+    expect(insideSprite(head.x, head.y, footX, footY, box.halfWidth, box.up, box.down)).toBe(true);
+
+    // O alcance antigo era um círculo de max(tamanho × 1,7; 16) em volta do
+    // ponto do mundo. Este é o número que provava que o clique não pegava.
+    const antigo = Math.max(size * 1.7, 16);
+    expect(Math.hypot(head.x - footX, head.y - footY)).toBeGreaterThan(antigo);
+  });
+
+  it('do pé ao topo, a criatura inteira é alvo', () => {
+    for (let dy = -28; dy <= 2; dy += 2) {
+      const point = worldUnderScreen(footX, footY, 0, dy);
+      expect(
+        insideSprite(point.x, point.y, footX, footY, box.halfWidth, box.up, box.down),
+        `falhou a ${-dy}px do pé`,
+      ).toBe(true);
+    }
+  });
+
+  it('o filhote continua clicável, mesmo sendo minúsculo', () => {
+    const baby = creatureBox(5);
+    const head = worldUnderScreen(footX, footY, 0, -10);
+    expect(insideSprite(head.x, head.y, footX, footY, baby.halfWidth, baby.up, baby.down)).toBe(
+      true,
+    );
+  });
+});
+
 describe('mirar no que está desenhado', () => {
   const footX = 300;
   const footY = 300;
