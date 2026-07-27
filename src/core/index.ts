@@ -17,6 +17,7 @@ export {
   tileRows,
   tileIndex,
 } from './grid';
+export { TINTIM } from './tintim';
 export { POSE, POSE_COUNT, POSE_DURATION, POSE_NAMES } from './poses';
 export type { PoseId } from './poses';
 export type { MemorySubject, MemoryTrace, Episode, EpisodeInput } from './memory';

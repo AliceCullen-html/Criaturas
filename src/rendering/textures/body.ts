@@ -1,4 +1,4 @@
-import { createRng } from '@core';
+import { TINTIM, createRng } from '@core';
 import type { Texture } from 'pixi.js';
 import { PixelBuffer, mix, shade } from '../pixel/PixelBuffer';
 import { shapeAt, type SpeciesShape } from './speciesShapes';
@@ -202,9 +202,11 @@ export function makeBodyTexture(
   // genoma. O Tintim amarelo de macacão vermelho é UM deles — os irmãos saem
   // verdes, azuis, roxos, e continuam sendo a mesma criatura.
   const overall = accent;
-  const overallDark = shade(overall, 0.7);
-  const trim = mix(accent, 0xff3ce0, 0.55);
-  const bulb = mix(0x6cf0ff, accent, 0.22);
+  const overallDark = shade(overall, 0.78);
+  // Estas duas não vêm do genoma: são do PERSONAGEM. O magenta das alças e o
+  // ciano das antenas são tão dele quanto o amarelo da cabeça.
+  const trim = stage === 2 ? mix(TINTIM.trim, 0xa0a0a0, 0.35) : TINTIM.trim;
+  const bulb = stage === 2 ? mix(TINTIM.bulb, 0xa0a0a0, 0.35) : TINTIM.bulb;
 
   // ---- Silhueta (atrás) -----------------------------------------------
   if (features.bigTail) {
@@ -302,14 +304,16 @@ export function makeBodyTexture(
       if (mask.has(x, y)) {
         const color =
           y >= p.footY - 1
-            ? trim
-            : y >= overallTop
-              ? y > p.bodyY + 1
-                ? overallDark
-                : overall
-              : y > p.bodyY + 1
-                ? underside
-                : skin;
+            ? trim // sapato
+            : y >= p.footY - 3
+              ? bulb // perna
+              : y >= overallTop
+                ? y > p.bodyY + 1
+                  ? overallDark
+                  : overall
+                : y > p.bodyY + 1
+                  ? underside
+                  : skin;
         buffer.set(x, y, color);
       } else if (
         mask.has(x - 1, y) ||

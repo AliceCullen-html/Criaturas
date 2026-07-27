@@ -1,4 +1,4 @@
-import { clamp01, hslToRgb, lerp } from '@core';
+import { TINTIM, clamp01, lerp } from '@core';
 import { GENE, type Genome } from './genome';
 import { SPECIES_COUNT, speciesAt, type Species } from './species';
 
@@ -46,9 +46,6 @@ export function express(genome: Genome): Phenotype {
 
   const aggression = trait('aggression', GENE.aggression);
 
-  // A matiz gira em torno da cor típica da espécie, com folga individual.
-  const hue = species.hue + (gene(genome, GENE.hue) - 0.5) * 2 * species.hueSpread;
-
   return {
     speed: lerp(20, 52, gene(genome, GENE.speed)) * lerp(1.1, 0.85, gene(genome, GENE.size)),
     vision: lerp(70, 175, gene(genome, GENE.vision)),
@@ -57,9 +54,19 @@ export function express(genome: Genome): Phenotype {
     size,
     metabolism: lerp(0.7, 1.4, gene(genome, GENE.metabolism)),
     lifespan: lerp(900, 1800, gene(genome, GENE.longevity)),
-    bodyColor: hslToRgb(hue, 0.62, 0.62),
-    accentColor: hslToRgb(hue + lerp(-0.25, 0.25, gene(genome, GENE.accent)), 0.55, 0.78),
-    eyeColor: hslToRgb(gene(genome, GENE.eyeHue), 0.7, 0.28),
+    // AS CORES DO TINTIM.
+    //
+    // Fixas, e é uma escolha, não um descuido: o pedido era esta criatura, não
+    // uma família parecida com ela. O amarelo, o macacão vermelho, as antenas
+    // cianas e as pupilas vermelhas são a identidade dela, e uma população em
+    // que cada um tem um tom é uma população de outra coisa.
+    //
+    // Os genes de cor continuam existindo e continuam sendo herdados e
+    // mutados — `hue`, `accent` e `eyeHue` estão logo ali. Voltar a pintar por
+    // genoma é trocar estas três linhas pelas de antes, sem tocar em mais nada.
+    bodyColor: TINTIM.body,
+    accentColor: TINTIM.overall,
+    eyeColor: TINTIM.pupil,
     features: Math.floor(gene(genome, GENE.features) * 0xffffff),
     species,
     personality: {
