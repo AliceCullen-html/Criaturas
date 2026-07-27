@@ -2,6 +2,7 @@ import { clamp01, subjects } from '@core';
 import { Transform, defineResource, type System, type World } from '@engine';
 import { Bond, Creature, Emotions, Identity, Memory, Mind, Nest, Needs } from '@creatures';
 import { isWaterAt, TerrainResource } from '@world';
+import { chronicle } from '../chronicle';
 
 /**
  * VIDA SOCIAL: melhores amigas, desafetos, ninhos e luto.
@@ -168,6 +169,8 @@ function mourn(world: World, _dt: number): void {
   for (const dead of deaths) {
     const grave = transforms.get(dead);
     const name = identities.get(dead)?.name ?? 'alguém';
+    chronicle(world, 'primeira-morte', `A primeira morte do jardim: ${name}`, true);
+    chronicle(world, 'morte', `Morreu ${name}`);
 
     world.store(Creature).forEach((_tag, mourner) => {
       if (mourner === dead) return;

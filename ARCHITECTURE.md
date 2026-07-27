@@ -95,6 +95,59 @@ verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
 | 7     | Save/Load em IndexedDB com seed (mundo reproduzível)                       |
 | 8     | HUD e inspetor: painéis, estatísticas, controles de velocidade            |
 
+### A filosofia
+
+O projeto não é um jogo casual: é um **mundo vivo**. A régua não é gráfica, é
+a sensação de que existe uma civilização acontecendo independentemente de quem
+olha. O jogador não recebe missões — ele **interfere**. As criaturas têm livre
+arbítrio, e mesmo sem ninguém tocar em nada elas vivem, aprendem, fazem amizade,
+brigam, têm filhos, envelhecem e morrem.
+
+Três compromissos que decidem qualquer dúvida de design:
+
+1. **Nenhuma criatura é igual à outra.** Nunca centenas de NPCs iguais: cada uma
+   é um ser pequeno e específico, reconhecível depois de horas de jogo.
+2. **O mundo conta histórias que ninguém escreveu.** Nada de roteiro; o enredo
+   sai do encontro entre sistemas simples.
+3. **A interface some.** Quase tudo acontece com o mouse, direto no mundo. Um
+   menu é a última saída, não a primeira.
+
+### A origem da espécie
+
+O mundo começa com **uma criatura**, sem sexo, sem par e sem história. Estando
+saudável, alimentada, tranquila e segura por tempo sustentado, ela se
+**duplica** — e a cópia não é cópia: o genoma passa por mutação de um genitor
+só, e daí saem cor, tamanho, metabolismo, coragem, curiosidade e velocidade
+diferentes. Nesta fase, a mutação é a ÚNICA fonte de diversidade da espécie.
+
+Quando a população cruza um limiar, a espécie **muda de fase**: aparecem machos
+e fêmeas (alternados, nunca sorteados — um mundo que sorteia trinta sexos pode
+dar 26 fêmeas e morrer por azar estatístico), o brotamento cessa e a reprodução
+passa a exigir duas criaturas que se escolham.
+
+A condição para brotar não é um relógio: é qualidade de vida **sustentada**, e
+o progresso regride quando a vida piora. É isso que amarra a demografia ao
+cuidado — o jardim cresce quando o jardim está bom. Medido em oito mundos de
+trinta minutos: a primeira duplicação entre 58 e 283 segundos, seis mundos
+chegando à transição, **dois extinguindo-se**. A fragilidade é intencional:
+começar com uma criatura é aceitar que a espécie pode acabar, e o livro
+registra o fim como registra tudo.
+
+### O livro da história
+
+Um diário que o mundo escreve sozinho: nasceu Luma, morreu Kiro, a primeira
+duplicação, o primeiro casal, a décima geração. Não é telemetria — é o que
+transforma uma população em uma HISTÓRIA. Uma morte anônima é um sprite a
+menos; a morte de alguém que tem nome e passado é uma perda.
+
+Duas regras o sustentam: **primeiras vezes são para sempre** (um evento marcado
+como "primeira vez" só entra uma vez na vida do mundo) e **o livro nunca
+descarta um marco** ao esquecer entradas antigas.
+
+Na tela ele tem duas camadas, nenhuma delas um menu: o **sussurro** no canto,
+que passa e some, e o **livro** inteiro, que só aparece quando o jogador aperta
+`H`.
+
 ### Dar vida (fase atual)
 
 A partir daqui a régua deixou de ser "quantos sistemas existem" e passou a ser
@@ -112,6 +165,8 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
 | D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
 | — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
+| — ✅  | Origem da espécie: um ancestral, brotamento com mutação, transição evolutiva |
+| — ✅  | Livro da história: diário automático de nascimentos, mortes e marcos      |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
 
@@ -294,6 +349,24 @@ bebedouro para saber onde ele fica; satisfeita, a criatura só repara na água �
 vista; morrendo de sede, ela sabe atravessar o jardim. Com isso o jardim deixou
 de encolher no primeiro minuto: a população **cresce** de 34 para ~60 em trinta
 minutos, e a companhia subiu de 92% para 96–99%.
+
+### O que a filosofia ainda cobra
+
+Registrado aqui para não se perder, na ordem em que muda mais a experiência:
+
+- **Aprendizado por associação e linguagem** (etapa F): objetos educativos,
+  ensinar palavras associando objeto + nome, e o conhecimento espalhando-se pela
+  população — uma criatura que aprende pode ensinar outra.
+- **Personalidade que muda com a experiência.** Hoje os traços são fixos desde o
+  nascimento; deveriam derivar lentamente conforme o que a criatura vive.
+- **Emoções que faltam**: vergonha, ansiedade, amor, ciúmes, nojo.
+- **Estações do ano.** Há dia/noite e chuva; falta o ano inteiro.
+- **Genoma maior.** São ~20 genes; a filosofia pede centenas, e nenhum
+  puramente cosmético.
+- **Carregar no colo** e o cursor mudando por gesto (mão aberta, fechada,
+  carinho, empurrão, apontar).
+- **Save/Load** (`src/save/` ainda vazio): um mundo que conta histórias por
+  centenas de horas precisa sobreviver a fechar a aba.
 
 ### Rumo à v1.0
 

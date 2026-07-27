@@ -67,6 +67,13 @@ import {
   orderSystem,
   issueOrder,
   ORDER,
+  buddingSystem,
+  SpeciesResource,
+  PHASE,
+  ChronicleResource,
+  createChronicle,
+  chronicle,
+  recentEntries,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -89,7 +96,13 @@ export interface AppInstance {
 
 const WORLD_CONFIG = { width: 900, height: 900 } as const;
 const WORLD_SEED = 1337;
-const INITIAL_CREATURES = 34;
+/**
+ * UMA. O mundo começa com a primeira criatura da espécie — sem sexo, sem par e
+ * sem história. Se ela morrer antes de brotar, a espécie acaba ali.
+ */
+const INITIAL_CREATURES = 1;
+/** População a partir da qual a espécie ganha machos e fêmeas. */
+const SEXUAL_THRESHOLD = 30;
 const FIXED_DT = 1 / 20;
 const PLANT_CAPACITY = 512;
 const ITEM_CAPACITY = 256;
@@ -98,10 +111,19 @@ const STATS_INTERVAL_FRAMES = 10;
 
 export function createApp(rootElement: HTMLElement): AppInstance {
   const world = createWorld(WORLD_CONFIG, WORLD_SEED);
-  spawnCreatures(world, INITIAL_CREATURES);
+  // Sem sexo: a espécie começa assexuada e só ganha machos e fêmeas quando
+  // a população cruzar o limiar.
+  spawnCreatures(world, INITIAL_CREATURES, { sex: 'none', ageFraction: 0.05 });
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   world.setResource(DeathsResource, []);
+  world.setResource(ChronicleResource, createChronicle());
+  world.setResource(SpeciesResource, {
+    phase: PHASE.budding,
+    threshold: SEXUAL_THRESHOLD,
+    buds: 0,
+  });
+  chronicle(world, 'genesis', 'O jardim ganhou seu primeiro ser vivo', true);
   const terrain = world.getResource(TerrainResource);
   const scenery = world.getResource(SceneryResource);
   const ambient = world.getResource(AmbientResource);
@@ -122,6 +144,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(movementSystem)
     .add(actionSystem)
     .add(reproductionSystem)
+    .add(buddingSystem)
     .add(metabolismSystem)
     .add(confinementSystem)
     .add(itemSystem)
@@ -243,7 +266,23 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       });
       pushSelected();
       emitAmbientSignals();
+      pushChronicle();
     }
+  };
+
+  /**
+   * O livro da história chega à tela.
+   *
+   * O sussurro do canto mostra só o que acabou de acontecer e some sozinho; o
+   * livro inteiro fica guardado e só aparece quando o jogador pede (tecla H).
+   * A tela é do mundo — a interface só entra quando alguém a chama.
+   */
+  let lastEntryCount = -1;
+  const pushChronicle = (): void => {
+    const book = world.getResource(ChronicleResource);
+    if (book.entries.length === lastEntryCount) return;
+    lastEntryCount = book.entries.length;
+    store.getState().setChronicle(recentEntries(world, 3), [...book.entries].reverse());
   };
 
   /** Balões espontâneos: o mundo se explica sem texto. */

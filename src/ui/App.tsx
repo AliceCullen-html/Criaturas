@@ -1,5 +1,6 @@
 import { SimulationCanvas } from './components/SimulationCanvas';
 import { CreatureCard } from './components/CreatureCard';
+import { HistoryBook } from './components/HistoryBook';
 
 export interface AppProps {
   mountCanvas: (container: HTMLElement) => () => void;
@@ -15,6 +16,7 @@ export function App({ mountCanvas }: AppProps) {
     <div className="app">
       <SimulationCanvas mountCanvas={mountCanvas} />
       <CreatureCard />
+      <HistoryBook />
     </div>
   );
 }

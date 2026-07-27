@@ -8,6 +8,7 @@ import {
   Appearance,
   Attributes,
   Bio,
+  type Sex,
   Creature,
   CreatureGenome,
   Emotions,
@@ -27,6 +28,11 @@ export interface SpawnOptions {
   parentA?: string | null;
   parentB?: string | null;
   ageFraction?: number;
+  /**
+   * Sexo imposto. Sem isto, sorteia macho ou fêmea — mas a espécie **começa
+   * assexuada**, e o ancestral e os brotos precisam nascer `'none'`.
+   */
+  sex?: Sex;
 }
 
 /** Registra os stores dos componentes de criatura (idempotente). */
@@ -89,7 +95,7 @@ export function spawnCreature(
   });
 
   world.store(Bio).set(entity, {
-    sex: rng.chance(0.5) ? 'M' : 'F',
+    sex: options.sex ?? (rng.chance(0.5) ? 'M' : 'F'),
     species: phenotype.species.name,
     age: (options.ageFraction ?? rng.range(0.2, 0.5)) * phenotype.lifespan,
     lifespan: phenotype.lifespan,

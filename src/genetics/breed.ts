@@ -22,3 +22,30 @@ export function breed(parentA: Genome, parentB: Genome, rng: Rng): Genome {
   }
   return child;
 }
+
+/**
+ * Mutação de um genitor só — o DNA do brotamento.
+ *
+ * `breed` mistura dois genomas; aqui não há com quem misturar. A cópia sai do
+ * mesmo DNA com um empurrão em alguns genes, e é DESSE empurrão que vem toda a
+ * diversidade da espécie enquanto ela ainda é assexuada: cor, tamanho,
+ * metabolismo, coragem, curiosidade, velocidade.
+ *
+ * A chance de mutação é maior que a do cruzamento de propósito. Com dois pais,
+ * a recombinação já produz variedade sozinha; com um só, a mutação é a ÚNICA
+ * fonte de diferença — no valor do cruzamento, os brotos sairiam clones.
+ */
+const BUD_MUTATION_CHANCE = 0.16;
+const BUD_MUTATION_STRENGTH = 0.14;
+
+export function mutate(parent: Genome, rng: Rng): Genome {
+  const child = new Float32Array(GENE_COUNT);
+  for (let i = 0; i < GENE_COUNT; i++) {
+    let gene = parent[i] ?? 0.5;
+    if (rng.chance(BUD_MUTATION_CHANCE)) {
+      gene += rng.range(-BUD_MUTATION_STRENGTH, BUD_MUTATION_STRENGTH);
+    }
+    child[i] = clamp01(gene);
+  }
+  return child;
+}

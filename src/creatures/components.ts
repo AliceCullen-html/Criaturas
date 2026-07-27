@@ -2,7 +2,16 @@ import type { CreatureMemory } from '@core';
 import { defineComponent } from '@engine';
 import type { Genome, PersonalityTraits } from '@genetics';
 
-export type Sex = 'M' | 'F';
+/**
+ * Sexo — e o `none` não é um caso de borda, é o COMEÇO.
+ *
+ * A espécie nasce assexuada: a primeira criatura do mundo se duplica por
+ * brotamento. Machos e fêmeas só aparecem quando a população cruza um limiar e
+ * a espécie muda de fase. Guardar isso como um terceiro valor, em vez de um
+ * `sex: Sex | null`, é o que deixa a fase assexuada ser um estado legítimo da
+ * vida e não a ausência de um dado.
+ */
+export type Sex = 'M' | 'F' | 'none';
 
 /** O que a criatura está fazendo agora. Escolhido por pontuação, não por script. */
 export type Intent =

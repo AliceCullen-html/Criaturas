@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CreatureSnapshot } from '@simulation';
+import type { ChronicleEntry, CreatureSnapshot } from '@simulation';
 
 /**
  * Estado EXCLUSIVO de UI. Não guarda dados da simulação em si — apenas
@@ -28,6 +28,10 @@ interface UiState {
   selectedIds: number[];
   followId: number | null;
   selected: CreatureSnapshot | null;
+  /** As últimas coisas que aconteceram, para o sussurro no canto. */
+  recent: ChronicleEntry[];
+  /** O livro inteiro, da mais recente para a mais antiga. */
+  book: ChronicleEntry[];
   setRunning: (running: boolean) => void;
   toggleRunning: () => void;
   setSpeed: (speed: SimulationSpeed) => void;
@@ -36,6 +40,7 @@ interface UiState {
   setSelectedIds: (ids: number[]) => void;
   setFollowId: (id: number | null) => void;
   setSelected: (snapshot: CreatureSnapshot | null) => void;
+  setChronicle: (recent: ChronicleEntry[], book: ChronicleEntry[]) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -46,6 +51,8 @@ export const useUiStore = create<UiState>((set) => ({
   selectedIds: [],
   followId: null,
   selected: null,
+  recent: [],
+  book: [],
   toggleRunning: () => set((state) => ({ isRunning: !state.isRunning })),
   setRunning: (running) => set({ isRunning: running }),
   setSpeed: (speed) => set({ speed }),
@@ -54,4 +61,5 @@ export const useUiStore = create<UiState>((set) => ({
   setSelectedIds: (ids) => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
   setFollowId: (id) => set({ followId: id }),
   setSelected: (snapshot) => set({ selected: snapshot }),
+  setChronicle: (recent, book) => set({ recent, book }),
 }));

@@ -12,7 +12,7 @@ export interface PerceivedCreature {
   aggression: number;
   isBaby: boolean;
   affinity: number;
-  sex: 'M' | 'F';
+  sex: 'M' | 'F' | 'none';
   fertile: boolean;
 }
 

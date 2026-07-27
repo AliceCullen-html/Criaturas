@@ -12,6 +12,7 @@ import { Transform } from '@engine';
 import { solids } from './solids';
 import { Plan } from './systems/planSystem';
 import { Order } from './orders';
+import { Budding } from './species';
 
 /**
  * A que distância da água uma criatura pode começar a vida.
@@ -31,12 +32,20 @@ import { Order } from './orders';
 const WATER_REACH = 200;
 
 /** Registra os componentes de criatura e povoa o mundo com `count` criaturas em solo. */
-export function spawnCreatures(world: World, count: number): void {
+export interface SpawnGroup {
+  sex?: 'M' | 'F' | 'none';
+  /** Fração da vida já vivida ao nascer. O ancestral começa recém-nascido. */
+  ageFraction?: number;
+}
+
+export function spawnCreatures(world: World, count: number, group: SpawnGroup = {}): void {
   registerCreatureComponents(world);
   // O plano em curso vive na simulação, não em @creatures: rotina é caso de uso.
   // A ordem do jogador é da mesma natureza — vem de fora da criatura.
   world.register(Plan);
   world.register(Order);
+  // Progresso de duplicação: existe só enquanto a espécie é assexuada.
+  world.register(Budding);
   const terrain = world.getResource(TerrainResource);
   // Nem na água, nem debaixo de uma pedra grande.
   solids.rebuild(world);
@@ -66,7 +75,7 @@ export function spawnCreatures(world: World, count: number): void {
     // firme, para um mundo de lago pequeno não ficar sem população.
     const demanding = attempts < maxAttempts * 0.7;
     if (demanding && !findNearestWater(terrain, x, y, WATER_REACH)) continue;
-    spawnCreature(world, x, y);
+    spawnCreature(world, x, y, group);
     placed++;
   }
 }

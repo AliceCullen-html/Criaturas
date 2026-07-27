@@ -173,7 +173,12 @@ export const decisionSystem: System = {
             isBaby: isBaby(otherBio),
             affinity: memory.valenceOf(subjects.creature(otherId)),
             sex: otherBio.sex,
-            fertile: !isBaby(otherBio) && otherBio.matingCooldown <= 0 && otherBio.sex !== bio.sex,
+            fertile:
+              !isBaby(otherBio) &&
+              otherBio.matingCooldown <= 0 &&
+              otherBio.sex !== 'none' &&
+              bio.sex !== 'none' &&
+              otherBio.sex !== bio.sex,
           });
         }
 

@@ -15,6 +15,7 @@ import {
 } from '@creatures';
 import { countIn } from '@world';
 import { isBaby } from '../age';
+import { chronicle } from '../chronicle';
 
 const MATING_COOLDOWN = 90;
 const MATE_REACH = 16;
@@ -82,6 +83,8 @@ export const reproductionSystem: System = {
       const genomeB = genomes.get(partner);
       if (!bioA || !bioB || !transformA || !transformB || !genomeA || !genomeB) return;
       if (bioA.matingCooldown > 0 || bioB.matingCooldown > 0) return;
+      // Assexuadas não acasalam: elas ainda estão na fase do brotamento.
+      if (bioA.sex === 'none' || bioB.sex === 'none') return;
       if (bioA.sex === bioB.sex || isBaby(bioA) || isBaby(bioB)) return;
 
       const distance = Math.hypot(transformB.x - transformA.x, transformB.y - transformA.y);
@@ -139,6 +142,21 @@ export const reproductionSystem: System = {
           parentB: birth.nameB,
           ageFraction: 0,
         },
+      );
+
+      const childName = identities.get(child)?.name ?? '?';
+      chronicle(
+        world,
+        'primeiro-filhote',
+        `Nasceu o primeiro filhote de um casal: ${childName}, de ${birth.nameA} e ${birth.nameB}`,
+        true,
+      );
+      chronicle(world, 'nascimento', `Nasceu ${childName}, de ${birth.nameA} e ${birth.nameB}`);
+      chronicle(
+        world,
+        `geracao-${birth.generation}`,
+        `Chegou a ${birth.generation}ª geração: ${childName}`,
+        true,
       );
 
       // Herança cultural: o filhote já nasce sabendo o que os pais aprenderam.
