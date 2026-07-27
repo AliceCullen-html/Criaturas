@@ -90,6 +90,7 @@ import {
   SpeechResource,
   eggSystem,
   warmEgg,
+  hatchNow,
   isEgg,
   forEachEgg,
 } from '@simulation';
@@ -416,6 +417,17 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         if (id === null) {
           clearSelection();
           return;
+        }
+        // O PRIMEIRO ovo nasce no toque.
+        //
+        // Enquanto não há nenhuma criatura viva, o jardim inteiro é uma casca
+        // no chão — e pedir cinquenta segundos de mão parada antes que qualquer
+        // coisa aconteça é cobrar paciência de quem ainda não conhece ninguém
+        // ali dentro. Do segundo ovo em diante, quando já há gente no jardim e
+        // já existe motivo para esperar, volta a valer o calor da mão.
+        if (isEgg(world, id) && world.store(Creature).size === 0) {
+          hatchNow(world, id);
+          signal('star', id);
         }
         store.getState().setSelectedId(id);
         cardTimer = CARD_SECONDS;

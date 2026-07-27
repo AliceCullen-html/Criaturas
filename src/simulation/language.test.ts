@@ -130,6 +130,13 @@ describe('a linguagem', () => {
     // Ninguém foi mandado estudar. O que houve foi uma máquina no meio do
     // jardim e criaturas curiosas passando por ela.
     expect(falantes, 'ninguém aprendeu uma palavra em quinze minutos').toBeGreaterThan(0);
+
+    // E cada palavra que entra SAI PELA BOCA. Sem isso o aprendizado é um
+    // número subindo em silêncio, e o jogador não tem como saber que aconteceu.
+    expect(
+      world.getResource(SpeechResource).length,
+      'ninguém disse nada em quinze minutos de jardim',
+    ).toBeGreaterThan(0);
   });
 
   it('uma palavra custa tempo e atenção — não entra num piscar de olhos', () => {

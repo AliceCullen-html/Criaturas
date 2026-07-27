@@ -1,4 +1,4 @@
-import { clamp01 } from '@core';
+import { EGG_CRACK_AT, clamp01 } from '@core';
 import { Transform, type System, type World } from '@engine';
 import { Creature, Egg, Emotions, Identity, Lineage, Memory } from '@creatures';
 import { chronicle } from '../chronicle';
@@ -29,6 +29,14 @@ const WARM_PER_SECOND = 0.9;
 const COOL_PER_SECOND = 0.35;
 /** Quanto a criatura gosta de quem a chocou. */
 const HATCH_AFFECTION = 0.45;
+/**
+ * Quanto tempo dura a casca abrindo quando o jogador manda o ovo nascer.
+ *
+ * Três segundos: o suficiente para VER a animação, curto o bastante para o
+ * clique parecer ter causado aquilo. Zero seria a criatura aparecendo do nada,
+ * e o desenho do nascimento não teria para que existir.
+ */
+const CRACK_SECONDS = 3;
 
 export const eggSystem: System = {
   name: 'egg',
@@ -70,6 +78,32 @@ export const eggSystem: System = {
     }
   },
 };
+
+/**
+ * ABRIR AGORA — o primeiro ovo do mundo, no clique.
+ *
+ * O jogo abre com uma casca no chão e nada mais. Fazer o jogador esperar
+ * cinquenta segundos com a mão em cima antes que qualquer coisa aconteça é
+ * cobrar paciência de quem ainda não tem motivo nenhum para ter: ele não
+ * conhece ninguém ali dentro. Então o primeiro ovo nasce quando ele toca.
+ *
+ * Chocar com a mão continua existindo — e passa a valer para os ovos que vêm
+ * depois, quando o jardim já tem gente e o jogador já sabe por que esperar.
+ *
+ * Não nasce no ato: o relógio é reescrito para que sobrem três segundos, que é
+ * a casca rachando na frente de quem clicou.
+ */
+export function hatchNow(world: World, entity: number): boolean {
+  const egg = world.store(Egg).get(entity);
+  if (!egg) return false;
+  // A animação ocupa a última fatia da espera; o relógio inteiro é redesenhado
+  // para que essa fatia dure `CRACK_SECONDS`.
+  egg.duration = CRACK_SECONDS / (1 - EGG_CRACK_AT);
+  egg.time = egg.duration - CRACK_SECONDS;
+  // Nasceu porque você quis: ela sai da casca gostando de você.
+  egg.warmth = Math.max(egg.warmth, 1);
+  return true;
+}
 
 /** A mão do jogador parada sobre o ovo: esquenta. */
 export function warmEgg(world: World, entity: number, dt: number): boolean {

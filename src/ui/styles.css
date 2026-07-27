@@ -192,12 +192,42 @@ body {
   color: #8ef0d4;
 }
 
+/* A maçaneta do livro: o único botão do jogo.
+   Fica no canto, do tamanho de um dedo, e some do caminho — mas existe, porque
+   um atalho de teclado que ninguém descobre é o mesmo que um livro que não
+   existe. */
+.bookmark {
+  position: fixed;
+  left: 12px;
+  bottom: 10px;
+  z-index: 15;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: rgba(20, 24, 20, 0.5);
+  color: #e8e2cf;
+  font-size: 14px;
+  line-height: 26px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 0.2s,
+    transform 0.15s;
+}
+
+.bookmark:hover {
+  opacity: 1;
+  transform: scale(1.12);
+}
+
 /* --- O livro da história -------------------------------------------------
    Duas camadas, nenhuma delas um menu. O sussurro passa no canto e some; o
    livro só existe quando o jogador aperta H. A tela é do mundo. */
 .whisper {
   position: absolute;
-  left: 14px;
+  left: 46px;
   bottom: 12px;
   pointer-events: none;
   font-size: 11px;
@@ -224,6 +254,15 @@ body {
   padding: 28px 32px;
   overflow-y: auto;
   cursor: pointer;
+}
+
+.book__close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .book__title {

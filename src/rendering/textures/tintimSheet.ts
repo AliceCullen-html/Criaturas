@@ -1,3 +1,4 @@
+import { EGG_CRACK_AT } from '@core';
 import { Rectangle, Texture } from 'pixi.js';
 import sheetUrl from '../../assets/tintim.png';
 
@@ -157,16 +158,12 @@ export const HATCH: readonly number[] = [
 /**
  * O quadro do ovo, dado o quanto falta para nascer (0 = recém-posto, 1 = saiu).
  *
- * Até o último quinto da espera o ovo é só um ovo: a rachadura tem de ser
- * NOTÍCIA, e um ovo que racha desde o primeiro segundo não avisa nada. Depois
- * disso a animação corre inteira, e o jogador que estava olhando vê a casca
- * abrir.
+ * Onde a rachadura começa é combinado com a simulação em `@core`: ela precisa
+ * do mesmo número para saber quanto tempo dura o "abrir agora" de um clique.
  */
-export const HATCH_START = 0.8;
-
 export function eggFrame(progress: number): number {
-  if (progress < HATCH_START) return FRAME.egg;
-  const t = (progress - HATCH_START) / (1 - HATCH_START);
+  if (progress < EGG_CRACK_AT) return FRAME.egg;
+  const t = (progress - EGG_CRACK_AT) / (1 - EGG_CRACK_AT);
   return HATCH[Math.min(HATCH.length - 1, Math.floor(t * HATCH.length))]!;
 }
 

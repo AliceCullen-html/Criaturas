@@ -141,10 +141,19 @@ Só dois lugares precisaram saber que ovos existem, e ambos por bons motivos:
   jardim começa com um ovo e nenhuma criatura. Enquanto houver casca no chão, a
   espécie não acabou.
 
-E o ovo é a primeira interação do jogo: **a mão parada em cima dele o esquenta**,
-e ele rompe até dois vezes e meia mais rápido. Quem chocou o ovo com a própria
-mão recebe de volta o afeto de quem saiu dele — a primeira memória daquela
-criatura é você.
+E o ovo é a primeira interação do jogo. Ele tem duas, e a diferença entre elas é
+sobre quem o jogador já conhece:
+
+- **O primeiro ovo nasce no toque.** Enquanto não há nenhuma criatura viva, o
+  jardim inteiro é uma casca no chão — e pedir cinquenta segundos de mão parada
+  antes que qualquer coisa aconteça é cobrar paciência de quem ainda não conhece
+  ninguém ali dentro. O clique reescreve o relógio para sobrarem três segundos,
+  que é a casca rachando na frente de quem clicou.
+- **Os outros se chocam com a mão**, que os apressa em duas vezes e meia. Aí já
+  há gente no jardim, e já existe motivo para esperar.
+
+Nos dois casos, quem tirou a criatura da casca recebe de volta o afeto dela — a
+primeira memória daquela criatura é você.
 
 ### A origem da espécie
 
@@ -450,6 +459,22 @@ Duas coisas que só aparecem no navegador de verdade e por isso ficam anotadas:
   o disparo vinha a cada 120 ms em vez de 33. Medido: 2,5 s de fade viravam mais
   de 9, e apertar `M` deixava a música tocando baixinho por vários segundos. O
   tempo passou a ser lido de `performance.now()`.
+
+### A palavra que sai pela boca
+
+Duas regras fazem o vocabulário aparecer na tela, e as duas existem pelo mesmo
+motivo: **aprendizado invisível é aprendizado que não aconteceu** para quem
+joga.
+
+- **Toda palavra que entra sai pela boca na hora.** O instante em que uma
+  criatura passa a saber "água" é o mais importante do sistema — e sem a bolha
+  ele seria um número subindo em silêncio.
+- **E ela diz o que está fazendo.** Quem sabe "água" e resolve beber DIZ "água";
+  quem sabe "perigo" e foge, diz "perigo". É aqui que o vocabulário deixa de ser
+  uma lista na ficha e vira comportamento visível: o jogador vê a palavra que
+  ensinou saindo da boca dela no momento em que ela serve para alguma coisa.
+  Só na TROCA de intenção, e com um intervalo de nove segundos — repetir "água"
+  durante a caminhada inteira até o lago viraria um zumbido.
 
 ### Dormir é ir para casa
 

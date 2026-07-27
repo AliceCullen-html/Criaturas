@@ -8,9 +8,11 @@ import { useUiStore } from '../store/simulationStore';
  *
  * - **O sussurro**: as últimas coisas que aconteceram passam no canto e
  *   desaparecem sozinhas. É o mundo avisando, não um painel informando.
- * - **O livro**: a tecla H abre tudo o que já aconteceu naquele jardim, dos
- *   marcos da espécie às mortes de ontem. Fica fechado por padrão porque a
- *   tela é do mundo, não da interface.
+ * - **O livro**: o ícone no canto (ou a tecla H) abre tudo o que já aconteceu
+ *   naquele jardim, dos marcos da espécie às mortes de ontem. Fica fechado por
+ *   padrão porque a tela é do mundo, não da interface — mas precisa de uma
+ *   maçaneta VISÍVEL: um atalho de teclado que ninguém descobre é o mesmo que
+ *   um livro que não existe.
  *
  * Sem isto, uma morte é um sprite a menos. Com isto, é a morte de Kiro — e é
  * disso que nasce o apego que nenhuma barra de status produz.
@@ -32,6 +34,7 @@ export function HistoryBook() {
   if (open) {
     return (
       <div className="book" onClick={() => setOpen(false)}>
+        <div className="book__close">fechar ✕</div>
         <div className="book__title">a história deste jardim</div>
         {book.length === 0 && <div className="book__line">nada aconteceu ainda</div>}
         {book.map((entry, i) => (
@@ -46,18 +49,31 @@ export function HistoryBook() {
     );
   }
 
-  if (recent.length === 0) return null;
   return (
-    <div className="whisper">
-      {recent.map((entry, i) => (
-        <div
-          key={`${entry.tick}-${i}`}
-          className={entry.landmark ? 'whisper__line whisper__line--mark' : 'whisper__line'}
-          style={{ opacity: 1 - i * 0.32 }}
-        >
-          {entry.text}
+    <>
+      {/* A maçaneta do livro. Discreta, no canto, sempre no mesmo lugar — e
+          suficiente para o jogador descobrir que existe uma história ali. */}
+      <button
+        className="bookmark"
+        onClick={() => setOpen(true)}
+        title="a história deste jardim (H)"
+        aria-label="abrir a história deste jardim"
+      >
+        📖
+      </button>
+      {recent.length > 0 && (
+        <div className="whisper">
+          {recent.map((entry, i) => (
+            <div
+              key={`${entry.tick}-${i}`}
+              className={entry.landmark ? 'whisper__line whisper__line--mark' : 'whisper__line'}
+              style={{ opacity: 1 - i * 0.32 }}
+            >
+              {entry.text}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

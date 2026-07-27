@@ -59,7 +59,12 @@ export const SpeechResource = defineResource<Utterance[]>('Speech');
 
 /** Ritmo da fala de cada criatura. */
 export interface Chatter {
+  /** Segundos até poder ensinar uma palavra a alguém de novo. */
   cooldown: number;
+  /** Segundos até poder falar sozinha de novo (dizer o que está fazendo). */
+  voice: number;
+  /** A última intenção anunciada — para não repetir a mesma palavra sem parar. */
+  spoke: string;
 }
 export const Chatter = defineComponent<Chatter>('Chatter');
 
@@ -104,6 +109,28 @@ const BUSY_FEAR = 0.4;
 const BABY_BONUS = 1.5;
 /** O quanto a conversa transfere do que o falante sabe sobre o assunto. */
 const HEARSAY = 0.35;
+
+/** Segundos entre duas falas espontâneas da mesma criatura. */
+const VOICE_EVERY = 9;
+
+/**
+ * A palavra que cada intenção pede.
+ *
+ * Nem toda intenção tem uma: "vagar" e "brincar" não são coisas que este
+ * vocabulário nomeia, e inventar uma palavra para elas seria pôr a criatura
+ * dizendo o que ela não sabe dizer.
+ */
+const WORD_FOR_INTENT: Record<string, number | undefined> = {
+  seekWater: WORD.water,
+  seekFood: WORD.food,
+  sleep: WORD.sleep,
+  flee: WORD.danger,
+  approachPlayer: WORD.player,
+  follow: WORD.friend,
+  socialize: WORD.friend,
+  shelter: WORD.tree,
+  mate: WORD.baby,
+};
 
 const nearby: number[] = [];
 
@@ -188,6 +215,11 @@ export function teachWord(world: World, id: number, word: number, amount: number
   const focus = focusOf(emotions, bio ? isBaby(bio) : false);
   const learned = lexicon.hear(word, amount * focus * familiarityOf(world, id, word));
   if (!learned) return false;
+
+  // A palavra que acabou de entrar sai na hora pela boca. É o instante mais
+  // importante do sistema inteiro e o único jeito de o jogador saber que
+  // aconteceu: sem isto, aprender é um número subindo em silêncio.
+  say(world, id, word);
 
   // Aprender uma palavra é uma alegria, e fica na memória como um dia bom.
   emotions.happiness = clamp01(emotions.happiness + 0.12);
@@ -357,7 +389,7 @@ export const teachingSystem: System = {
 
       let chatter = chatters.get(speaker);
       if (!chatter) {
-        chatter = { cooldown: SPEAK_EVERY };
+        chatter = { cooldown: SPEAK_EVERY, voice: 0, spoke: '' };
         chatters.set(speaker, chatter);
       }
       chatter.cooldown -= dt;
@@ -415,6 +447,32 @@ export const teachingSystem: System = {
           return;
         }
       }
+    });
+
+    // ---- Dizer o que se está fazendo -------------------------------------
+    //
+    // Uma criatura que sabe a palavra "água" e vai beber DIZ "água". É aqui que
+    // o vocabulário deixa de ser uma lista na ficha e vira comportamento
+    // visível: o jogador vê a palavra que ele ensinou saindo da boca dela no
+    // momento em que ela serve para alguma coisa.
+    creatures.forEach((_tag, self) => {
+      const lexicon = wordsStore.get(self);
+      const mind = minds.get(self);
+      const chatter = chatters.get(self);
+      if (!lexicon || !mind || !chatter) return;
+
+      chatter.voice -= dt;
+      const word = WORD_FOR_INTENT[mind.intent];
+      // Só quando a intenção MUDA: repetir "água" durante a caminhada inteira
+      // até o lago transformaria a fala num zumbido.
+      if (word === undefined || mind.intent === chatter.spoke) {
+        if (mind.intent !== chatter.spoke) chatter.spoke = mind.intent;
+        return;
+      }
+      chatter.spoke = mind.intent;
+      if (chatter.voice > 0 || !lexicon.knows(word)) return;
+      say(world, self, word);
+      chatter.voice = VOICE_EVERY;
     });
 
     // ---- O que não se repete, se perde -----------------------------------
