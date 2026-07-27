@@ -20,6 +20,12 @@ interface UiState {
   speed: SimulationSpeed;
   stats: SimulationStats;
   selectedId: number | null;
+  /**
+   * O GRUPO selecionado pelo retângulo. `selectedId` continua sendo quem
+   * aparece na ficha — uma ficha só cabe uma criatura —, mas as ordens valem
+   * para todos daqui.
+   */
+  selectedIds: number[];
   followId: number | null;
   selected: CreatureSnapshot | null;
   setRunning: (running: boolean) => void;
@@ -27,6 +33,7 @@ interface UiState {
   setSpeed: (speed: SimulationSpeed) => void;
   setStats: (stats: SimulationStats) => void;
   setSelectedId: (id: number | null) => void;
+  setSelectedIds: (ids: number[]) => void;
   setFollowId: (id: number | null) => void;
   setSelected: (snapshot: CreatureSnapshot | null) => void;
 }
@@ -36,13 +43,15 @@ export const useUiStore = create<UiState>((set) => ({
   speed: 1,
   stats: { tick: 0, population: 0, plants: 0, items: 0 },
   selectedId: null,
+  selectedIds: [],
   followId: null,
   selected: null,
   toggleRunning: () => set((state) => ({ isRunning: !state.isRunning })),
   setRunning: (running) => set({ isRunning: running }),
   setSpeed: (speed) => set({ speed }),
   setStats: (stats) => set({ stats }),
-  setSelectedId: (id) => set({ selectedId: id }),
+  setSelectedId: (id) => set({ selectedId: id, selectedIds: id === null ? [] : [id] }),
+  setSelectedIds: (ids) => set({ selectedIds: ids, selectedId: ids[0] ?? null }),
   setFollowId: (id) => set({ followId: id }),
   setSelected: (snapshot) => set({ selected: snapshot }),
 }));

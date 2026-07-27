@@ -2,6 +2,7 @@ import { POSE, POSE_DURATION, type Rng } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Behavior, Bio, Creature, Emotions, Mind, Needs, Personality } from '@creatures';
 import type { PersonalityTraits } from '@genetics';
+import { Order } from '../orders';
 import {
   AMBIENT_BIRD,
   AmbientResource,
@@ -99,6 +100,7 @@ export const idleSystem: System = {
     const velocities = world.store(Velocity);
     const bios = world.store(Bio);
 
+    const orders = world.store(Order);
     const props = world.getResource(PropsResource);
     const scenery = world.getResource(SceneryResource);
     const beings = world.getResource(AmbientResource);
@@ -131,7 +133,13 @@ export const idleSystem: System = {
         return;
       }
 
+      // Sob ordem do jogador, ela não fica de bobeira. Sem esta linha o gesto
+      // ocioso congelava a criatura no lugar e a ordem não saía do papel: ela
+      // recebia "vá até lá", e ficava parada se coçando.
+      const underOrder = orders.has(entity);
+
       const urgent =
+        underOrder ||
         needs.hunger > URGENT_HUNGER ||
         needs.thirst > URGENT_THIRST ||
         emotions.fear > URGENT_FEAR ||

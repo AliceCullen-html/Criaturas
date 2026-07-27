@@ -43,10 +43,20 @@ export interface GestureHandlers {
   onPokeGround: (x: number, y: number) => void;
   /** Clique na água: ondas e peixes fugindo. */
   onPokeWater: (x: number, y: number) => void;
+
+  // --- Comando de grupo ---------------------------------------------------
+  /** Arrastando um retângulo de seleção no chão (cantos em coordenadas de mundo). */
+  onMarquee: (x1: number, y1: number, x2: number, y2: number) => void;
+  /** Soltou o retângulo: seleciona quem estiver dentro. */
+  onMarqueeEnd: (x1: number, y1: number, x2: number, y2: number) => void;
+  /** Ordem no ponto (botão direito, ou toque com alguém já selecionado). */
+  onOrder: (x: number, y: number) => void;
 }
 
 export interface WorldProbe {
   creatureAt: (x: number, y: number) => number | null;
+  /** Há alguém selecionado agora? Decide se um toque no chão é ordem ou cutucão. */
+  hasSelection: () => boolean;
   itemAt: (x: number, y: number) => number | null;
   /** Cenário grande sob o ponto: árvore, pedra ou arbusto. */
   sceneryAt: (x: number, y: number) => { kind: string; index: number } | null;
@@ -98,6 +108,15 @@ export class GestureRecognizer {
   /** Segundos de dedo apoiado, e o que está embaixo dele. */
   private holdTime = 0;
   private holdTarget: { kind: 'item' | 'scenery'; index: number } | null = null;
+  /**
+   * Retângulo de seleção em curso.
+   *
+   * Só nasce quando o arrasto começou em chão VAZIO — sem objeto, sem criatura
+   * e sem cenário embaixo. É o que deixa a seleção conviver com o resto dos
+   * gestos sem roubar nenhum deles: onde havia algo para pegar, pega-se; onde
+   * não havia nada, varre-se.
+   */
+  private marquee = false;
   private pettingId: number | null = null;
   private petTime = 0;
   private petRemembered = false;
@@ -233,6 +252,11 @@ export class GestureRecognizer {
     if (creature !== null) this.pettingId = creature;
   }
 
+  /** Botão direito: ordem para quem estiver selecionado. */
+  secondaryDown(x: number, y: number): void {
+    this.handlers.onOrder(x, y);
+  }
+
   pointerMove(x: number, y: number, time: number): void {
     // O dt real entre dois eventos pode ser de 1 ms, o que faria um tremor de
     // 3 px virar "3000 px/s". Um piso de dt e uma média móvel evitam que um
@@ -266,6 +290,20 @@ export class GestureRecognizer {
     }
 
     if (Math.hypot(x - this.downX, y - this.downY) > DRAG_THRESHOLD) this.moved = true;
+
+    // Varredura: arrastar a partir de chão vazio desenha o retângulo.
+    if (this.marquee || (this.moved && this.holdTarget === null && this.pettingId === null)) {
+      const empty =
+        this.probe.itemAt(this.downX, this.downY) === null &&
+        this.probe.creatureAt(this.downX, this.downY) === null &&
+        this.probe.sceneryAt(this.downX, this.downY) === null;
+      if (this.marquee || empty) {
+        this.marquee = true;
+        this.state = 'open';
+        this.handlers.onMarquee(this.downX, this.downY, x, y);
+        return;
+      }
+    }
 
     // Já carregando cenário: a árvore ou pedra acompanha a mão.
     if (this.heldScenery !== null) {
@@ -311,7 +349,11 @@ export class GestureRecognizer {
   pointerUp(x: number, y: number, time: number, button: number): void {
     if (button !== 0) return;
 
-    if (this.heldScenery !== null) {
+    if (this.marquee) {
+      this.handlers.onMarqueeEnd(this.downX, this.downY, x, y);
+      this.marquee = false;
+      this.state = 'open';
+    } else if (this.heldScenery !== null) {
       this.handlers.onDropScenery(this.heldScenery, x, y);
       this.heldScenery = null;
       this.state = 'dropping';
@@ -337,6 +379,17 @@ export class GestureRecognizer {
         return;
       }
 
+      // Com um grupo selecionado, tocar o mundo é MANDAR. É o que faz o
+      // comando funcionar no celular, onde não existe botão direito.
+      if (this.probe.hasSelection()) {
+        this.handlers.onOrder(x, y);
+        this.state = 'open';
+        this.down = false;
+        this.holdTime = 0;
+        this.holdTarget = null;
+        return;
+      }
+
       // Clique fora de uma criatura age sobre o mundo, não sobre menus.
       const scenery = this.probe.sceneryAt(x, y);
       if (scenery) this.handlers.onPokeScenery(scenery.kind, scenery.index);
@@ -349,6 +402,7 @@ export class GestureRecognizer {
     }
 
     this.down = false;
+    this.marquee = false;
     this.pettingId = null;
     this.petTime = 0;
     this.holdTime = 0;
@@ -390,6 +444,7 @@ export class GestureRecognizer {
     }
     this.down = false;
     this.moved = false;
+    this.marquee = false;
     this.holdTime = 0;
     this.holdTarget = null;
     this.pettingId = null;

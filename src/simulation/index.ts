@@ -21,6 +21,8 @@ export { idleSystem } from './systems/idleSystem';
 export { confinementSystem } from './systems/confinementSystem';
 export { planSystem, Plan } from './systems/planSystem';
 export { socialSystem, DeathsResource } from './systems/socialSystem';
+export { Order, ORDER, orderSystem, issueOrder, clearOrder } from './orders';
+export type { OrderKind, OrderReply } from './orders';
 export { ROUTINE, ROUTINE_NAMES, carriedBy, dropCarried } from './routines';
 export { solids } from './solids';
 export {

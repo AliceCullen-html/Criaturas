@@ -42,6 +42,8 @@ export interface FrameInput {
   creatures: CreatureRenderBuffer;
   alpha: number;
   selectedId: number | null;
+  /** Todo o grupo selecionado: cada um ganha seu anel no chão. */
+  selectedIds: readonly number[];
   followId: number | null;
   /** Ids dos itens, na mesma ordem do buffer `items` (para o hit-test). */
   itemIds: Int32Array;
@@ -75,6 +77,8 @@ export interface Renderer {
   ripple(x: number, y: number): void;
   /** Faz a árvore tremer quando sacudida. */
   shakeTreeAt(index: number): void;
+  /** Quem está dentro do retângulo de seleção (cantos em coordenadas de mundo). */
+  creaturesInBox(x1: number, y1: number, x2: number, y2: number): number[];
   setHandlers(handlers: GestureHandlers): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
@@ -523,6 +527,7 @@ export function createRenderer(options: RendererOptions): Renderer {
   let reflectionLayer: Container | null = null;
   let shadowG: Graphics | null = null;
   let selectionG: Graphics | null = null;
+  let marqueeG: Graphics | null = null;
   let creatureLayer: Container | null = null;
   let particleLayer: Container | null = null;
   let destroyed = false;
@@ -615,6 +620,16 @@ export function createRenderer(options: RendererOptions): Renderer {
   let sceneryList: readonly ScenerySpot[] = [];
   /** Índice da peça de cenário que está na mão agora, ou null. */
   let draggedScenery: number | null = null;
+  /**
+   * Retângulo de seleção, em coordenadas JÁ PROJETADAS.
+   *
+   * Guardado assim de propósito: na tela o retângulo é alinhado aos eixos, mas
+   * no mundo ele é um losango. Comparar em espaço projetado é o que faz a
+   * varredura pegar exatamente quem o jogador enxergou dentro da caixa.
+   */
+  let marquee: { x1: number; y1: number; x2: number; y2: number } | null = null;
+  /** Quem está selecionado agora, para o gesto saber se um toque é ordem. */
+  const selectedNow = new Set<number>();
   /** A peça que estava tremendo, para poder devolvê-la ao lugar ao soltar. */
   let lastLoosening: number | null = null;
   let dragX = 0;
@@ -778,6 +793,29 @@ export function createRenderer(options: RendererOptions): Renderer {
     return null;
   }
 
+  /**
+   * Quem ficou dentro do retângulo.
+   *
+   * A comparação acontece em espaço PROJETADO: é lá que a caixa é um
+   * retângulo. Em coordenadas de mundo ela seria um losango, e a varredura
+   * pegaria criaturas que o jogador não viu dentro dela.
+   */
+  function creaturesInBox(x1: number, y1: number, x2: number, y2: number): number[] {
+    const buffer = lastCreatures;
+    if (!buffer) return [];
+    const left = Math.min(isoX(x1, y1), isoX(x2, y2));
+    const right = Math.max(isoX(x1, y1), isoX(x2, y2));
+    const top = Math.min(isoY(x1, y1), isoY(x2, y2));
+    const bottom = Math.max(isoY(x1, y1), isoY(x2, y2));
+    const found: number[] = [];
+    for (let i = 0; i < buffer.count; i++) {
+      const px = isoX(buffer.x[i]!, buffer.y[i]!);
+      const py = isoY(buffer.x[i]!, buffer.y[i]!);
+      if (px >= left && px <= right && py >= top && py <= bottom) found.push(buffer.id[i]!);
+    }
+    return found;
+  }
+
   /** A casa está livre para receber a peça que está sendo arrastada? */
   function tileAcceptsDrop(col: number, row: number, ignoreIndex: number): boolean {
     if (col < 0 || row < 0 || col >= tileCols(options.worldWidth)) return false;
@@ -883,6 +921,13 @@ export function createRenderer(options: RendererOptions): Renderer {
 
     canvas.addEventListener('pointerdown', (event) => {
       capture(event.pointerId);
+      // Botão direito: ordem, como em qualquer jogo de estratégia.
+      if (event.button === 2) {
+        event.preventDefault();
+        const { x, y } = toWorld(event);
+        gestures?.secondaryDown(x, y);
+        return;
+      }
       if (event.button === 1) {
         event.preventDefault();
         panning = true;
@@ -1064,6 +1109,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       const glow = new Container();
       const shadows = new Graphics();
       const selection = new Graphics();
+      const marqueeRect = new Graphics();
       const creatures = new Container();
       creatures.sortableChildren = true;
       const particles = new Container();
@@ -1094,7 +1140,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Cenário e criaturas na MESMA camada ordenada. Em vista isométrica, uma
       // árvore que está atrás não pode ser desenhada por cima de quem está na
       // frente — e com camadas separadas isso era inevitável.
-      upright.addChild(groundProps, hiddenItems, resources, creatures, itemsLayer);
+      upright.addChild(groundProps, hiddenItems, resources, creatures, itemsLayer, marqueeRect);
 
       root.addChild(ground, upright, ambient, particles, rain, tint, glow, rainbow, hand);
       instance.stage.addChild(root);
@@ -1141,6 +1187,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       resourceLayer = resources;
       shadowG = shadows;
       selectionG = selection;
+      marqueeG = marqueeRect;
       creatureLayer = creatures;
       particleLayer = particles;
 
@@ -1302,6 +1349,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
     },
 
+    creaturesInBox,
+
     shakeTreeAt(index: number): void {
       const spot = sceneryList[index];
       if (!spot) return;
@@ -1326,6 +1375,16 @@ export function createRenderer(options: RendererOptions): Renderer {
       // no ar por dois segundos — precisa saber apenas onde ela pousou.
       const watched: GestureHandlers = {
         ...next,
+        // O retângulo é assunto do desenho: a simulação só recebe quem ficou
+        // dentro dele, no fim.
+        onMarquee: (x1, y1, x2, y2) => {
+          marquee = { x1: isoX(x1, y1), y1: isoY(x1, y1), x2: isoX(x2, y2), y2: isoY(x2, y2) };
+          next.onMarquee(x1, y1, x2, y2);
+        },
+        onMarqueeEnd: (x1, y1, x2, y2) => {
+          marquee = null;
+          next.onMarqueeEnd(x1, y1, x2, y2);
+        },
         onGrabScenery: (index) => {
           draggedScenery = index;
           // O alvo começa DEBAIXO DA MÃO. Sem esta linha, quem segura sem
@@ -1347,6 +1406,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       };
       gestures = new GestureRecognizer(watched, {
         creatureAt: pickCreature,
+        hasSelection: () => selectedNow.size > 0,
         itemAt: pickItem,
         sceneryAt: pickScenery,
         isWater: (x, y) => waterProbe?.(x, y) ?? false,
@@ -1656,12 +1716,43 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       // Anel de seleção animado.
+      // Anéis de seleção: um para cada criatura do grupo. Ficam no container do
+      // chão, então saem elípticos na medida da perspectiva sem nenhuma conta
+      // extra — é o mesmo losango das casas, só que redondo.
       selectionG.clear();
-      if (selFound) {
-        const pulse = 1 + Math.sin(elapsed * 4) * 0.12;
+      const pulse = 1 + Math.sin(elapsed * 4) * 0.12;
+      selectedNow.clear();
+      for (const id of input.selectedIds) selectedNow.add(id);
+      if (input.selectedIds.length > 0) {
+        for (let i = 0; i < creatures.count; i++) {
+          if (!selectedNow.has(creatures.id[i]!)) continue;
+          const rx = creatures.x[i]!;
+          const ry = creatures.y[i]! + creatures.size[i]! * GROUND_CONTACT;
+          selectionG
+            .ellipse(rx, ry, creatures.size[i]! * 1.5 * pulse, creatures.size[i]! * 0.7 * pulse)
+            .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
+        }
+      } else if (selFound) {
         selectionG
           .ellipse(selX, selY, selSize * 1.5 * pulse, selSize * 0.7 * pulse)
           .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
+      }
+
+      // O retângulo da varredura. Vai no container SEM a matriz do chão: na
+      // tela ele é alinhado aos eixos, como em qualquer jogo de estratégia —
+      // inclinar junto com o terreno faria a caixa não bater com o gesto.
+      if (marqueeG) {
+        marqueeG.clear();
+        if (marquee) {
+          const x = Math.min(marquee.x1, marquee.x2);
+          const y = Math.min(marquee.y1, marquee.y2);
+          const w = Math.abs(marquee.x2 - marquee.x1);
+          const h = Math.abs(marquee.y2 - marquee.y1);
+          marqueeG
+            .rect(x, y, w, h)
+            .fill({ color: SELECTION_COLOR, alpha: 0.12 })
+            .stroke({ width: 1.5 / camera.zoom, color: SELECTION_COLOR, alpha: 0.9 });
+        }
       }
 
       // Objetos físicos (frutas, brinquedos).

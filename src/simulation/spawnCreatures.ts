@@ -11,6 +11,7 @@ import {
 import { Transform } from '@engine';
 import { solids } from './solids';
 import { Plan } from './systems/planSystem';
+import { Order } from './orders';
 
 /**
  * A que distância da água uma criatura pode começar a vida.
@@ -33,7 +34,9 @@ const WATER_REACH = 200;
 export function spawnCreatures(world: World, count: number): void {
   registerCreatureComponents(world);
   // O plano em curso vive na simulação, não em @creatures: rotina é caso de uso.
+  // A ordem do jogador é da mesma natureza — vem de fora da criatura.
   world.register(Plan);
+  world.register(Order);
   const terrain = world.getResource(TerrainResource);
   // Nem na água, nem debaixo de uma pedra grande.
   solids.rebuild(world);

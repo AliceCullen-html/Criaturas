@@ -20,6 +20,7 @@ import {
   Plant,
   SceneryResource,
   TerrainResource,
+  isWaterAt,
   WATER,
   PropsResource,
   propSystem,
@@ -63,6 +64,9 @@ import {
   planSystem,
   socialSystem,
   DeathsResource,
+  orderSystem,
+  issueOrder,
+  ORDER,
   DiscoveryResource,
   pokeProps,
   rememberPleasantPlace,
@@ -111,6 +115,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(emotionSystem)
     .add(handReactionSystem)
     .add(socialSystem)
+    .add(orderSystem)
     .add(planSystem)
     .add(decisionSystem)
     .add(idleSystem)
@@ -139,6 +144,25 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   let cardTimer = 0;
   const store = useUiStore;
   const CARD_SECONDS = 7;
+
+  /** A fruta solta mais próxima do ponto, ou -1. Uma ordem sobre comida
+   *  precisa saber em QUAL fruta o jogador clicou. */
+  const nearestFruit = (x: number, y: number): number => {
+    let best = -1;
+    let bestDistance = 26;
+    const transforms = world.store(Transform);
+    world.store(ItemComponent).forEach((item, entity) => {
+      if (item.kind !== 'fruit' || item.held || item.carriedBy >= 0) return;
+      const spot = transforms.get(entity);
+      if (!spot) return;
+      const distance = Math.hypot(spot.x - x, spot.y - y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = entity;
+      }
+    });
+    return best;
+  };
 
   /** Sinal visual sobre uma criatura (coração, gota, estrela). */
   const signal = (kind: FeedbackKind, id: number): void => {
@@ -186,6 +210,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       creatures: creatureBuffer,
       alpha,
       selectedId: state.selectedId,
+      selectedIds: state.selectedIds,
       followId: state.followId,
       ambient,
       rain: weather.intensity,
@@ -371,6 +396,44 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         }
       },
       onPokeGround: (x, y) => pokeProps(world, x, y),
+      // --- Comando de grupo -------------------------------------------
+      // O retângulo em si é desenho puro; a simulação só recebe o resultado.
+      onMarquee: () => {},
+      onMarqueeEnd: (x1, y1, x2, y2) => {
+        const dentro = renderer.creaturesInBox(x1, y1, x2, y2);
+        store.getState().setSelectedIds(dentro);
+        if (dentro.length > 0) {
+          cardTimer = CARD_SECONDS;
+          pushSelected();
+        } else {
+          clearSelection();
+        }
+      },
+      onOrder: (x, y) => {
+        const grupo = store.getState().selectedIds;
+        if (grupo.length === 0) return;
+
+        // O que há no ponto decide a ordem: fruta é "coma aquilo", água é
+        // "beba ali", chão é "vá até lá". Um comando só, três significados —
+        // como num jogo de estratégia, e sem nenhum menu.
+        const fruta = nearestFruit(x, y);
+        const naAgua = isWaterAt(terrain, x, y);
+        const kind = fruta >= 0 ? ORDER.eat : naAgua ? ORDER.drink : ORDER.move;
+
+        let obedeceram = 0;
+        for (const id of grupo) {
+          // Espalha o destino: um grupo inteiro mirando o mesmo pixel vira
+          // um empilhamento, e eles se empurram sem chegar nunca.
+          const spread = grupo.length > 1 ? 16 + grupo.length * 2 : 0;
+          const angle = (obedeceram / Math.max(1, grupo.length)) * Math.PI * 2;
+          const alvoX = x + Math.cos(angle) * spread;
+          const alvoY = y + Math.sin(angle) * spread;
+          const reply = issueOrder(world, id, kind, alvoX, alvoY, fruta);
+          if (reply === 'accepted') obedeceram += 1;
+          else if (reply === 'refused') signal('question', id);
+        }
+        if (obedeceram > 0) activeRenderer?.emit('star', x, y - 8);
+      },
       onPokeWater: (x, y) => {
         touchWater(world, x, y);
         activeRenderer?.ripple(x, y);

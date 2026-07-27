@@ -111,6 +111,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
 | D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
+| — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
 | F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
 
@@ -237,6 +238,33 @@ com quem morreu fica triste, guarda a lembrança e vai até onde aconteceu.
 Critério de aceitação (`social.test.ts`): o que se cobra não é que os laços
 EXISTAM — isso é só um número —, é que apareçam no comportamento. Com quem ela
 anda, onde ela dorme, e o que acontece com quem fica.
+
+### Ordens do jogador, e por que a criatura pode recusar
+
+Selecionar um grupo com um retângulo e mandá-lo andar até um ponto entra em
+tensão direta com a regra principal do projeto: *a criatura nunca pode parecer
+um NPC esperando ordens*.
+
+A saída não foi enfraquecer o comando — foi dar a ele um **custo**. A criatura
+decide se obedece:
+
+- quem confia em você vai, e sai um pouco mais próxima de você por ter ido;
+- quem tem medo de você **não vai**;
+- quem está morrendo de fome, de sede ou de dor não vai, porque tem problema
+  próprio — exatamente como já acontecia com as rotinas.
+
+Com isso a desobediência deixa de ser um defeito e vira **informação**: é o
+jeito mais direto de descobrir que aquela ali ainda não confia em você. A ordem
+também tem prazo (22 segundos) e é largada quando a urgência chega, o que
+impede uma criatura de morrer perseguindo um ponto impossível.
+
+Mecanicamente, `Order` é irmã de `Plan`: roda antes da decisão, impõe intenção
+e alvo e segura o compromisso alto para o cérebro não interferir. A diferença é
+de ORIGEM, não de mecanismo — uma nasce da própria criatura, a outra da sua mão.
+
+Do lado do desenho, o retângulo de seleção é comparado em espaço **projetado**:
+na tela ele é alinhado aos eixos, mas no mundo isométrico seria um losango, e a
+varredura pegaria criaturas que o jogador não viu dentro da caixa.
 
 ### Invariantes de geração do mundo
 
