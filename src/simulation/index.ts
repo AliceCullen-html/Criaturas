@@ -23,6 +23,15 @@ export { planSystem, Plan } from './systems/planSystem';
 export { socialSystem, DeathsResource } from './systems/socialSystem';
 export { Order, ORDER, orderSystem, issueOrder, clearOrder } from './orders';
 export {
+  Chatter,
+  SpeechResource,
+  teachingSystem,
+  teachWord,
+  showAndTell,
+  findComputer,
+} from './systems/teachingSystem';
+export type { Utterance, LessonReply } from './systems/teachingSystem';
+export {
   SpeciesResource,
   Budding,
   PHASE,

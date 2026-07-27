@@ -158,6 +158,24 @@ body {
   opacity: 0.75;
 }
 
+/* As palavras que ela aprendeu. Etiquetas pequenas, como se estivessem
+   escritas à mão na margem da ficha. */
+.card__words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.card__word {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: 7px;
+  background: rgba(142, 240, 212, 0.14);
+  color: #8ef0d4;
+}
+
 /* --- O livro da história -------------------------------------------------
    Duas camadas, nenhuma delas um menu. O sussurro passa no canto e some; o
    livro só existe quando o jogador aperta H. A tela é do mundo. */

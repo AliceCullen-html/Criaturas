@@ -5,7 +5,7 @@ import { generateTerrain, isWaterAt, findNearestWater } from './terrain';
 import { TerrainResource } from './terrainResource';
 import { spawnPlant } from './plant';
 import { registerItems, spawnFruit, spawnTrinket, spawnBoulder, BOULDER_RADIUS } from './items';
-import { SceneryResource, generateScenery } from './scenery';
+import { SceneryResource, generateScenery, placeComputer } from './scenery';
 import { WeatherResource, createWeather } from './weather';
 import { DayNightResource, createDayNight } from './dayNight';
 import { AmbientResource, createAmbient } from './ambient';
@@ -50,6 +50,9 @@ export function createWorld(config: WorldConfig, seed: number): World {
   world.setResource(TerrainResource, terrain);
 
   const scenery = generateScenery(terrain, config.width, config.height, seed);
+  // A máquina de ensinar palavras já vem com o jardim. Ela é do jogador, não da
+  // natureza: é a única coisa ali que ninguém plantou.
+  placeComputer(scenery, terrain, config.width, config.height);
   world.setResource(SceneryResource, scenery);
   world.setResource(WeatherResource, createWeather());
   world.setResource(DayNightResource, createDayNight());

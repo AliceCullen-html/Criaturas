@@ -1,4 +1,4 @@
-import { clamp, subjects } from '@core';
+import { WORD, clamp, subjects } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import {
   Attributes,
@@ -11,6 +11,7 @@ import {
   Needs,
   Nest,
   Personality,
+  Words,
 } from '@creatures';
 import type { PerceivedCreature, PerceivedFood, Perception } from '@ai';
 import {
@@ -36,10 +37,33 @@ const hunch = { x: 0, y: 0, distance: 0 };
 const WANDER_RANGE = 150;
 /** O quanto a sede estende o alcance da água além do que a vista enxerga. */
 const THIRST_MEMORY = 700;
+/**
+ * O que a palavra "água" acrescenta ao alcance da lembrança.
+ *
+ * Aqui está o motivo de a linguagem existir neste jogo. Uma criatura que sabe
+ * dizer "água" não enxerga mais longe: ela CONSEGUE PENSAR na água sem estar
+ * vendo o lago, e por isso vai até ele antes de estar morrendo de sede. É a
+ * diferença entre reagir e planejar, e ela cabe nesta constante.
+ */
+const WORD_RECALL = 260;
+/** E "fruta" faz reparar em comida que os outros passam sem ver. */
+const WORD_EYE = 1.35;
+/**
+ * De quão longe a máquina chama a atenção.
+ *
+ * Bem mais que a visão comum, e por um motivo concreto: ela é a coisa mais alta
+ * do jardim depois das árvores e a única que ACENDE. Medido, com o alcance
+ * preso à visão as criaturas passavam vinte e cinco minutos sem chegar a menos
+ * de cinquenta pixels dela — a linguagem existia no código e não acontecia
+ * nunca no mundo. Uma luz que ninguém vê não ensina ninguém.
+ */
+const MACHINE_SIGHT = 300;
 /** Segundos batendo no mesmo obstáculo antes de desistir do alvo. */
 const GIVE_UP_AFTER = 1.6;
 /** A que distância ela vai dar a volta ao desistir. */
 const DETOUR = 70;
+/** Perto o bastante da cama para se deitar. */
+const SLEEP_REACH = 14;
 const NO_TARGET = -1;
 
 /** O ponto suspeito mais próximo, dentro do alcance da visão. */
@@ -78,6 +102,7 @@ export const decisionSystem: System = {
     const memories = world.store(Memory);
     const plants = world.store(Plant);
     const items = world.store(Item);
+    const lexicons = world.store(Words);
 
     const terrain = world.getResource(TerrainResource);
     const foodIndex = world.getResource(FoodIndexResource);
@@ -182,14 +207,19 @@ export const decisionSystem: System = {
           });
         }
 
+        // Quem sabe a palavra "fruta" repara em comida mais longe: ter o nome
+        // da coisa é ter a coisa na cabeça enquanto se olha o mundo.
+        const words = lexicons.get(entity);
+        const foodSight = attributes.vision * (words?.knows(WORD.food) ? WORD_EYE : 1);
+
         perceivedFood.length = 0;
-        foodIndex.query(transform.x, transform.y, attributes.vision, candidates);
+        foodIndex.query(transform.x, transform.y, foodSight, candidates);
         for (let i = 0; i < candidates.length; i++) {
           const foodId = candidates[i]!;
           const foodTransform = transforms.get(foodId);
           if (!foodTransform) continue;
           const distance = Math.hypot(foodTransform.x - transform.x, foodTransform.y - transform.y);
-          if (distance > attributes.vision) continue;
+          if (distance > foodSight) continue;
 
           // Comida pode ser uma planta do chão ou uma fruta caída da árvore.
           const plant = plants.get(foodId);
@@ -220,7 +250,10 @@ export const decisionSystem: System = {
         // termo é essa lembrança, e ela cresce com a sede: satisfeita, a
         // criatura só repara na água que está à vista; morrendo de sede, ela
         // sabe atravessar o jardim até o lago.
-        const reach = attributes.vision + needs.thirst * THIRST_MEMORY;
+        const reach =
+          attributes.vision +
+          needs.thirst * THIRST_MEMORY +
+          (words?.knows(WORD.water) ? WORD_RECALL : 0);
         const water = findNearestWater(terrain, transform.x, transform.y, reach);
 
         // Laço e ninho: lidos prontos dos componentes que o sistema social
@@ -270,6 +303,7 @@ export const decisionSystem: System = {
           attention: mind.attention,
           ambient: nearestAmbient(ambient, transform.x, transform.y, attributes.vision),
           shelter: nearestTree(scenery, transform.x, transform.y),
+          machine: nearestComputer(scenery, transform.x, transform.y, MACHINE_SIGHT),
           hunch: nearestHunch(transform.x, transform.y, attributes.vision),
           rain: weather.intensity,
           home: nest ? { x: nest.x, y: nest.y, attachment: nest.attachment } : null,
@@ -317,11 +351,13 @@ export const decisionSystem: System = {
       const limp = 1 - emotions.pain * 0.65;
 
       // Traduz a intenção em movimento.
-      if (mind.intent === 'sleep') {
-        velocity.x = 0;
-        velocity.y = 0;
-        return;
-      }
+      //
+      // Dormir deixou de ser "parar onde está". Antes esta era a primeira
+      // linha do trecho: quem decidia dormir zerava a velocidade na hora, e o
+      // ninho escolhido como alvo não servia para nada — a criatura caía no
+      // sono a duzentos pixels da própria cama. Agora ela VAI para casa, e
+      // devagar, como quem já está com sono. É o que faz as famílias
+      // aparecerem dormindo juntas em vez de espalhadas pelo jardim.
 
       const dx = mind.targetX - transform.x;
       const dy = mind.targetY - transform.y;
@@ -330,16 +366,21 @@ export const decisionSystem: System = {
       // Procurar e acasalar são o contrário de observar: exigem encostar. Parar
       // a `size` de distância deixava as maiores sem nunca alcançar o par.
       const stopAt =
-        mind.intent === 'seekFood' ||
+        mind.intent === 'sleep'
+          ? SLEEP_REACH
+          : mind.intent === 'seekFood' ||
         mind.intent === 'seekWater' ||
         mind.intent === 'search' ||
         mind.intent === 'mate'
           ? 2
-          : mind.intent === 'watch'
-            ? 34
-            : mind.intent === 'follow'
-              ? attributes.size * 2.2
-              : attributes.size;
+          : // Estudar é de perto, mas não colado: ela para DIANTE da tela.
+            mind.intent === 'study'
+            ? 30
+            : mind.intent === 'watch'
+              ? 34
+              : mind.intent === 'follow'
+                ? attributes.size * 2.2
+                : attributes.size;
 
       if (distance < stopAt) {
         velocity.x = 0;
@@ -348,11 +389,13 @@ export const decisionSystem: System = {
       }
 
       const haste =
-        mind.intent === 'flee'
-          ? 1.45
-          : mind.intent === 'attack' || mind.intent === 'play'
-            ? 1.15
-            : 1;
+        mind.intent === 'sleep'
+          ? 0.6
+          : mind.intent === 'flee'
+            ? 1.45
+            : mind.intent === 'attack' || mind.intent === 'play'
+              ? 1.15
+              : 1;
       const tired = needs.energy < 0.25 ? 0.55 : 1;
       const speed = attributes.speed * haste * tired * limp;
       velocity.x = (dx / distance) * speed;
@@ -375,6 +418,23 @@ function nearestAmbient(
     if (!best || distance < best.distance) best = { x: being.x, y: being.y, distance };
   }
   return best;
+}
+
+/** O computador, se estiver ao alcance da vista. */
+function nearestComputer(
+  scenery: ReadonlyArray<{ kind: string; x: number; y: number }>,
+  x: number,
+  y: number,
+  vision: number,
+): { x: number; y: number; distance: number } | null {
+  for (const piece of scenery) {
+    if (piece.kind !== 'computer') continue;
+    const distance = Math.hypot(piece.x - x, piece.y - y);
+    // Fica a uma casa de distância da tela, do lado de baixo: é de lá que ela
+    // enxerga o que está escrito, e é lá que o jogador a vê parada olhando.
+    return distance <= vision ? { x: piece.x, y: piece.y + 22, distance } : null;
+  }
+  return null;
 }
 
 /** Árvore mais próxima — abrigo natural contra a chuva. */

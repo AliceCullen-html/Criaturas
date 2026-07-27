@@ -18,6 +18,8 @@ export {
   tileIndex,
 } from './grid';
 export { TINTIM } from './tintim';
+export { Lexicon, WORD, WORD_TEXT, WORD_COUNT, KNOWN } from './language';
+export type { WordId } from './language';
 export { POSE, POSE_COUNT, POSE_DURATION, POSE_NAMES } from './poses';
 export type { PoseId } from './poses';
 export type { MemorySubject, MemoryTrace, Episode, EpisodeInput } from './memory';

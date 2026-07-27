@@ -1,7 +1,8 @@
-import { Application, Container, Graphics, Matrix, Sprite, type Texture } from 'pixi.js';
+import { Application, Container, Graphics, Matrix, Sprite, Text, type Texture } from 'pixi.js';
 import {
   POSE,
   TILE,
+  WORD_TEXT,
   clamp,
   createRng,
   lerp,
@@ -82,6 +83,8 @@ export interface Renderer {
   setHandlers(handlers: GestureHandlers): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
+  /** Alguém disse uma palavra: aparece uma bolha com ela por cima da cabeça. */
+  say(word: number, worldX: number, worldY: number): void;
   /** Onde a criatura selecionada está NA TELA, para ancorar o cartão. */
   onSelectedScreen(callback: (x: number, y: number, visible: boolean) => void): void;
   frame(input: FrameInput): void;
@@ -89,7 +92,7 @@ export interface Renderer {
 }
 
 export interface ScenerySpot {
-  kind: 'tree' | 'rock' | 'bush';
+  kind: 'tree' | 'rock' | 'bush' | 'computer';
   /** A casa do tabuleiro em que a peça está plantada. */
   col: number;
   row: number;
@@ -98,6 +101,10 @@ export interface ScenerySpot {
   variant: number;
   /** 0 a 1 — uma muda recém-plantada é uma árvore pequena. */
   growth: number;
+  /** Só o computador: a palavra que está na tela. */
+  word: number;
+  /** Só o computador: >0 enquanto alguém estiver aprendendo diante dele. */
+  wordTimer: number;
 }
 
 /** Um detalhe do jardim, como o renderer precisa vê-lo. */
@@ -426,7 +433,20 @@ function animatePose(pose: number, t: number, elapsed: number, size: number, out
  * Onde fica o PÉ de cada peça, em fração da altura da textura. É por este
  * ponto que ela é plantada na casa — errar aqui faz a árvore pairar.
  */
-const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = { tree: 0.94, rock: 0.88, bush: 0.87 };
+const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = {
+  tree: 0.94,
+  rock: 0.88,
+  bush: 0.87,
+  computer: 0.92,
+};
+
+/**
+ * Onde fica o meio da tela do computador, contando do topo da textura, e a
+ * largura útil dela. Ficam aqui porque são medidas do DESENHO da máquina — o
+ * texto tem de cair dentro do vidro, não em cima da carcaça.
+ */
+const SCREEN_CENTER_Y = 32;
+const SCREEN_WIDTH = 38;
 
 /** Uma muda não é uma árvore em miniatura: começa baixinha e engrossa depois. */
 const growthScale = (growth: number): number => 0.35 + growth * 0.65;
@@ -576,6 +596,17 @@ export function createRenderer(options: RendererOptions): Renderer {
     down: number;
   }> = [];
   const reflections: Array<{ sprite: Sprite; phase: number; scale: number }> = [];
+  /**
+   * A tela do computador.
+   *
+   * A palavra é TEXTO de verdade, não pixel desenhado na textura: ela muda a
+   * cada lição, e é a única coisa do jogo que o jogador lê literalmente. Sem
+   * isso, a máquina seria uma caixa piscando e ensinar seria um número subindo
+   * em silêncio — o jogador precisa VER a palavra que a criatura está olhando.
+   */
+  let screenLabel: { text: Text; piece: ScenerySpot; width: number; showing: number } | null = null;
+  /** Palavras ditas em voz alta, subindo e sumindo. */
+  const bubbles: Array<{ text: Text; life: number }> = [];
   const ripples: Array<{ x: number; y: number; life: number }> = [];
   let groundPropLayer: Container | null = null;
   let tileCursorG: Graphics | null = null;
@@ -1280,6 +1311,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         decorationLayer.removeChild(entry.sprite);
         entry.sprite.destroy();
       }
+      if (screenLabel) {
+        decorationLayer.removeChild(screenLabel.text);
+        screenLabel.text.destroy();
+        screenLabel = null;
+      }
       reflectionLayer?.removeChildren();
       treeSprites.length = 0;
       reflections.length = 0;
@@ -1309,6 +1345,27 @@ export function createRenderer(options: RendererOptions): Renderer {
         });
         if (piece.kind === 'tree') {
           treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
+        }
+
+        if (piece.kind === 'computer') {
+          const label = new Text({
+            text: '',
+            style: {
+              fontFamily: 'monospace',
+              fontSize: 22,
+              fontWeight: 'bold',
+              fill: 0x8ef0d4,
+              align: 'center',
+            },
+          });
+          label.anchor.set(0.5);
+          // O meio da tela: medido a partir do PÉ da peça, como tudo aqui.
+          const face = texture.height * anchorY - SCREEN_CENTER_Y;
+          label.position.set(sprite.position.x, sprite.position.y - face * scale);
+          label.zIndex = sprite.zIndex + 0.5;
+          label.visible = false;
+          decorationLayer.addChild(label);
+          screenLabel = { text: label, piece, width: SCREEN_WIDTH * scale, showing: -1 };
         }
 
         // Quem está na beira aparece de cabeça para baixo na água. Só quem
@@ -1420,6 +1477,29 @@ export function createRenderer(options: RendererOptions): Renderer {
       sprite.position.set(isoX(worldX, worldY), isoY(worldX, worldY));
       particleLayer.addChild(sprite);
       feedback.push({ sprite, life: 1.4, maxLife: 1.4 });
+    },
+
+    say(word: number, worldX: number, worldY: number): void {
+      if (!particleLayer || bubbles.length > 16) return;
+      const text = WORD_TEXT[word];
+      if (!text) return;
+      const bubble = new Text({
+        text,
+        style: {
+          fontFamily: 'monospace',
+          fontSize: 20,
+          fontWeight: 'bold',
+          fill: 0xfdfbf0,
+          stroke: { color: 0x2a2f26, width: 5, join: 'round' },
+        },
+      });
+      bubble.anchor.set(0.5, 1);
+      // Metade do tamanho: o texto é desenhado grande e reduzido, senão fica
+      // serrilhado quando a câmera se aproxima.
+      bubble.scale.set(0.5);
+      bubble.position.set(isoX(worldX, worldY), isoY(worldX, worldY) - 16);
+      particleLayer.addChild(bubble);
+      bubbles.push({ text: bubble, life: 2.2 });
     },
 
     frame(input: FrameInput): void {
@@ -1825,6 +1905,45 @@ export function createRenderer(options: RendererOptions): Renderer {
         signal.sprite.position.y -= 14 * dt;
         signal.sprite.alpha = 1 - t * t;
         signal.sprite.scale.set(0.8 + t * 0.4);
+      }
+
+      // Palavras ditas: sobem devagar e somem. Sobem devagar de propósito —
+      // uma palavra precisa ficar tempo suficiente para ser LIDA.
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const bubble = bubbles[i]!;
+        bubble.life -= dt;
+        if (bubble.life <= 0) {
+          particleLayer.removeChild(bubble.text);
+          bubble.text.destroy();
+          bubbles.splice(i, 1);
+          continue;
+        }
+        bubble.text.position.y -= 9 * dt;
+        bubble.text.alpha = Math.min(1, bubble.life * 1.6);
+      }
+
+      // A tela do computador. Ela só acende quando alguém está aprendendo:
+      // uma máquina que fica piscando sozinha no meio do mato é enfeite; uma
+      // que acende quando a criatura chega é uma coisa acontecendo.
+      if (screenLabel) {
+        const { piece } = screenLabel;
+        const on = piece.wordTimer > 0;
+        screenLabel.text.visible = on;
+        if (on) {
+          if (screenLabel.showing !== piece.word) {
+            screenLabel.showing = piece.word;
+            screenLabel.text.text = WORD_TEXT[piece.word] ?? '';
+            // Encolhe o que não couber no vidro: "filhote" é bem mais larga
+            // que "casa", e uma palavra vazando pela carcaça estragaria a
+            // ilusão de que aquilo é uma tela.
+            screenLabel.text.scale.set(1);
+            const natural = screenLabel.text.width;
+            const fit = natural > 0 ? Math.min(0.6, screenLabel.width / natural) : 0.6;
+            screenLabel.text.scale.set(fit);
+          }
+          // Pulsa de leve, como monitor velho.
+          screenLabel.text.alpha = 0.82 + Math.sin(elapsed * 6) * 0.14;
+        }
       }
 
       // Mudas crescendo.

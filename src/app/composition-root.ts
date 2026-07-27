@@ -33,6 +33,7 @@ import {
   Item as ItemComponent,
 } from '@world';
 import { Creature, Emotions, Mind } from '@creatures';
+import { WORD, WORD_TEXT } from '@core';
 import {
   actionSystem,
   BrainResource,
@@ -84,6 +85,9 @@ import {
   turnRock,
   writeCreatureBuffer,
   writeItemBuffer,
+  teachingSystem,
+  showAndTell,
+  SpeechResource,
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
 import { App } from '@ui';
@@ -108,6 +112,8 @@ const PLANT_CAPACITY = 512;
 const ITEM_CAPACITY = 256;
 const CREATURE_CAPACITY = 128;
 const STATS_INTERVAL_FRAMES = 10;
+/** Segundos que a tela fica acesa quando o jogador cutuca a máquina. */
+const COMPUTER_FLASH = 4;
 
 export function createApp(rootElement: HTMLElement): AppInstance {
   const world = createWorld(WORLD_CONFIG, WORLD_SEED);
@@ -117,6 +123,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   world.setResource(DeathsResource, []);
+  world.setResource(SpeechResource, []);
   world.setResource(ChronicleResource, createChronicle());
   world.setResource(SpeciesResource, {
     phase: PHASE.budding,
@@ -137,6 +144,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(emotionSystem)
     .add(handReactionSystem)
     .add(socialSystem)
+    .add(teachingSystem)
     .add(orderSystem)
     .add(planSystem)
     .add(decisionSystem)
@@ -168,9 +176,23 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const store = useUiStore;
   const CARD_SECONDS = 7;
 
-  /** A fruta solta mais próxima do ponto, ou -1. Uma ordem sobre comida
-   *  precisa saber em QUAL fruta o jogador clicou. */
-  const nearestFruit = (x: number, y: number): number => {
+  /** Aquele objeto é uma fruta que dá para mandar comer? */
+  const edible = (entity: number): boolean => {
+    const item = world.store(ItemComponent).get(entity);
+    return !!item && item.kind === 'fruit' && !item.held && item.carriedBy < 0;
+  };
+
+  /**
+   * Em qual fruta o jogador clicou.
+   *
+   * A mira boa vem de fora: quem desenha a fruta sabe onde ela ESTÁ NA TELA e
+   * já respondeu isso na hora do clique. A varredura por raio aqui embaixo é só
+   * a rede de segurança para o dedo que passou de raspão pela fruta — sozinha
+   * ela errava sempre, porque uma fruta é desenhada acima do seu ponto no chão
+   * e o clique caía a trinta pixels de mundo do que se via.
+   */
+  const orderedFruit = (x: number, y: number, clicked: number | null): number => {
+    if (clicked !== null && clicked >= 0 && edible(clicked)) return clicked;
     let best = -1;
     let bestDistance = 26;
     const transforms = world.store(Transform);
@@ -185,6 +207,38 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       }
     });
     return best;
+  };
+
+  /**
+   * O nome do que está na sua mão.
+   *
+   * É o vocabulário do ensino direto: mostrar a coisa e dizer a palavra. Um
+   * graveto não tem nome no vocabulário — e é bom que não tenha, porque nem
+   * tudo no jardim precisa ter: a linguagem cobre o que importa para a vida
+   * delas, não o inventário inteiro.
+   */
+  const wordForItem = (itemId: number): number | null => {
+    const item = world.store(ItemComponent).get(itemId);
+    if (!item) return null;
+    if (item.kind === 'fruit') return WORD.food;
+    if (item.kind === 'seed') return WORD.tree;
+    if (item.kind === 'stone' || item.kind === 'boulder') return WORD.rock;
+    return null;
+  };
+
+  /**
+   * Você mostrando uma coisa e dizendo o nome dela.
+   *
+   * Só funciona com a criatura olhando — e é isso que faz ensinar ser uma
+   * relação e não um botão. Quem não estava prestando atenção não recebe nada,
+   * e o jogador descobre sozinho que precisa chamar antes.
+   */
+  const nameIt = (itemId: number, creatureId: number): void => {
+    const word = wordForItem(itemId);
+    if (word === null) return;
+    const reply = showAndTell(world, creatureId, word);
+    if (reply === 'learned') signal('star', creatureId);
+    else if (reply === 'listening') signal('question', creatureId);
   };
 
   /** Sinal visual sobre uma criatura (coração, gota, estrela). */
@@ -212,6 +266,18 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const step = (dt: number): void => {
     scheduler.update(world, dt);
     world.tick += 1;
+
+    // O que foi dito neste tique vira bolha na tela. A simulação registrou
+    // "fulana disse fruta"; quem transforma isso em imagem é esta camada.
+    const said = world.getResource(SpeechResource);
+    if (said.length > 0) {
+      const transforms = world.store(Transform);
+      for (const utterance of said) {
+        const where = transforms.get(utterance.speaker);
+        if (where) activeRenderer?.say(utterance.word, where.x, where.y);
+      }
+      said.length = 0;
+    }
   };
 
   const render = (alpha: number): void => {
@@ -377,6 +443,10 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       onPetRemembered: (creatureId) => {
         rememberPetting(world, creatureId);
         signal('star', creatureId);
+        // Derretida de carinho, ela está olhando para você — e é a única hora
+        // em que "você" é uma palavra que ela pode aprender por associação:
+        // a coisa nomeada está bem ali, encostada nela.
+        showAndTell(world, creatureId, WORD.player);
         pushSelected();
       },
       onRough: (creatureId, speed, dirX, dirY) => {
@@ -394,6 +464,8 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           signal('heart', creatureId);
           pushSelected();
         }
+        // A oferta é também uma aula: a fruta na frente do nariz e o nome dela.
+        nameIt(itemId, creatureId);
       },
       onHandMove: (x, y, inside) => setHandPresence(world, x, y, inside),
 
@@ -409,6 +481,15 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         } else if (kind === 'rock') {
           const spot = turnRock(world, index);
           if (spot.kind !== 'none') activeRenderer?.emit('question', spot.x, spot.y - 14);
+        } else if (kind === 'computer') {
+          // Cutucar a máquina acende a tela e passa para a próxima palavra.
+          // É como o jogador descobre para que ela serve: ninguém explica.
+          const machine = scenery[index];
+          if (machine) {
+            machine.word = (machine.word + 1) % WORD_TEXT.length;
+            machine.wordTimer = COMPUTER_FLASH;
+            activeRenderer?.emit('star', machine.x, machine.y - 40);
+          }
         } else {
           pokeProps(world, 0, 0);
         }
@@ -448,16 +529,29 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           clearSelection();
         }
       },
-      onOrder: (x, y) => {
+      onOrder: (x, y, alvo) => {
         const grupo = store.getState().selectedIds;
         if (grupo.length === 0) return;
 
         // O que há no ponto decide a ordem: fruta é "coma aquilo", água é
-        // "beba ali", chão é "vá até lá". Um comando só, três significados —
-        // como num jogo de estratégia, e sem nenhum menu.
-        const fruta = nearestFruit(x, y);
+        // "beba ali", o computador é "vá aprender", chão é "vá até lá". Um
+        // comando só, quatro significados — como num jogo de estratégia, e sem
+        // nenhum menu.
+        const fruta = orderedFruit(x, y, alvo.item);
+        const maquina =
+          alvo.scenery?.kind === 'computer' ? (scenery[alvo.scenery.index] ?? null) : null;
         const naAgua = isWaterAt(terrain, x, y);
-        const kind = fruta >= 0 ? ORDER.eat : naAgua ? ORDER.drink : ORDER.move;
+        const kind = maquina
+          ? ORDER.learn
+          : fruta >= 0
+            ? ORDER.eat
+            : naAgua
+              ? ORDER.drink
+              : ORDER.move;
+
+        // Diante da tela, não em cima dela: quem estuda fica na casa da frente.
+        const destinoX = maquina ? maquina.x : x;
+        const destinoY = maquina ? maquina.y + 26 : y;
 
         let obedeceram = 0;
         for (const id of grupo) {
@@ -465,13 +559,13 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           // um empilhamento, e eles se empurram sem chegar nunca.
           const spread = grupo.length > 1 ? 16 + grupo.length * 2 : 0;
           const angle = (obedeceram / Math.max(1, grupo.length)) * Math.PI * 2;
-          const alvoX = x + Math.cos(angle) * spread;
-          const alvoY = y + Math.sin(angle) * spread;
+          const alvoX = destinoX + Math.cos(angle) * spread;
+          const alvoY = destinoY + Math.sin(angle) * spread;
           const reply = issueOrder(world, id, kind, alvoX, alvoY, fruta);
           if (reply === 'accepted') obedeceram += 1;
           else if (reply === 'refused') signal('question', id);
         }
-        if (obedeceram > 0) activeRenderer?.emit('star', x, y - 8);
+        if (obedeceram > 0) activeRenderer?.emit('star', destinoX, destinoY - 8);
       },
       onPokeWater: (x, y) => {
         touchWater(world, x, y);

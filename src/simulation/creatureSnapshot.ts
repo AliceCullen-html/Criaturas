@@ -1,4 +1,4 @@
-import { subjects, type Episode } from '@core';
+import { WORD_TEXT, subjects, type Episode } from '@core';
 import { Plan } from './systems/planSystem';
 import { ROUTINE, ROUTINE_NAMES } from './routines';
 import type { World } from '@engine';
@@ -17,6 +17,7 @@ import {
   Mind,
   Needs,
   Personality,
+  Words,
   type Intent,
   type Mood,
   type Sex,
@@ -63,6 +64,15 @@ export interface CreatureSnapshot {
    * dados. O jogador precisa poder saber de quem ela gosta.
    */
   friend: string | null;
+  /**
+   * As palavras que ela sabe dizer.
+   *
+   * Vai para a ficha porque é a coisa mais difícil de perceber olhando o
+   * jardim: um vínculo se vê (elas andam juntas), a fome se vê (ela corre para
+   * a fruta), mas saber uma palavra só aparece quando ela fala — e o jogador
+   * que passou meia hora ensinando precisa poder conferir o que entrou.
+   */
+  words: string[];
   memories: Episode[];
   children: string[];
   friends: Array<{ name: string; affinity: number }>;
@@ -125,6 +135,7 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     isElder: isElder(bio),
     trauma: emotions.trauma,
     bond: memory.valenceOf(subjects.player()),
+    words: (world.store(Words).get(id)?.known() ?? []).map((word) => WORD_TEXT[word] ?? '?'),
     memories: memory.episodes.slice(0, 8),
     children: findChildren(world, identity.name),
     friends: findFriends(world, id, memory),

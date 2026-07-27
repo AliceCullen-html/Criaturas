@@ -134,7 +134,7 @@ function pickMood(
   if (mind.intent === 'play' || mind.intent === 'mate') return 'playful';
   if (mind.intent === 'seekWater' || needs.thirst > 0.75) return 'thirsty';
   if (mind.intent === 'seekFood' || needs.hunger > 0.75) return 'hungry';
-  if (mind.attention > 0) return 'curious';
+  if (mind.attention > 0 || mind.intent === 'study') return 'curious';
   if (emotions.happiness > 0.68) return 'happy';
   if (emotions.loneliness > 0.7 && emotions.happiness < 0.55) return 'needy';
   if (emotions.happiness < 0.3 || emotions.stress > 0.55) return 'sad';

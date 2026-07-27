@@ -399,6 +399,8 @@ export interface SceneryTextures {
   tree: Texture[];
   rock: Texture[];
   bush: Texture[];
+  /** A máquina que ensina palavras. Uma só variante: só existe uma no jardim. */
+  computer: Texture[];
 }
 
 /**
@@ -607,10 +609,71 @@ export function makeSceneryTextures(rng: Rng): SceneryTextures {
     return b.toTexture();
   };
 
+  /**
+   * O COMPUTADOR — a única coisa do jardim que não nasceu ali.
+   *
+   * Tudo no mundo é orgânico e arredondado; esta máquina é reta, tem cantos,
+   * tem parafuso e tem uma luz que pisca. A estranheza é de propósito: ela
+   * precisa parecer um objeto POSTO ali, porque é isso que ela é — o único
+   * canal pelo qual algo de fora entra na cabeça das criaturas. E o corpo é
+   * pesado e baixo para ela ser, ao mesmo tempo, um móvel: o jogador vai
+   * arrastá-la pelo jardim escolhendo quem vai aprender a falar.
+   */
+  const computer = (): Texture => {
+    const W = 72;
+    const H = 84;
+    const b = new PixelBuffer(W, H);
+    const shell = 0xd8d2c0;
+    const shellDark = shade(shell, 0.7);
+    const shellLight = mix(shell, 0xffffff, 0.35);
+    const screen = 0x1b2a33;
+    const cx = 36;
+
+    groundShadow(b, cx, 76, 24);
+
+    // Pedestal: um pé grosso, do tipo que não tomba.
+    b.rect(cx - 13, 62, 26, 12, shellDark);
+    b.rect(cx - 13, 62, 26, 2, shell);
+    b.rect(cx - 8, 54, 16, 10, shade(shell, 0.82));
+
+    // Corpo do monitor.
+    b.rect(cx - 26, 12, 52, 44, shell);
+    b.rect(cx - 26, 12, 52, 3, shellLight);
+    b.rect(cx - 26, 53, 52, 3, shellDark);
+    b.rect(cx - 26, 12, 3, 44, shellLight);
+    b.rect(cx + 23, 12, 3, 44, shellDark);
+
+    // A tela, funda e levemente curva nos cantos.
+    b.rect(cx - 21, 17, 42, 30, shade(screen, 0.7));
+    b.rect(cx - 20, 18, 40, 28, screen);
+    b.rect(cx - 20, 18, 40, 2, mix(screen, 0x6fe0d0, 0.25));
+    // Reflexo diagonal: é o que faz um retângulo escuro virar VIDRO.
+    for (let i = 0; i < 16; i++) {
+      b.rect(cx - 18 + i, 20 + i, 3, 1, mix(screen, 0xffffff, 0.12));
+    }
+
+    // Luzinha de ligado e os botões.
+    b.disc(cx + 17, 51, 1.8, 0x7ce08a);
+    b.rect(cx - 18, 50, 5, 2, shellDark);
+    b.rect(cx - 10, 50, 5, 2, shellDark);
+
+    // Parafusos nos cantos: detalhe de máquina, coisa que árvore não tem.
+    for (const [px, py] of [
+      [cx - 23, 15],
+      [cx + 21, 15],
+      [cx - 23, 52],
+      [cx + 21, 52],
+    ] as const) {
+      b.set(px, py, shellDark);
+    }
+    return b.toTexture();
+  };
+
   return {
     tree: [tree('plain'), tree('flowers'), tree('fruit'), tree('nest')],
     rock: [rock(0), rock(1)],
     bush: [bush(0), bush(1)],
+    computer: [computer()],
   };
 }
 

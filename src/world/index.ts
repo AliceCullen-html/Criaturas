@@ -29,6 +29,7 @@ export {
   tileAt,
   placeOnTile,
   makePiece,
+  placeComputer,
 } from './scenery';
 export type { SceneryPiece, SceneryKind } from './scenery';
 export { itemSystem } from './systems/itemSystem';

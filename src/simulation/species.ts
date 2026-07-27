@@ -10,6 +10,7 @@ import {
   Lineage,
   Memory,
   Needs,
+  Words,
   spawnCreature,
 } from '@creatures';
 import { countIn } from '@world';
@@ -233,6 +234,12 @@ export const buddingSystem: System = {
       const parentMemory = memories.get(parent);
       const childMemory = memories.get(child);
       if (parentMemory && childMemory) childMemory.inheritFrom(parentMemory, 0.5);
+
+      // E as palavras que o genitor aprendeu, pela metade. Numa espécie que se
+      // duplica, é o único caminho da língua entre as gerações.
+      const parentWords = world.store(Words).get(parent);
+      const childWords = world.store(Words).get(child);
+      if (parentWords && childWords) childWords.inheritFrom(parentWords, 0.5);
 
       // Duplicar custa: ela sai faminta, cansada e precisa de um tempo.
       needs.hunger = clamp01(needs.hunger + 0.3);

@@ -57,7 +57,7 @@ verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
 
 | Módulo         | Responsabilidade                                                                 | Depende de                         |
 | -------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
-| **core**       | Math (vetores 2D), RNG semeado, object pool, event bus, spatial hash, tipos base | nada                               |
+| **core**       | Math (vetores 2D), RNG semeado, spatial hash, grade do tabuleiro, memória associativa e vocabulário | nada                               |
 | **engine**     | ECS (entidades/componentes/sistemas), loop de timestep fixo, snapshots           | core                               |
 | **world**      | Terreno, recursos, plantas, clima, temperatura, dia/noite, estações              | core, engine                       |
 | **creatures**  | Componentes de criatura e blueprint de montagem                                  | core, engine                       |
@@ -167,8 +167,8 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
 | — ✅  | Origem da espécie: um ancestral, brotamento com mutação, transição evolutiva |
 | — ✅  | Livro da história: diário automático de nascimentos, mortes e marcos      |
+| F ✅  | Linguagem: vocabulário de 10 palavras, computador de ensino, conhecimento que se espalha |
 | E     | Som: voz sintetizada do genoma, chamados, risadas, choro de filhote       |
-| F     | Linguagem: vocabulário, computador de ensino, aprender observando         |
 
 Critérios de aceitação da fase, verificados por teste:
 
@@ -178,6 +178,10 @@ Critérios de aceitação da fase, verificados por teste:
 - `routines.test.ts` cobra que as histórias **cheguem ao fim** sozinhas: num
   jardim comum de 10 minutos, quantas correntes completas aconteceram sem o
   jogador tocar em nada.
+- `language.test.ts` cobra que o ensino **aconteça sozinho** num mundo vivo: uma
+  máquina no meio do jardim e criaturas com mais o que fazer. E cobra o preço —
+  que uma palavra custe tempo, que não entre em criatura faminta, e que quem
+  está de costas não aprenda nada.
 - `observation.test.ts` é a **regra principal virada em verificação**: segue uma
   criatura por cinco minutos, escreve a vida dela em frases e cobra variedade —
   e compara o terço mais preguiçoso com o terço mais agitado do jardim para
@@ -321,6 +325,68 @@ Do lado do desenho, o retângulo de seleção é comparado em espaço **projetad
 na tela ele é alinhado aos eixos, mas no mundo isométrico seria um losango, e a
 varredura pegaria criaturas que o jogador não viu dentro da caixa.
 
+### A linguagem, e por que ela não é enfeite
+
+Uma criatura que aprende a dizer "água" não ganhou um adorno de ficha: ganhou
+um jeito de guardar o mundo na cabeça sem ter o mundo na frente. Por isso cada
+palavra do vocabulário **faz alguma coisa**:
+
+- quem sabe `água` alcança o lago de muito mais longe (o termo de lembrança da
+  sede ganha +260) — deixa de reagir à sede e passa a se antecipar a ela;
+- quem sabe `fruta` repara em comida a 35% mais distância;
+- e a palavra **carrega conhecimento junto**. Quando duas criaturas
+  compartilham `fruta`, quem sabe que certo fruto faz mal passa o aviso adiante;
+  com `perigo`, passa-se o lugar onde algo ruim aconteceu; com `você`, passa-se
+  a OPINIÃO sobre o jogador. Uma criatura que nunca provou o cogumelo venenoso
+  pode recusá-lo porque alguém lhe contou, e a sua reputação corre o jardim sem
+  você encostar em ninguém.
+
+O ensino tem três caminhos, e todos passam pela mesma porta (`teachWord`):
+
+1. **O computador** — a única coisa artificial do jardim. Ocupa uma casa do
+   tabuleiro como uma árvore, e por isso se arrasta: onde o jogador o põe decide
+   quem aprende a falar. A tela acende quando alguém está diante dela e mostra
+   uma palavra por vez.
+2. **Você** — segurar uma fruta diante de uma criatura **que está olhando** é
+   nomear a fruta para ela. Mostrar algo para quem está de costas não ensina
+   nada, e é isso que faz ensinar ser uma relação e não um botão.
+3. **Elas** — quem sabe uma palavra a repete para quem está por perto, e assim o
+   conhecimento deixa de ser de um indivíduo e passa a ser da espécie. Filhotes
+   herdam metade do que os pais sabiam dizer, sempre abaixo do que eles sabiam:
+   nascem com o começo da língua da família e precisam terminar de aprendê-la.
+
+Aprender exige estar **bem** — sem fome, sem sede, sem medo, sem dor. Cuidar é
+pré-requisito de ensinar, e essa dependência é o que amarra a linguagem ao resto
+do jogo.
+
+Duas medições valem ficar registradas, porque as duas primeiras versões do
+sistema **não aprendiam nada**:
+
+- **O esquecimento não pode ser mais rápido que os intervalos da vida.** Com
+  0,004/s, a criatura estudava um pouco, saía para comer e voltava tendo perdido
+  o caminho andado: 25 mil lições dadas em vinte e cinco minutos, **zero
+  palavras aprendidas**. Passou a 0,0008/s, da ordem do esquecimento da memória
+  associativa.
+- **Ensinar é insistir.** A máquina mostrava sempre a palavra menos sabida, o
+  que parecia justo e era desastroso: espalhava um pouquinho de dez palavras por
+  todas as cabeças e nenhuma chegava perto de virar conhecimento. Agora ela
+  TERMINA o que começou — a tela não muda enquanto a turma presente não dominar
+  a palavra atual.
+
+Com isso, medido: em quinze minutos de jardim sem nenhuma interferência, **12 de
+35 criaturas falam**, uma delas com o vocabulário inteiro; e num mundo SEM
+computador, onde a única fonte de palavras é uma criatura que já sabe, duas
+outras aprenderam ouvindo — e souberam da fruta ruim sem nunca terem provado.
+
+### Dormir é ir para casa
+
+Ficou registrado porque foi um defeito que ninguém via. A criatura escolhia
+dormir, o ninho era posto como alvo — e a primeira linha do trecho de movimento
+zerava a velocidade na hora. Ela caía no sono a duzentos pixels da própria cama,
+e o ninho não servia para nada. Agora ela **anda até em casa**, devagar, como
+quem já está com sono: dormir no próprio ninho subiu de 56% para 62% das
+amostras, e é o que faz as famílias aparecerem dormindo juntas.
+
 ### Invariantes de geração do mundo
 
 O jardim é sorteado, mas não pode sortear um mundo inviável. A geração
@@ -333,7 +399,9 @@ O jardim é sorteado, mas não pode sortear um mundo inviável. A geração
 - **Ninguém nasce em ilha** (`spawnCreatures`): criaturas só surgem na maior
   região contínua, e a até 200 pixels de água.
 - **Uma peça por casa** (`scenery.ts`): o cenário nasce alinhado à grade, nunca
-  dentro do lago, nunca encostado noutra peça.
+  dentro do lago, nunca encostado noutra peça. Vale também para o computador:
+  encostado numa árvore ele viraria parede, e ainda por cima uma parede onde as
+  criaturas precisam parar para ler.
 
 ### A sede precisa de memória, não só de vista
 
@@ -354,9 +422,6 @@ minutos, e a companhia subiu de 92% para 96–99%.
 
 Registrado aqui para não se perder, na ordem em que muda mais a experiência:
 
-- **Aprendizado por associação e linguagem** (etapa F): objetos educativos,
-  ensinar palavras associando objeto + nome, e o conhecimento espalhando-se pela
-  população — uma criatura que aprende pode ensinar outra.
 - **Personalidade que muda com a experiência.** Hoje os traços são fixos desde o
   nascimento; deveriam derivar lentamente conforme o que a criatura vive.
 - **Emoções que faltam**: vergonha, ansiedade, amor, ciúmes, nojo.

@@ -1,4 +1,4 @@
-import type { CreatureMemory } from '@core';
+import type { CreatureMemory, Lexicon } from '@core';
 import { defineComponent } from '@engine';
 import type { Genome, PersonalityTraits } from '@genetics';
 
@@ -30,7 +30,9 @@ export type Intent =
   | 'shelter'
   | 'sunbathe'
   | 'search'
-  | 'follow';
+  | 'follow'
+  /** Parada diante do computador, aprendendo palavras. */
+  | 'study';
 
 /** Expressão facial dominante, derivada das emoções. */
 export type Mood =
@@ -183,6 +185,17 @@ export const Identity = defineComponent<Identity>('Identity');
 
 /** Memória associativa e episódica — a base do aprendizado. */
 export const Memory = defineComponent<CreatureMemory>('Memory');
+
+/**
+ * As palavras que ela sabe.
+ *
+ * Fica separado da memória porque são coisas diferentes: a memória é o que ela
+ * VIVEU, o vocabulário é o que ela consegue DIZER. Uma criatura pode ter comido
+ * cem frutas e não saber a palavra "fruta"; e pode saber a palavra sem nunca
+ * ter passado mal com nenhuma. É o encontro dos dois que faz o conhecimento
+ * atravessar de uma cabeça para outra.
+ */
+export const Words = defineComponent<Lexicon>('Words');
 
 /** Decisão atual e alvo. `commitment` evita trocar de ideia a cada tick. */
 export interface Mind {

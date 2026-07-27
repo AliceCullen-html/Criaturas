@@ -335,6 +335,40 @@ export function createUtilityBrain(): Brain {
         );
       }
 
+      // ---- Estudar ------------------------------------------------------
+      //
+      // Ninguém nasce querendo aprender: o que existe é uma máquina piscando e
+      // uma criatura curiosa. E só quem está de barriga cheia, sem sede e sem
+      // medo para de fazer o resto e fica olhando — aprender é o que sobra
+      // quando não há nada urgente, e é por isso que ensinar depende de cuidar.
+      if (perception.machine) {
+        // O alcance da máquina é maior que a vista (ela acende), então a
+        // proximidade se mede pela distância dela, não pela visão da criatura.
+        const proximity = 1 - clamp01(perception.machine.distance / 300);
+        options.push(
+          option(
+            'study',
+            // Mesma forma da curiosidade que faz investigar o que parece
+            // escondido — é a mesma pulsão. As necessidades apenas PODAM a
+            // nota; multiplicá-las inteiras zerava a vontade de aprender em
+            // qualquer criatura que não estivesse recém-saciada, e ninguém
+            // nunca chegava à tela.
+            (emotions.curiosity * 1.5 + traits.curiosity * 0.8 + (self.isBaby ? 0.5 : 0)) *
+              (0.45 + proximity * 0.9) *
+              (1 - emotions.fear) *
+              (1 - needs.hunger * 0.85) *
+              (1 - needs.thirst * 0.85) *
+              (1 - emotions.sleepiness * 0.6) *
+              0.95,
+            perception.machine.x,
+            perception.machine.y,
+            NO_TARGET,
+            // Compromisso longo: uma lição não cabe em dois segundos.
+            7,
+          ),
+        );
+      }
+
       // ---- Observar uma borboleta ---------------------------------------
       // Curiosas param para acompanhar o que passa voando.
       if (perception.ambient) {
