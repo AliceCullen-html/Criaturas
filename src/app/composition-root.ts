@@ -90,6 +90,7 @@ import {
   SpeechResource,
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
+import { createMusic } from '@audio';
 import { App } from '@ui';
 import { cardAnchor } from '@ui/cardAnchor';
 import { useUiStore } from '@ui/store/simulationStore';
@@ -592,8 +593,18 @@ export function createApp(rootElement: HTMLElement): AppInstance {
 
   // Controles invisíveis: existem para quem procurar, sem ocupar a tela.
   // Espaço pausa, 1/2/4 mudam a velocidade.
+  // A música começa junto com o jogo. Se o navegador barrar o áudio — e ele
+  // barra, enquanto ninguém tocou na página —, ela entra sozinha no primeiro
+  // clique. O jogador nunca precisa apertar "tocar".
+  const music = createMusic();
+  music.start();
+
   const onKeyDown = (event: KeyboardEvent): void => {
     const state = store.getState();
+    if (event.key === 'm' || event.key === 'M') {
+      music.toggleMute();
+      return;
+    }
     if (event.code === 'Space') {
       event.preventDefault();
       state.toggleRunning();
@@ -609,6 +620,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   return {
     dispose(): void {
       window.removeEventListener('keydown', onKeyDown);
+      music.dispose();
       loop.stop();
       root.unmount();
     },

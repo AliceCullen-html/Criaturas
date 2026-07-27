@@ -43,6 +43,8 @@
       "@simulation/*": ["src/simulation/*"],
       "@rendering": ["src/rendering"],
       "@rendering/*": ["src/rendering/*"],
+      "@audio": ["src/audio"],
+      "@audio/*": ["src/audio/*"],
       "@ui": ["src/ui"],
       "@ui/*": ["src/ui/*"],
       "@save": ["src/save"],

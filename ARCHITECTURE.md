@@ -65,6 +65,7 @@ verificada automaticamente pelo ESLint (`eslint-plugin-boundaries`).
 | **ai**         | Interface `Brain` (percepção→intenção) e implementações plugáveis                | core, engine, creatures            |
 | **simulation** | Sistemas que aplicam as regras a cada tick; define o snapshot                    | core, engine, world, creatures, genetics, ai |
 | **rendering**  | Adapter PixiJS: desenha o snapshot, câmera, interpolação, pooling de sprites     | core, engine, assets               |
+| **audio**      | Música de fundo (e, adiante, a voz sintetizada das criaturas)                     | core, assets                       |
 | **ui**         | React + Zustand: HUD, inspetor, painéis, controles                               | core, engine, simulation           |
 | **save**       | Serialização e persistência em IndexedDB (inclui a seed)                          | core, engine, world                |
 | **app**        | Composition root: instancia e conecta tudo                                        | todas                              |
@@ -377,6 +378,24 @@ Com isso, medido: em quinze minutos de jardim sem nenhuma interferência, **12 d
 35 criaturas falam**, uma delas com o vocabulário inteiro; e num mundo SEM
 computador, onde a única fonte de palavras é uma criatura que já sabe, duas
 outras aprenderam ouvindo — e souberam da fruta ruim sem nunca terem provado.
+
+### A música e a política de autoplay
+
+Qualquer áudio largado em `src/assets/audio/` vira música de fundo, sem tocar em
+código: o módulo varre a pasta e monta a lista. Um arquivo só toca em círculo;
+vários viram uma lista que dá a volta. `M` liga e desliga.
+
+Duas coisas que só aparecem no navegador de verdade e por isso ficam anotadas:
+
+- **Nenhum navegador toca som antes de um gesto.** Um `play()` na abertura da
+  página falha em silêncio — sem erro visível, sem música nunca. O player trata
+  essa falha como o caso NORMAL e fica de tocaia no primeiro clique ou tecla,
+  que num jogo feito de cliques chega em segundos.
+- **Temporizador não é relógio.** A entrada suave contava um trigésimo por
+  disparo de `setInterval`; com a página ocupada a sessenta quadros por segundo,
+  o disparo vinha a cada 120 ms em vez de 33. Medido: 2,5 s de fade viravam mais
+  de 9, e apertar `M` deixava a música tocando baixinho por vários segundos. O
+  tempo passou a ser lido de `performance.now()`.
 
 ### Dormir é ir para casa
 

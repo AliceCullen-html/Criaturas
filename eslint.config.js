@@ -22,6 +22,9 @@ const layerRules = [
   // `assets` entra aqui porque é justamente o renderer quem lê sprite: a
   // camada de assets não depende de nada e existe para ser consumida.
   { from: 'rendering', allow: ['core', 'engine', 'assets'] },
+  // O som não é desenho nem interface: é uma saída própria, e como o renderer
+  // ele só precisa do núcleo e dos arquivos.
+  { from: 'audio', allow: ['core', 'assets'] },
   { from: 'save', allow: ['core', 'engine', 'world'] },
   { from: 'ui', allow: ['core', 'engine', 'simulation'] },
   {
@@ -35,6 +38,7 @@ const layerRules = [
       'ai',
       'simulation',
       'rendering',
+      'audio',
       'ui',
       'save',
     ],
@@ -66,6 +70,7 @@ export default tseslint.config(
         { type: 'ai', pattern: 'src/ai/**' },
         { type: 'simulation', pattern: 'src/simulation/**' },
         { type: 'rendering', pattern: 'src/rendering/**' },
+        { type: 'audio', pattern: 'src/audio/**' },
         { type: 'ui', pattern: 'src/ui/**' },
         { type: 'save', pattern: 'src/save/**' },
         { type: 'app', pattern: 'src/app/**' },

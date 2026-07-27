@@ -15,6 +15,7 @@ export default defineConfig({
       '@ai': fileURLToPath(new URL('./src/ai', import.meta.url)),
       '@simulation': fileURLToPath(new URL('./src/simulation', import.meta.url)),
       '@rendering': fileURLToPath(new URL('./src/rendering', import.meta.url)),
+      '@audio': fileURLToPath(new URL('./src/audio', import.meta.url)),
       '@ui': fileURLToPath(new URL('./src/ui', import.meta.url)),
       '@save': fileURLToPath(new URL('./src/save', import.meta.url)),
       '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
