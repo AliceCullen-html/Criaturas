@@ -51,10 +51,18 @@ function mainNeed(creature: CreatureSnapshot): string {
 }
 
 function ageLabel(creature: CreatureSnapshot): string {
+  if (creature.egg >= 0) return 'ovo';
   if (creature.isBaby) return 'filhote';
   if (creature.isElder) return 'idosa';
   const years = Math.floor((creature.age / creature.lifespan) * 10);
   return `${Math.max(1, years)} anos`;
+}
+
+/** O que dizer de um ovo. Segure a mão em cima dele para chocar mais rápido. */
+function eggLabel(progress: number): string {
+  if (progress > 0.85) return '🥚 a casca está rachando';
+  if (progress > 0.5) return '🥚 está quase';
+  return '🥚 esquente com a mão';
 }
 
 /**
@@ -89,6 +97,23 @@ export function CreatureCard() {
   }, []);
 
   if (!creature) return null;
+
+  // O ovo tem ficha própria, e curta: quem está lá dentro e o quanto falta.
+  // Mostrar humor, fome e amizades de quem ainda não nasceu seria mentira.
+  if (creature.egg >= 0) {
+    return (
+      <div className="card" ref={ref}>
+        <div className="card__name">
+          {creature.name}
+          <span className="card__age">ovo</span>
+        </div>
+        <div className="card__need">{eggLabel(creature.egg)}</div>
+        <div className="card__hatch">
+          <div className="card__hatchFill" style={{ width: `${Math.round(creature.egg * 100)}%` }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card" ref={ref}>

@@ -5,6 +5,7 @@ import type { World } from '@engine';
 import { describePersonality, type PersonalityTraits } from '@genetics';
 import {
   Appearance,
+  Egg,
   Attributes,
   Bio,
   Bond,
@@ -33,6 +34,14 @@ export interface CreatureSnapshot {
   age: number;
   lifespan: number;
   isBaby: boolean;
+  /**
+   * -1 depois de nascida; 0..1 enquanto está no ovo.
+   *
+   * A ficha de um ovo é curta de propósito — não há humor, não há história,
+   * não há amizade. Há um nome e o quanto falta. Mas ela EXISTE, e é o que
+   * transforma "tem um ovo ali" em "o Bibo está para nascer".
+   */
+  egg: number;
   intent: Intent;
   /** A história em curso, em palavras — vazio se não houver nenhuma. */
   story: string;
@@ -79,7 +88,10 @@ export interface CreatureSnapshot {
 }
 
 export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot | null {
-  if (!world.store(Creature).has(id)) return null;
+  // Um ovo não é criatura para nenhum sistema do jogo — mas é para o jogador,
+  // que clicou nele e quer saber de quem é aquilo.
+  const egg = world.hasComponent(Egg) ? world.store(Egg).get(id) : undefined;
+  if (!egg && !world.store(Creature).has(id)) return null;
   const needs = world.store(Needs).get(id);
   const emotions = world.store(Emotions).get(id);
   const bio = world.store(Bio).get(id);
@@ -115,6 +127,7 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     age: bio.age,
     lifespan: bio.lifespan,
     isBaby: isBaby(bio),
+    egg: egg ? Math.min(1, egg.time / egg.duration) : -1,
     intent: mind.intent,
     story: storyOf(world, id),
     friend: friendName(world, id),

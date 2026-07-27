@@ -26,6 +26,7 @@ import { movementSystem } from './systems/movementSystem';
 import { actionSystem } from './systems/actionSystem';
 import { metabolismSystem } from './systems/metabolismSystem';
 import { reproductionSystem } from './systems/reproductionSystem';
+import { eggSystem } from './systems/eggSystem';
 import { searchSystem } from './systems/searchSystem';
 import { idleSystem } from './systems/idleSystem';
 import { confinementSystem } from './systems/confinementSystem';
@@ -59,6 +60,7 @@ const full = (): SystemScheduler =>
   new SystemScheduler()
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
+    .add(eggSystem)
     .add(emotionSystem)
     .add(planSystem)
     .add(decisionSystem)

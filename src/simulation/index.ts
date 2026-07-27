@@ -22,6 +22,7 @@ export { confinementSystem } from './systems/confinementSystem';
 export { planSystem, Plan } from './systems/planSystem';
 export { socialSystem, DeathsResource } from './systems/socialSystem';
 export { Order, ORDER, orderSystem, issueOrder, clearOrder } from './orders';
+export { eggSystem, warmEgg, isEgg, hatchProgress, forEachEgg } from './systems/eggSystem';
 export {
   Chatter,
   SpeechResource,

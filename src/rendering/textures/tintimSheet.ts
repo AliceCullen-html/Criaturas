@@ -4,7 +4,7 @@ import sheetUrl from '../../assets/tintim.png';
 /**
  * A FOLHA DE SPRITES DO TINTIM.
  *
- * Desenhada à mão, 512×384, oito colunas por seis linhas de células de 64×64.
+ * Desenhada à mão, 512×448, oito colunas por sete linhas de células de 64×64.
  * Dentro de cada célula o desenho tem 16×16 pixels de verdade, ampliados
  * quatro vezes — verificado pixel a pixel: a folha é um upscale 4× exato, sem
  * meio-tom nem antialiasing. Por isso a leitura aqui **desfaz a ampliação** e
@@ -22,14 +22,10 @@ export const ART = 16;
 const CELL = 64;
 const COLS = 8;
 /**
- * Quadros que a folha traz. Os vinte primeiros são os estados que o jogo já
- * sabe usar; os vinte e dois seguintes são desenhos novos ainda sem nome — a
- * folha chegou sem a ficha que dizia o que cada um representa. Eles são
- * recortados e ficam prontos, mas nenhum comportamento aponta para eles: dar
- * um significado errado a um quadro faz a criatura MENTIR sobre o que está
- * sentindo, que é pior do que não usá-lo.
+ * Quadros que a folha traz — os quarenta e três da criatura e os sete do
+ * começo da vida: seis do nascimento e um do ovo parado.
  */
-const COUNT = 42;
+const COUNT = 50;
 /** Destes o jogo já sabe o significado. */
 export const NAMED = 20;
 
@@ -95,6 +91,25 @@ export const FRAME = {
   dizzy3: 39,
   fall2: 40,
   fall3: 41,
+  /** Um quadro a mais que veio com a folha do ovo, ainda sem uso. */
+  spare: 42,
+  // --- O começo da vida (linha 6) ---
+  /**
+   * O ovo intacto e o ovo rachando.
+   *
+   * Os seis quadros de 43 a 48 são UMA animação em ordem: casca inteira,
+   * primeira rachadura, casca partida, a cabeça amarela aparecendo, a criatura
+   * saindo dos cacos e, enfim, ela de pé. É o único ciclo da folha que não dá
+   * a volta — nascer acontece uma vez.
+   */
+  hatch1: 43,
+  hatch2: 44,
+  hatch3: 45,
+  hatch4: 46,
+  hatch5: 47,
+  hatch6: 48,
+  /** O ovo parado, esperando. */
+  egg: 49,
 } as const;
 
 export type FrameId = (typeof FRAME)[keyof typeof FRAME];
@@ -123,6 +138,37 @@ export const LOOK_AROUND: readonly number[] = [
 export const EAT: readonly number[] = [FRAME.eat1, FRAME.eat2];
 export const FALL: readonly number[] = [FRAME.fall1, FRAME.fall2, FRAME.fall3];
 export const DIZZY: readonly number[] = [FRAME.dizzy1, FRAME.dizzy2, FRAME.dizzy3];
+/**
+ * NASCER. Não é um ciclo: é uma linha do tempo.
+ *
+ * Os outros ciclos dão a volta porque respirar, andar e dançar se repetem.
+ * Este vai do ovo inteiro à criatura de pé e para ali — e é por isso que o
+ * renderer o percorre pelo PROGRESSO da eclosão, não por um relógio.
+ */
+export const HATCH: readonly number[] = [
+  FRAME.hatch1,
+  FRAME.hatch2,
+  FRAME.hatch3,
+  FRAME.hatch4,
+  FRAME.hatch5,
+  FRAME.hatch6,
+];
+
+/**
+ * O quadro do ovo, dado o quanto falta para nascer (0 = recém-posto, 1 = saiu).
+ *
+ * Até o último quinto da espera o ovo é só um ovo: a rachadura tem de ser
+ * NOTÍCIA, e um ovo que racha desde o primeiro segundo não avisa nada. Depois
+ * disso a animação corre inteira, e o jogador que estava olhando vê a casca
+ * abrir.
+ */
+export const HATCH_START = 0.8;
+
+export function eggFrame(progress: number): number {
+  if (progress < HATCH_START) return FRAME.egg;
+  const t = (progress - HATCH_START) / (1 - HATCH_START);
+  return HATCH[Math.min(HATCH.length - 1, Math.floor(t * HATCH.length))]!;
+}
 
 /**
  * Índice do humor vindo da simulação. Cópia local do que a simulação escreve

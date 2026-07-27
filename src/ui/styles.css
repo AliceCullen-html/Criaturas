@@ -158,6 +158,22 @@ body {
   opacity: 0.75;
 }
 
+/* O quanto falta para o ovo romper. É a única barra do jogo — e existe porque
+   uma espera sem sinal nenhum parece um jogo travado. */
+.card__hatch {
+  margin-top: 6px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.card__hatchFill {
+  height: 100%;
+  background: #f5d76e;
+  transition: width 0.3s linear;
+}
+
 /* As palavras que ela aprendeu. Etiquetas pequenas, como se estivessem
    escritas à mão na margem da ficha. */
 .card__words {

@@ -53,6 +53,38 @@ export type Mood =
 /** Marca uma entidade como criatura. */
 export const Creature = defineComponent<true>('Creature');
 
+/**
+ * O OVO — a vida antes de começar.
+ *
+ * Toda criatura deste mundo nasce de um ovo, inclusive a primeira. E a decisão
+ * de projeto que sustenta isso é o que ela NÃO tem: enquanto está na casca, a
+ * entidade existe inteira — genoma, nome, aparência, linhagem — mas **não
+ * carrega o marcador `Creature`**.
+ *
+ * Isso não é um truque: é a afirmação, no código, de que um ovo ainda não é uma
+ * criatura. Todos os sistemas do jogo varrem `Creature` — decidir, andar, comer,
+ * sentir fome, fazer amizade, aprender palavras, se duplicar. Um ovo não faz
+ * nada disso, e não faz porque simplesmente não está na lista. Nenhum sistema
+ * precisou ganhar uma exceção, e nenhum vai precisar: o que for escrito amanhã
+ * também vai passar direto por ele.
+ *
+ * Ao nascer, a entidade ganha o marcador e continua a mesma — o nome que estava
+ * no ovo é o nome de quem saiu dele.
+ */
+export interface Egg {
+  /** Segundos já passados dentro da casca. */
+  time: number;
+  /** Quantos segundos leva para romper. */
+  duration: number;
+  /**
+   * Calor que a mão do jogador deixou. Decai sozinho e apressa a eclosão
+   * enquanto dura — é a primeira coisa que se pode fazer por uma criatura, e
+   * acontece antes de ela existir.
+   */
+  warmth: number;
+}
+export const Egg = defineComponent<Egg>('Egg');
+
 /** Necessidades fisiológicas, 0..1. hunger/thirst: 0 = saciado, 1 = crítico. */
 export interface Needs {
   hunger: number;

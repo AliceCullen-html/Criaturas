@@ -25,6 +25,13 @@ export class CreatureRenderBuffer {
   readonly poseTime: Float32Array;
   /** 1 quando está levando alguma coisa na boca: tem quadro próprio. */
   readonly carrying: Uint8Array;
+  /**
+   * -1 para quem já nasceu; 0..1 para quem ainda está no ovo, medindo o quanto
+   * falta para romper. O ovo viaja pelo MESMO buffer das criaturas de propósito:
+   * ele ocupa o mesmo lugar no mundo, tem a mesma sombra, entra na mesma
+   * ordenação por profundidade e se clica do mesmo jeito.
+   */
+  readonly egg: Float32Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -45,6 +52,7 @@ export class CreatureRenderBuffer {
     this.pose = new Uint8Array(capacity);
     this.poseTime = new Float32Array(capacity);
     this.carrying = new Uint8Array(capacity);
+    this.egg = new Float32Array(capacity);
   }
 
   clear(): void {
@@ -69,6 +77,7 @@ export class CreatureRenderBuffer {
     pose: number,
     poseTime: number,
     carrying: number,
+    egg: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -89,6 +98,7 @@ export class CreatureRenderBuffer {
     this.pose[i] = pose;
     this.poseTime[i] = poseTime;
     this.carrying[i] = carrying;
+    this.egg[i] = egg;
     this.count = i + 1;
   }
 }

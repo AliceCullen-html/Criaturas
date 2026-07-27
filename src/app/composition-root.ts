@@ -88,6 +88,10 @@ import {
   teachingSystem,
   showAndTell,
   SpeechResource,
+  eggSystem,
+  warmEgg,
+  isEgg,
+  forEachEgg,
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
 import { createMusic } from '@audio';
@@ -120,7 +124,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const world = createWorld(WORLD_CONFIG, WORLD_SEED);
   // Sem sexo: a espécie começa assexuada e só ganha machos e fêmeas quando
   // a população cruzar o limiar.
-  spawnCreatures(world, INITIAL_CREATURES, { sex: 'none', ageFraction: 0.05 });
+  // E começa DENTRO DE UM OVO. A primeira coisa que o jogador vê não é uma
+  // criatura andando: é uma casca parada no chão, com alguém lá dentro.
+  spawnCreatures(world, INITIAL_CREATURES, { sex: 'none', ageFraction: 0.05, asEgg: true });
   world.setResource(BrainResource, createUtilityBrain());
   world.setResource(PlayerResource, { x: 0, y: 0, present: false });
   world.setResource(DeathsResource, []);
@@ -131,7 +137,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     threshold: SEXUAL_THRESHOLD,
     buds: 0,
   });
-  chronicle(world, 'genesis', 'O jardim ganhou seu primeiro ser vivo', true);
+  chronicle(world, 'genesis', 'O jardim ganhou seu primeiro ovo', true);
   const terrain = world.getResource(TerrainResource);
   const scenery = world.getResource(SceneryResource);
   const ambient = world.getResource(AmbientResource);
@@ -142,6 +148,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const scheduler = new SystemScheduler()
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
+    .add(eggSystem)
     .add(emotionSystem)
     .add(handReactionSystem)
     .add(socialSystem)
@@ -437,6 +444,15 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         rememberPleasantPlace(world, x, y, 120);
       },
       onPet: (creatureId, dt) => {
+        // A mão parada sobre um ovo o esquenta, e ele rompe mais cedo. É a
+        // primeira coisa que o jogador pode fazer por uma criatura — antes
+        // mesmo de ela existir —, e quem chocou o ovo ganha o afeto de quem
+        // saiu dele.
+        if (isEgg(world, creatureId)) {
+          warmEgg(world, creatureId, dt);
+          if (Math.random() < dt * 1.2) signal('heart', creatureId);
+          return;
+        }
         if (petCreature(world, creatureId, dt) === 'accepted') {
           if (Math.random() < dt * 1.5) signal('heart', creatureId);
         }
@@ -579,6 +595,10 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       renderer.setTerrain(terrain, WATER, WORLD_SEED);
       renderer.setScenery(scenery);
       renderer.setProps(props);
+      // O jogo abre OLHANDO para o primeiro ovo. Sem isto ele nasce em algum
+      // canto de um jardim de novecentos por novecentos, e o jogador começa a
+      // partida procurando o próprio jogo.
+      forEachEgg(world, (_id, _progress, x, y) => renderer.lookAt(x, y));
       activeRenderer = renderer;
     });
 

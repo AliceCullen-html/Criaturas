@@ -4,6 +4,7 @@ import { mutate } from '@genetics';
 import {
   Bio,
   Creature,
+  Egg,
   CreatureGenome,
   Emotions,
   Identity,
@@ -120,7 +121,12 @@ export const buddingSystem: System = {
     // A espécie pode acabar. Começar com uma criatura só é assumir isso: se ela
     // morrer antes de brotar, ou se a linhagem não vingar, o jardim fica vazio.
     // O fim entra no livro como qualquer outro acontecimento — é o último.
-    if (creatures.size === 0) {
+    //
+    // Mas um ovo é vida esperando: enquanto houver casca no chão, a espécie não
+    // acabou. Sem esta segunda condição o jogo anunciava a extinção no primeiro
+    // segundo — porque o jardim começa com um ovo e nenhuma criatura.
+    const eggsLeft = world.hasComponent(Egg) ? world.store(Egg).size : 0;
+    if (creatures.size === 0 && eggsLeft === 0) {
       chronicle(world, 'extincao', 'A espécie se extinguiu. O jardim ficou vazio.', true);
       return;
     }
@@ -212,8 +218,9 @@ export const buddingSystem: System = {
         world,
         here.x + Math.cos(angle) * BUD_DISTANCE,
         here.y + Math.sin(angle) * BUD_DISTANCE,
-        // Mutação de um genitor só: é o mesmo DNA com um empurrão.
-        { genome: mutate(genome, world.rng), ageFraction: 0 },
+        // Mutação de um genitor só: é o mesmo DNA com um empurrão. E o broto
+        // sai como OVO: mesmo a duplicação passa pela casca.
+        { genome: mutate(genome, world.rng), ageFraction: 0, asEgg: true },
       );
 
       const childBio = bios.get(child);
@@ -248,13 +255,12 @@ export const buddingSystem: System = {
       state.cooldown = BUD_REST;
 
       species.buds += 1;
-      const childName = identities.get(child)?.name ?? '?';
       chronicle(
         world,
         species.buds === 1 ? 'primeiro-broto' : `broto-${species.buds}`,
         species.buds === 1
-          ? `${parentName} se duplicou pela primeira vez — nasceu ${childName}`
-          : `${parentName} se duplicou: nasceu ${childName}`,
+          ? `${parentName} se duplicou pela primeira vez — pôs um ovo`
+          : `${parentName} se duplicou: mais um ovo no jardim`,
         species.buds === 1,
       );
     }

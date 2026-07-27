@@ -37,6 +37,8 @@ export interface SpawnGroup {
   sex?: 'M' | 'F' | 'none';
   /** Fração da vida já vivida ao nascer. O ancestral começa recém-nascido. */
   ageFraction?: number;
+  /** Começa dentro de um ovo — é assim que o jardim abre. */
+  asEgg?: boolean;
 }
 
 export function spawnCreatures(world: World, count: number, group: SpawnGroup = {}): void {

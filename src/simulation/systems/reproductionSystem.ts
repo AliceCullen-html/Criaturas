@@ -142,6 +142,9 @@ export const reproductionSystem: System = {
           parentA: birth.nameA,
           parentB: birth.nameB,
           ageFraction: 0,
+          // O filhote de um casal também vem de um ovo. O nascimento vira dois
+          // acontecimentos: o ovo que aparece e a casca que se abre.
+          asEgg: true,
         },
       );
 
@@ -149,14 +152,14 @@ export const reproductionSystem: System = {
       chronicle(
         world,
         'primeiro-filhote',
-        `Nasceu o primeiro filhote de um casal: ${childName}, de ${birth.nameA} e ${birth.nameB}`,
+        `O primeiro ovo de um casal: ${birth.nameA} e ${birth.nameB} vão ter ${childName}`,
         true,
       );
-      chronicle(world, 'nascimento', `Nasceu ${childName}, de ${birth.nameA} e ${birth.nameB}`);
+      chronicle(world, 'ovo', `Apareceu um ovo de ${birth.nameA} e ${birth.nameB}`);
       chronicle(
         world,
         `geracao-${birth.generation}`,
-        `Chegou a ${birth.generation}ª geração: ${childName}`,
+        `Chegou a ${birth.generation}ª geração: ${childName} está a caminho`,
         true,
       );
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { subjects } from '@core';
 import { SystemScheduler, Transform, type Entity, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
-import { Bio, Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
+import { Bio, Creature, Egg, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
 import { createWorld, itemSystem, plantGrowthSystem, plantSpreadSystem, spawnFruit } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { foodIndexSystem } from './foodIndex';
@@ -13,6 +13,7 @@ import { movementSystem } from './systems/movementSystem';
 import { actionSystem } from './systems/actionSystem';
 import { metabolismSystem } from './systems/metabolismSystem';
 import { reproductionSystem } from './systems/reproductionSystem';
+import { eggSystem } from './systems/eggSystem';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
 import { offerItem, petCreature, roughGesture } from './handActions';
@@ -31,6 +32,7 @@ function fullScheduler(): SystemScheduler {
   return new SystemScheduler()
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
+    .add(eggSystem)
     .add(emotionSystem)
     .add(decisionSystem)
     .add(movementSystem)
@@ -215,7 +217,7 @@ describe('determinismo', () => {
 });
 
 describe('reprodução', () => {
-  it('um casal fértil, alimentado e feliz, tem filhote', () => {
+  it('um casal fértil, alimentado e feliz, põe um ovo — e dele nasce alguém', () => {
     const world = makeWorld(21, 2);
     const transforms = world.store(Transform);
     const bios = world.store(Bio);
@@ -247,8 +249,26 @@ describe('reprodução', () => {
 
     run(world, 200);
 
+    // Um casal não faz um filhote: faz um OVO. A segunda geração existe, mas
+    // ainda está dentro da casca — e enquanto está, não é criatura nenhuma
+    // para o resto do jogo.
+    expect(world.store(Egg).size, 'não veio ovo nenhum').toBeGreaterThan(0);
+    expect(world.store(Creature).size, 'nasceu direto, sem passar pelo ovo').toBe(2);
+
+    // Corre até a casca abrir, e para AÍ. Não é impaciência: neste mundo
+    // montado à mão o casal não vai atrás de comida, e passados uns noventa
+    // segundos parados eles morrem de fome — o teste passaria a medir a
+    // inanição em vez do nascimento.
+    const scheduler = fullScheduler();
+    let ticks = 0;
+    while (world.store(Egg).size > 0 && ticks < 20 * 90) {
+      scheduler.update(world, 1 / 20);
+      ticks += 1;
+    }
+    console.log(`a casca abriu em ${(ticks / 20).toFixed(0)}s`);
+
     // Sem esta expectativa o jogo nunca teria uma segunda geração: o mundo
     // só envelheceria até esvaziar.
-    expect(world.store(Creature).size).toBeGreaterThan(2);
+    expect(world.store(Creature).size, 'o ovo nunca chocou').toBeGreaterThan(2);
   });
 });

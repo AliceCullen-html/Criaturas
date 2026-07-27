@@ -11,6 +11,7 @@ import {
   type Sex,
   Creature,
   CreatureGenome,
+  Egg,
   Emotions,
   Identity,
   Lineage,
@@ -34,7 +35,23 @@ export interface SpawnOptions {
    * assexuada**, e o ancestral e os brotos precisam nascer `'none'`.
    */
   sex?: Sex;
+  /**
+   * Nasce dentro de um ovo. Quem chama decide: o jardim começa com um ovo, e
+   * cada broto e cada filhote também.
+   */
+  asEgg?: boolean;
+  /** Segundos de casca, se for ovo. */
+  eggSeconds?: number;
 }
+
+/**
+ * Quanto tempo um ovo leva para romper, sem ninguém esquentando.
+ *
+ * Perto de um minuto: tempo de o jogador reparar que há um ovo ali, chegar
+ * perto e descobrir que a mão dele faz diferença. Menos que isso e o ovo é uma
+ * animação de abertura; muito mais e vira uma tela de espera.
+ */
+export const EGG_SECONDS = 55;
 
 /** Registra os stores dos componentes de criatura (idempotente). */
 export function registerCreatureComponents(world: World): void {
@@ -56,6 +73,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Bond);
   world.register(Nest);
   world.register(Words);
+  world.register(Egg);
 }
 
 /** Cria uma criatura em (x, y), expressando o genoma dado (ou um aleatório). */
@@ -72,7 +90,15 @@ export function spawnCreature(
 
   world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
   world.store(Velocity).set(entity, { x: 0, y: 0 });
-  world.store(Creature).set(entity, true);
+  // O ovo NÃO é marcado como criatura: é isso que o mantém fora de todos os
+  // sistemas do jogo sem que nenhum deles precise saber que ovos existem.
+  if (options.asEgg) {
+    world
+      .store(Egg)
+      .set(entity, { time: 0, duration: options.eggSeconds ?? EGG_SECONDS, warmth: 0 });
+  } else {
+    world.store(Creature).set(entity, true);
+  }
   world.store(CreatureGenome).set(entity, genome);
   world.store(Personality).set(entity, phenotype.personality);
 

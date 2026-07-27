@@ -14,7 +14,7 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { ART, FRAME, frameFor, loadTintimFrames } from './textures/tintimSheet';
+import { ART, FRAME, eggFrame, frameFor, loadTintimFrames } from './textures/tintimSheet';
 import {
   makeDustTexture,
   makeTileTextures,
@@ -85,6 +85,14 @@ export interface Renderer {
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
   /** Alguém disse uma palavra: aparece uma bolha com ela por cima da cabeça. */
   say(word: number, worldX: number, worldY: number): void;
+  /**
+   * Aponta a câmera para um ponto do mundo, uma vez.
+   *
+   * Não é seguir: é olhar. Existe porque o jogo abre com UM ovo parado num
+   * jardim de novecentos por novecentos — e uma coisa que o jogador não acha
+   * é uma coisa que não existe. Depois disso a câmera é dele.
+   */
+  lookAt(worldX: number, worldY: number): void;
   /** Onde a criatura selecionada está NA TELA, para ancorar o cartão. */
   onSelectedScreen(callback: (x: number, y: number, visible: boolean) => void): void;
   frame(input: FrameInput): void;
@@ -1479,6 +1487,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       feedback.push({ sprite, life: 1.4, maxLife: 1.4 });
     },
 
+    lookAt(worldX: number, worldY: number): void {
+      camera.isoX = isoX(worldX, worldY);
+      camera.isoY = isoY(worldX, worldY);
+    },
+
     say(word: number, worldX: number, worldY: number): void {
       if (!particleLayer || bubbles.length > 16) return;
       const text = WORD_TEXT[word];
@@ -1691,6 +1704,15 @@ export function createRenderer(options: RendererOptions): Renderer {
           slot.yawnIn = (stage === 2 ? 8 : 14) + Math.random() * 10;
         }
 
+        // O OVO.
+        //
+        // Quem ainda está na casca não anda, não gesticula e não tem humor:
+        // tudo o que existe dele é o quanto falta para romper. Por isso ele
+        // curto-circuita a escolha de quadro inteira — e só ele, porque uma
+        // criatura nascida nunca tem este canal preenchido.
+        const hatching = creatures.egg[i]!;
+        const isEggSlot = hatching >= 0;
+
         const pose = creatures.pose[i]!;
         let frame = frameFor({
           mood,
@@ -1708,6 +1730,7 @@ export function createRenderer(options: RendererOptions): Renderer {
           if (slot.yawning > 0) frame = FRAME.surprised;
           else if (slot.blinking > 0 && eyesOpen) frame = FRAME.blink;
         }
+        if (isEggSlot) frame = eggFrame(hatching);
         const texture = tintimFrames[frame];
         if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
 
@@ -1746,11 +1769,21 @@ export function createRenderer(options: RendererOptions): Renderer {
         // respiração de fundo continua discreta; o gesto deliberado recupera
         // quase toda a amplitude.
         const give = pose !== POSE.none ? POSE_GIVE : SQUASH_DAMPING;
-        slot.container.scale.set(
-          slot.facing * scale * (1 + (anim.squashX - 1) * give),
-          scale * (1 + (anim.squashY - 1) * give),
-        );
-        slot.container.rotation = (anim.tilt + yawnTilt) * give * slot.facing;
+        if (isEggSlot) {
+          // O ovo não respira nem se inclina — ele BALANÇA, e cada vez mais
+          // perto da hora. Um ovo perfeitamente imóvel parece um enfeite do
+          // cenário; esse tremor é o que diz que há alguém ali dentro.
+          const stir = hatching * hatching;
+          const wobble = Math.sin(elapsed * (3 + hatching * 9) + slot.phase) * 0.06 * stir;
+          slot.container.scale.set(scale, scale);
+          slot.container.rotation = wobble;
+        } else {
+          slot.container.scale.set(
+            slot.facing * scale * (1 + (anim.squashX - 1) * give),
+            scale * (1 + (anim.squashY - 1) * give),
+          );
+          slot.container.rotation = (anim.tilt + yawnTilt) * give * slot.facing;
+        }
         // O PÉ NO CHÃO.
         //
         // A posição da criatura no mundo é o centro do corpo, não a sola do

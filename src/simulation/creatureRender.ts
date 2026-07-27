@@ -1,6 +1,6 @@
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
 import { Item } from '@world';
-import { Appearance, Attributes, Behavior, Bio, Creature, Mind, type Mood } from '@creatures';
+import { Appearance, Attributes, Behavior, Bio, Creature, Egg, Mind, type Mood } from '@creatures';
 import { growthScale, lifeStage } from './age';
 
 /** Códigos de expressão consumidos pelo renderer. */
@@ -21,6 +21,9 @@ const MOOD_CODES: Record<Mood, number> = {
 };
 
 const carrying = new Set<number>();
+
+/** Marca de "esta linha é uma criatura, não um ovo". */
+const NOT_AN_EGG = -1;
 
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
 export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer): void {
@@ -74,6 +77,41 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       pose,
       poseTime,
       carrying.has(entity) ? 1 : 0,
+      NOT_AN_EGG,
+    );
+  });
+
+  // Os ovos entram na mesma lista. Eles não são criaturas — nenhum sistema do
+  // jogo os enxerga —, mas ESTÃO no jardim, e quem desenha o jardim precisa
+  // deles. O canal `egg` diz ao renderer que aquele slot é uma casca.
+  if (!world.hasComponent(Egg)) return;
+  world.store(Egg).forEach((egg, entity) => {
+    const transform = transforms.get(entity);
+    const attribute = attributes.get(entity);
+    const appearance = appearances.get(entity);
+    const bio = bios.get(entity);
+    if (!transform || !attribute || !appearance || !bio) return;
+
+    buffer.push(
+      entity,
+      transform.x,
+      transform.y,
+      transform.prevX,
+      transform.prevY,
+      // Um ovo não cresce com a idade: é do tamanho que é.
+      attribute.size,
+      appearance.bodyColor,
+      appearance.eyeColor,
+      appearance.accentColor,
+      appearance.features,
+      appearance.speciesIndex,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      Math.min(1, egg.time / egg.duration),
     );
   });
 }

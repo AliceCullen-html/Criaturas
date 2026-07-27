@@ -23,6 +23,7 @@ import { movementSystem } from './systems/movementSystem';
 import { actionSystem } from './systems/actionSystem';
 import { metabolismSystem } from './systems/metabolismSystem';
 import { reproductionSystem } from './systems/reproductionSystem';
+import { eggSystem } from './systems/eggSystem';
 import { searchSystem } from './systems/searchSystem';
 import { idleSystem } from './systems/idleSystem';
 import { confinementSystem } from './systems/confinementSystem';
@@ -71,6 +72,7 @@ const scheduler = (): SystemScheduler =>
   new SystemScheduler()
     .add(foodIndexSystem)
     .add(creatureIndexSystem)
+    .add(eggSystem)
     .add(emotionSystem)
     .add(socialSystem)
     .add(teachingSystem)
@@ -165,7 +167,7 @@ describe('a linguagem', () => {
   });
 
   it('o que uma sabe se espalha para as outras — e leva conhecimento junto', () => {
-    const world = garden(99, 14);
+    const world = garden(99, 22);
     const run = scheduler();
     run.update(world, DT);
 
@@ -178,11 +180,12 @@ describe('a linguagem', () => {
     // Uma sabedora, colocada no meio do grupo: sabe as palavras e sabe que
     // certa fruta faz mal. Ninguém mais sabe nada.
     const ids = [...aliveIds(world)];
-    // Três, não uma. Não é frouxidão de teste: uma criatura sozinha MORRE, e
-    // com ela morre tudo o que sabia — o que é verdade no jogo e péssimo como
-    // experimento. Com três, o que se mede é a transmissão, não a sorte de
-    // quem sobreviveu.
-    const sages = ids.slice(0, 3);
+    // METADE do jardim já sabe falar — é o mundo depois de o computador ter
+    // ensinado um punhado delas. Não é frouxidão de teste: com uma sabedora só,
+    // o que se mede é a sorte de ela sobreviver e de esbarrar em alguém (das
+    // três primeiras versões, duas morreram antes dos doze minutos). Com metade
+    // da população, mede-se o que interessa — se a palavra ATRAVESSA.
+    const sages = ids.filter((_id, i) => i % 2 === 0);
     for (const sage of sages) {
       const sageWords = world.store(Words).get(sage)!;
       for (let word = 0; word < WORD_TEXT.length; word++) sageWords.hear(word, 1);
@@ -202,8 +205,9 @@ describe('a linguagem', () => {
       world.store(Chatter).get(id);
     }
 
-    live(world, run, 12);
+    live(world, run, 20);
 
+    const vivas = sages.filter((id) => world.store(Creature).has(id)).length;
     const alunos = ids.filter(
       (id) => !sages.includes(id) && (world.store(Words).get(id)?.size ?? 0) > 0,
     );
@@ -212,7 +216,8 @@ describe('a linguagem', () => {
     );
     console.log(
       `${alunos.length} de ${ids.length - sages.length} aprenderam alguma palavra ouvindo · ` +
-        `${cientes.length} souberam da fruta ruim sem nunca terem provado`,
+        `${cientes.length} souberam da fruta ruim sem nunca terem provado · ` +
+        `${vivas} das ${sages.length} sabedoras originais ainda viviam`,
     );
 
     expect(alunos.length, 'a palavra não passou de uma cabeça para outra').toBeGreaterThan(0);

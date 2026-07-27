@@ -113,6 +113,39 @@ Três compromissos que decidem qualquer dúvida de design:
 3. **A interface some.** Quase tudo acontece com o mouse, direto no mundo. Um
    menu é a última saída, não a primeira.
 
+### O ovo, e a ausência que o define
+
+Toda criatura deste jardim nasce de um ovo — a primeira inclusive. O jogo abre
+com uma casca parada no chão, e a câmera abre olhando para ela.
+
+A decisão que sustenta isso é o que o ovo **não tem**: enquanto está na casca, a
+entidade existe inteira — genoma, nome, aparência, linhagem, memória — mas *não
+carrega o marcador `Creature`*. Todos os sistemas do jogo varrem `Creature`:
+decidir, andar, comer, sentir fome, envelhecer, fazer amizade, aprender
+palavras, se duplicar. Um ovo não faz nada disso, e não faz porque simplesmente
+**não está na lista**. Nenhum sistema precisou ganhar uma exceção — e o que for
+escrito amanhã também vai passar direto por ele. Ao romper, a mesma entidade
+ganha o marcador e continua a mesma: o nome que estava no ovo é o nome de quem
+saiu dele.
+
+Só dois lugares precisaram saber que ovos existem, e ambos por bons motivos:
+
+- **O desenho.** Os ovos entram no mesmo buffer das criaturas, com um canal que
+  diz "esta linha é uma casca". Assim eles ocupam o mesmo lugar no mundo, têm a
+  mesma sombra, entram na mesma ordenação por profundidade e se clicam do mesmo
+  jeito. O ovo balança cada vez mais perto da hora, e a animação de nascer só
+  começa no último quinto da espera — uma casca que racha desde o primeiro
+  segundo não avisa nada.
+- **A extinção.** O sistema da espécie declarava o fim quando a população
+  chegava a zero — e passou a declará-lo no primeiro segundo de jogo, porque o
+  jardim começa com um ovo e nenhuma criatura. Enquanto houver casca no chão, a
+  espécie não acabou.
+
+E o ovo é a primeira interação do jogo: **a mão parada em cima dele o esquenta**,
+e ele rompe até dois vezes e meia mais rápido. Quem chocou o ovo com a própria
+mão recebe de volta o afeto de quem saiu dele — a primeira memória daquela
+criatura é você.
+
 ### A origem da espécie
 
 O mundo começa com **uma criatura**, sem sexo, sem par e sem história. Estando
@@ -164,6 +197,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Vista isométrica 2:1 e jardim maior (900×900), sem tocar na simulação        |
 | — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
+| — ✅  | O ovo: toda criatura nasce de uma casca, e a mão do jogador a choca          |
 | D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
 | — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
 | — ✅  | Origem da espécie: um ancestral, brotamento com mutação, transição evolutiva |
