@@ -174,6 +174,15 @@ export interface PropView {
 
 const BACKGROUND_COLOR = 0x2b4a3a;
 const SELECTION_COLOR = 0x9be0b4;
+/**
+ * Raios, em fração do tamanho da criatura, medidos NO MUNDO.
+ *
+ * Como a camada do chão achata tudo por 2:1, o que se vê na tela é uma elipse
+ * de largura 1,41× o raio e altura 0,71× — por isso os números parecem
+ * pequenos para o desenho que sai.
+ */
+const SHADOW_RADIUS = 0.44;
+const RING_RADIUS = 0.95;
 const SHADOW_COLOR = 0x101408;
 const PIXEL_SCALE = 0.8;
 const LEAF_COUNT = 36;
@@ -2063,20 +2072,38 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         slot.seen = frameId;
 
-        // Poeirinha dos passos.
+        // O PÉ DELA, em coordenadas do mundo.
+        //
+        // A criatura é posicionada pelo CENTRO do corpo (é com o centro que a
+        // simulação faz colisão), e o desenho desce um tanto para os pés
+        // encostarem no chão. Tudo que acompanha os pés — sombra, poeira, anel
+        // de seleção — desce o mesmo tanto, e nos DOIS eixos: no mundo, mexer
+        // só no y empurra o desenho na diagonal; nos dois, ele desce reto na
+        // tela, que é para onde o corpo desceu.
+        const foot = size * GROUND_CONTACT * ISO_SQUASH;
+
+        // Poeirinha dos passos, aos pés dela — nos dois eixos, como a sombra.
         if (moving && dustTimer <= 0) {
-          spawnDust(cx, cy + size * GROUND_CONTACT, size);
+          spawnDust(cx + foot, cy + foot, size);
         }
 
-        // Sombra suave.
-        shadowG.ellipse(cx, cy + size * GROUND_CONTACT, size * 0.62, size * 0.26).fill({
+        // SOMBRA SUAVE — E DEITADA NO CHÃO DE VERDADE.
+        //
+        // Um CÍRCULO, não uma elipse. Esta camada carrega a matriz do chão, e
+        // é ela que achata o que for desenhado aqui: um círculo do mundo sai
+        // como a elipse 2:1 da perspectiva, alinhada com a tela e com o
+        // losango das casas. Uma elipse desenhada já achatada sai GIRADA 45
+        // graus — e uma sombra torta embaixo de uma criatura em pé é
+        // exatamente o que faz parecer que ela está tombada no chão.
+        //
+        shadowG.ellipse(cx + foot, cy + foot, size * SHADOW_RADIUS, size * SHADOW_RADIUS).fill({
           color: SHADOW_COLOR,
           alpha: 0.24,
         });
 
         if (id === input.selectedId) {
-          selX = cx;
-          selY = cy + size * 0.35;
+          selX = cx + foot;
+          selY = cy + foot;
           selSize = size;
           selFound = true;
         }
@@ -2117,15 +2144,20 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (input.selectedIds.length > 0) {
         for (let i = 0; i < creatures.count; i++) {
           if (!selectedNow.has(creatures.id[i]!)) continue;
-          const rx = creatures.x[i]!;
-          const ry = creatures.y[i]! + creatures.size[i]! * GROUND_CONTACT;
+          const each = creatures.size[i]!;
+          const pé = each * GROUND_CONTACT * ISO_SQUASH;
           selectionG
-            .ellipse(rx, ry, creatures.size[i]! * 1.5 * pulse, creatures.size[i]! * 0.7 * pulse)
+            .ellipse(
+              creatures.x[i]! + pé,
+              creatures.y[i]! + pé,
+              each * RING_RADIUS * pulse,
+              each * RING_RADIUS * pulse,
+            )
             .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
         }
       } else if (selFound) {
         selectionG
-          .ellipse(selX, selY, selSize * 1.5 * pulse, selSize * 0.7 * pulse)
+          .ellipse(selX, selY, selSize * RING_RADIUS * pulse, selSize * RING_RADIUS * pulse)
           .stroke({ width: 1.5, color: SELECTION_COLOR, alpha: 0.9 });
       }
 
@@ -2381,8 +2413,10 @@ export function createRenderer(options: RendererOptions): Renderer {
             continue;
           }
           const radius = (1 - wave.life) * 34;
+          // Círculo: a onda é redonda NA ÁGUA, e quem a achata é a matriz do
+          // chão. Achatá-la aqui a deixaria girada, como a sombra ficava.
           rippleG
-            .ellipse(wave.x, wave.y, radius, radius * 0.55)
+            .ellipse(wave.x, wave.y, radius * 0.72, radius * 0.72)
             .stroke({ width: 1.4, color: 0xcfe8f7, alpha: wave.life * 0.7 });
         }
       }
@@ -2453,7 +2487,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         puddleG.clear();
         for (const puddle of input.puddles) {
           puddleG
-            .ellipse(puddle.x, puddle.y, 11 * puddle.life, 6 * puddle.life)
+            .ellipse(puddle.x, puddle.y, 8 * puddle.life, 8 * puddle.life)
             .fill({ color: 0x5b90bd, alpha: 0.4 * puddle.life });
         }
       }
