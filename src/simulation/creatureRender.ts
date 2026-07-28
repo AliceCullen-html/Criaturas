@@ -33,14 +33,21 @@ const PLAY_NEAR = 70;
  * QUAL QUADRO DE BRINCAR, se ela estiver brincando com a bola.
  *
  * A ficha da folha nomeia cinco: olha, empurra, pula, abraça, persegue. A
- * escolha sai da distância e do que ela acabou de fazer — de longe ela
- * PERSEGUE, chegando perto OLHA, encostada EMPURRA. É o mesmo princípio do
- * resto do jogo: o desenho não decide nada, ele lê o que está acontecendo.
+ * escolha sai da distância e do que ela acabou de fazer — parada de longe ela
+ * arma a PERSEGUIÇÃO, chegando perto OLHA, encostada PULA ou ABRAÇA.
+ *
+ * ANDANDO, quem manda é a caminhada. Este é o ponto que estava errado: a pose
+ * de brincar cobria tudo, inclusive a corrida atrás da bola, e uma criatura
+ * atravessava o jardim inteiro num desenho só — pernas paradas, deslizando no
+ * chão. Um quadro fixo em cima de um corpo que anda é o contrário de animação.
+ * A única pose que atropela a caminhada é o EMPURRÃO, e por um instante só:
+ * é o gesto em si, e ele precisa ser visto.
  */
 function playFrame(
   world: World,
   mind: { intent: string; targetEntity: number; actionCooldown: number },
   transform: { x: number; y: number },
+  moving: boolean,
 ): number {
   if (mind.intent !== 'play' || mind.targetEntity < 0) return 0;
   if (!world.hasComponent(Ball)) return 0;
@@ -49,9 +56,11 @@ function playFrame(
   const spot = world.store(Transform).get(mind.targetEntity);
   if (!spot) return 0;
 
-  const distance = Math.hypot(spot.x - transform.x, spot.y - transform.y);
   // Acabou de empurrar: o quadro do empurrão fica um instante no ar.
   if (mind.actionCooldown > 0.55) return 2;
+  if (moving) return 0;
+
+  const distance = Math.hypot(spot.x - transform.x, spot.y - transform.y);
   if (distance > PLAY_NEAR) return 5;
   if (distance > PLAY_TOUCH) return 1;
   // Coladinha: se a bola está no alto, ela pula atrás; no chão, abraça.
@@ -111,7 +120,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       poseTime,
       carrying.has(entity) ? 1 : 0,
       NOT_AN_EGG,
-      playFrame(world, mind, transform),
+      playFrame(world, mind, transform, moving),
     );
   });
 

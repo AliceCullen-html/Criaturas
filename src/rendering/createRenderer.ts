@@ -109,6 +109,24 @@ export interface Renderer {
    * gesto de mão VAZIA; com um objeto na mão, o toque é o objeto.
    */
   setOrderTest(test: () => boolean): void;
+  /**
+   * Quem responde QUAL DESENHO está na mão do jogador dentro do jardim.
+   *
+   * Devolve o índice do ícone no atlas, ou -1 para a mão nua. É o que faz o
+   * cursor virar a ferramenta de verdade: a seta do sistema não entra no
+   * jardim (o canvas a esconde), então quem mostra o que você está segurando é
+   * este desenho, aqui dentro do mundo, no tamanho e na luz do mundo.
+   */
+  setToolIcon(pick: () => number): void;
+  /**
+   * Quem responde se um gesto brusco MACHUCA.
+   *
+   * Só a mão nua bate. Com a esponja, a maçã ou o livro, esfregar depressa é
+   * esfregar depressa — antes, uma esfregada de banho com vontade era
+   * registrada como pancada, e o jogador assustava a criatura tentando cuidar
+   * dela.
+   */
+  setRoughTest(test: () => boolean): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
   /** Alguém disse uma palavra: aparece uma bolha com ela por cima da cabeça. */
@@ -712,6 +730,12 @@ export function createRenderer(options: RendererOptions): Renderer {
   let canGrab: () => boolean = () => true;
   /** E manda? Com um objeto na mão, tocar o chão é usar o objeto, não mandar. */
   let canOrder: () => boolean = () => true;
+  /** E machuca? Só a mão nua. */
+  let canHurt: () => boolean = () => true;
+  /** Qual ícone está na mão do jogador (-1 = a mão nua). */
+  let toolIcon: () => number = () => -1;
+  /** Os quinze ícones desenhados à mão, para o cursor dentro do mundo. */
+  let iconTextures: Texture[] | null = null;
   let dustTexture: Texture | null = null;
   let feedbackTextures: Record<FeedbackKind, Texture> | null = null;
   let handTextures: Record<HandState, Texture> | null = null;
@@ -815,6 +839,39 @@ export function createRenderer(options: RendererOptions): Renderer {
   }
 
   /**
+   * A MÃO AINDA ESTÁ EM CIMA DAQUELA criatura?
+   *
+   * Mais frouxo que `pickCreature` de propósito, e por dois motivos práticos.
+   * Uma criatura tem dezesseis pixels; esfregar é um gesto largo, e a esponja
+   * sai de cima dela a cada ida e volta. E ela ANDA — dar banho num bicho que
+   * caminha exigia perseguir o desenho pixel a pixel, o que na prática
+   * significava que ninguém conseguia dar banho.
+   *
+   * Aqui a pergunta é outra: "a mão continua junto dela?". O retângulo do
+   * desenho cresce à volta, e a resposta acompanha a criatura enquanto ela se
+   * move — é o contato que segue o corpo, e não o corpo que precisa ficar
+   * parado embaixo do cursor.
+   */
+  function stillTouching(worldX: number, worldY: number, id: number): boolean {
+    const buffer = lastCreatures;
+    if (!buffer) return false;
+    for (let i = 0; i < buffer.count; i++) {
+      if (buffer.id[i] !== id) continue;
+      const box = creatureBox(buffer.size[i]!);
+      return insideSprite(
+        worldX,
+        worldY,
+        buffer.x[i]!,
+        buffer.y[i]!,
+        box.halfWidth * TOUCH_SLACK,
+        box.up * TOUCH_SLACK,
+        box.down * TOUCH_SLACK,
+      );
+    }
+    return false;
+  }
+
+  /**
    * O dedo está EM CIMA do desenho?
    *
    * Esta é a conta que faltava, e é a razão de arrastar não funcionar direito.
@@ -848,6 +905,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       screenY >= -up * slack
     );
   }
+
+  /** O quanto o alvo cresce quando a mão JÁ está em contato com a criatura. */
+  const TOUCH_SLACK = 1.9;
 
   /**
    * O retângulo que a criatura ocupa na tela, medido a partir do seu ponto no
@@ -1205,6 +1265,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
       // segura e o que ele larga na grama têm de ser a mesma coisa.
       const icons = await loadIconTextures();
+      iconTextures = icons;
       for (const [variant, icon] of Object.entries(ICON_FOR_VARIANT)) {
         const texture = icons[icon];
         if (texture) resourceTextures[Number(variant)] = texture;
@@ -1567,6 +1628,14 @@ export function createRenderer(options: RendererOptions): Renderer {
       canOrder = test;
     },
 
+    setToolIcon(pick: () => number): void {
+      toolIcon = pick;
+    },
+
+    setRoughTest(test: () => boolean): void {
+      canHurt = test;
+    },
+
     setHandlers(next: GestureHandlers): void {
       // O renderer se intromete no arrasto do cenário porque a peça na mão é
       // um assunto SÓ dele: a simulação não precisa saber que uma árvore está
@@ -1604,7 +1673,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       };
       gestures = new GestureRecognizer(watched, {
         creatureAt: pickCreature,
+        stillTouching,
         canGrab: () => canGrab(),
+        canHurt: () => canHurt(),
         hasSelection: () => selectedNow.size > 0 && canOrder(),
         itemAt: pickItem,
         sceneryAt: pickScenery,
@@ -2098,17 +2169,30 @@ export function createRenderer(options: RendererOptions): Renderer {
         for (let i = items.count; i < itemSprites.length; i++) itemSprites[i]!.visible = false;
       }
 
-      // A mão do jogador dentro do mundo.
+      // A MÃO DO JOGADOR DENTRO DO MUNDO — e o que ela está segurando.
+      //
+      // O canvas esconde a seta do sistema de propósito: quem representa o
+      // jogador é este desenho, que vive no mundo, com o tamanho e a luz do
+      // mundo. Por isso é AQUI que a ferramenta tem de aparecer. Enquanto só a
+      // mãozinha era desenhada, escolher a esponja não mudava nada do que se
+      // via dentro do jardim: o cinto dizia "banho" e a mão continuava a mesma.
+      //
+      // Carregando alguma coisa, volta a mão: o que está na mão é o objeto que
+      // ela pegou, e uma esponja fechada em volta de uma fruta seria mentira.
       if (handSprite && handTextures) {
         handSprite.visible = handWorld.inside;
         if (handWorld.inside) {
           const state = gestures?.handState ?? 'open';
-          handSprite.texture = handTextures[state];
-          // Tamanho constante na tela, independente do zoom.
-          handSprite.scale.set(1 / camera.zoom);
+          const icon = state === 'holding' ? -1 : toolIcon();
+          const tool = icon >= 0 ? iconTextures?.[icon] : null;
+          handSprite.texture = tool ?? handTextures[state];
+          // Tamanho constante na tela, independente do zoom. O ícone é de
+          // 16 px e a mão de 20: o ajuste iguala o peso dos dois na tela.
+          handSprite.scale.set((tool ? 1.25 : 1) / camera.zoom);
+          // Esfregando, o objeto na mão treme junto — é o gesto do banho.
           const wobble = state === 'petting' ? Math.sin(elapsed * 9) * 1.5 : 0;
           handSprite.position.set(
-            isoX(handWorld.x, handWorld.y),
+            isoX(handWorld.x, handWorld.y) + (tool ? Math.sin(elapsed * 9) * wobble * 0.4 : 0),
             isoY(handWorld.x, handWorld.y) + wobble / camera.zoom,
           );
         }

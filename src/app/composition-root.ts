@@ -95,6 +95,7 @@ import {
   isEgg,
   forEachEgg,
   shakeFruitFrom,
+  feedCreature,
   placeBall,
   placeGift,
   placeEgg,
@@ -480,6 +481,18 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           return;
         }
 
+        // COMIDA: encostar a maçã na criatura é dar de comer. A fruta cai à
+        // frente dela e quem decide comer é ela.
+        if (tool() === TOOL.food && !isEgg(world, id)) {
+          const [fx, fy] = creaturePoint(id);
+          activeRenderer?.emit(
+            feedCreature(world, id) === 'given' ? 'star' : 'question',
+            fx,
+            fy - 14,
+          );
+          return;
+        }
+
         // ENSINO: apontar uma criatura é dizer "amigo" para quem estiver
         // olhando — inclusive para ela mesma.
         if (tool() === TOOL.book && !isEgg(world, id)) {
@@ -741,6 +754,14 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     // E mandar é gesto de mão vazia: com a bola, o presente ou o ovo na mão, o
     // toque no chão é aquilo, não uma ordem.
     renderer.setOrderTest(() => tool() === TOOL.hand);
+    // O QUE ESTÁ NA SUA MÃO, DENTRO DO JARDIM.
+    //
+    // A ordem do cinto é a mesma do atlas de ícones — comida 0, bola 1,
+    // esponja 2... —, então a ferramenta É o índice do desenho. A mão nua
+    // (-1) continua sendo a mãozinha animada de sempre.
+    renderer.setToolIcon(() => (tool() === TOOL.hand ? -1 : tool()));
+    // E só a mão nua machuca: esfregar com vontade não pode ser pancada.
+    renderer.setRoughTest(() => tool() === TOOL.hand);
 
     void renderer.mount(container).then(() => {
       if (cancelled) return;

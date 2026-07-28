@@ -52,6 +52,35 @@ export function shakeFruitFrom(world: World, piece: SceneryPiece): number {
   return spawnFruit(world, x, y);
 }
 
+export type FeedReply = 'given' | 'full';
+
+/**
+ * A MAÇÃ ATÉ A BOCA DELA.
+ *
+ * O cinto mostra uma maçã; encostar essa maçã na criatura tem de dar comida —
+ * era o gesto mais óbvio do jogo e o único que não fazia nada: o toque virava
+ * seleção e abria a ficha, que é exatamente a interface aparecendo no lugar do
+ * mundo.
+ *
+ * A fruta cai no chão à frente dela, não dentro dela. Quem decide comer é ela:
+ * pode estar sem fome, pode estar com medo de você, pode achar aquilo ruim. O
+ * jogador oferece — a criatura responde. É a maçã de verdade, a mesma variante
+ * que o ícone desenha, e é assim que "a comida que VOCÊ dá" vira um gosto
+ * aprendido, separado do que ela cata sozinha embaixo das árvores.
+ */
+export function feedCreature(world: World, id: number): FeedReply {
+  if (loose(world) >= maxItems(world.config)) return 'full';
+  const spot = world.store(Transform).get(id);
+  if (!spot) return 'full';
+  // À frente e um pouco para baixo: na projeção isométrica é onde ela enxerga,
+  // e é onde a fruta não fica escondida atrás do próprio corpo dela.
+  spawnFruit(world, spot.x + 9, spot.y + 9, { toxic: false, variant: 0 });
+  const mind = world.store(Mind).get(id);
+  // Ela repara: a mão do jogador acabou de pôr uma coisa ali.
+  if (mind) mind.attention = Math.max(mind.attention, 2.5);
+  return 'given';
+}
+
 export type BallReply = 'placed' | 'full';
 
 /** Larga uma bola no chão. */

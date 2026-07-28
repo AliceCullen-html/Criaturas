@@ -32,6 +32,7 @@ export {
 } from './systems/eggSystem';
 export {
   shakeFruitFrom,
+  feedCreature,
   placeBall,
   placeGift,
   placeEgg,
@@ -39,7 +40,7 @@ export {
   nameThing,
   wordForSpot,
 } from './toolActions';
-export type { BallReply, EggReply, ScrubReply } from './toolActions';
+export type { BallReply, EggReply, FeedReply, ScrubReply } from './toolActions';
 export {
   Chatter,
   SpeechResource,
@@ -49,20 +50,9 @@ export {
   findComputer,
 } from './systems/teachingSystem';
 export type { Utterance, LessonReply } from './systems/teachingSystem';
-export {
-  SpeciesResource,
-  Budding,
-  PHASE,
-  buddingSystem,
-  isBuddingPhase,
-} from './species';
+export { SpeciesResource, Budding, PHASE, buddingSystem, isBuddingPhase } from './species';
 export type { SpeciesState } from './species';
-export {
-  ChronicleResource,
-  createChronicle,
-  chronicle,
-  recentEntries,
-} from './chronicle';
+export { ChronicleResource, createChronicle, chronicle, recentEntries } from './chronicle';
 export type { Chronicle, ChronicleEntry } from './chronicle';
 export type { OrderKind, OrderReply } from './orders';
 export { ROUTINE, ROUTINE_NAMES, carriedBy, dropCarried } from './routines';

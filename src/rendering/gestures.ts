@@ -80,6 +80,21 @@ export interface WorldProbe {
    * significar alguma coisa.
    */
   canGrab: () => boolean;
+  /**
+   * A ferramenta na mão machuca?
+   *
+   * Só a mão nua. Um gesto brusco com a esponja é uma esfregada com vontade, e
+   * confundir os dois fazia o jogo punir quem estava cuidando da criatura.
+   */
+  canHurt: () => boolean;
+  /**
+   * A mão continua encostada NAQUELA criatura?
+   *
+   * Diferente de `creatureAt`, que pergunta "o que há sob o dedo" para começar
+   * um gesto. Esta pergunta é a de continuar um gesto já começado, e por isso é
+   * mais frouxa: o contato acompanha o corpo dela, inclusive enquanto ela anda.
+   */
+  stillTouching: (x: number, y: number, id: number) => boolean;
   /** Há alguém selecionado agora? Decide se um toque no chão é ordem ou cutucão. */
   hasSelection: () => boolean;
   itemAt: (x: number, y: number) => number | null;
@@ -103,6 +118,8 @@ const OBSERVE_MS = 700;
 const PET_SPEED_MAX = 260; // px/s no mundo: acima disso não é carinho
 const ROUGH_SPEED = 620;
 const PET_TIME_FOR_MEMORY = 2.2;
+/** Segundos de mão fora da criatura antes de o contato acabar de verdade. */
+const PET_GRACE = 0.35;
 const DRAG_THRESHOLD = 4;
 /** Piso do intervalo entre amostras, para não inflar a velocidade. */
 const MIN_SAMPLE_DT = 0.016;
@@ -143,6 +160,16 @@ export class GestureRecognizer {
    */
   private marquee = false;
   private pettingId: number | null = null;
+  /**
+   * Há quanto tempo a mão saiu de cima da criatura sem soltar o botão.
+   *
+   * Existe por causa do banho. Uma criatura tem dezesseis pixels; esfregar é um
+   * gesto largo, e a esponja sai de cima dela a cada ida e volta. Antes o
+   * contato morria no primeiro pixel de fora, e uma esfregada honesta tirava
+   * sete por cento da sujeira — a mesma esfregada, feita em circulozinhos de
+   * três pixels, tirava tudo. O jogo estava premiando o gesto errado.
+   */
+  private petAway = 0;
   private petTime = 0;
   private petRemembered = false;
   private roughSent = false;
@@ -227,6 +254,24 @@ export class GestureRecognizer {
     }
 
     if (this.pettingId !== null && this.down) {
+      // A MÃO SAIU DE CIMA DELA.
+      //
+      // Tem uma folga antes de o contato acabar: é o vaivém do banho e o
+      // carinho que passa da cabeça para as costas. Passada a folga, o contato
+      // para — mas o ALVO continua sendo ela, e basta a mão voltar para que a
+      // esfregada continue. Antes o alvo era esquecido junto com o contato, e
+      // só um clique novo trazia a criatura de volta: dar banho num bicho que
+      // anda virava clicar nele trinta vezes.
+      const touching = this.probe.stillTouching(this.lastX, this.lastY, this.pettingId);
+      if (!touching) {
+        this.petAway += dt;
+        if (this.petAway > PET_GRACE) {
+          if (this.state === 'petting') this.state = 'open';
+          return;
+        }
+      } else {
+        this.petAway = 0;
+      }
       this.petTime += dt;
       this.handlers.onPet(this.pettingId, dt);
       if (!this.petRemembered && this.petTime >= PET_TIME_FOR_MEMORY) {
@@ -255,6 +300,7 @@ export class GestureRecognizer {
     this.roughSent = false;
     this.observed = false;
     this.petTime = 0;
+    this.petAway = 0;
     this.petRemembered = false;
     this.holdTime = 0;
     this.holdTarget = null;
@@ -354,21 +400,45 @@ export class GestureRecognizer {
     // Sobre uma criatura: lento = carinho, rápido e longe = agressão.
     if (this.pettingId !== null) {
       const travel = Math.hypot(x - this.downX, y - this.downY);
-      if (this.speed > ROUGH_SPEED && travel > ROUGH_MIN_TRAVEL && !this.roughSent) {
+      // Só a mão nua machuca. Com a esponja ou a maçã, depressa é só depressa.
+      if (
+        this.probe.canHurt() &&
+        this.speed > ROUGH_SPEED &&
+        travel > ROUGH_MIN_TRAVEL &&
+        !this.roughSent
+      ) {
         this.roughSent = true;
         this.state = 'rough';
         this.handlers.onRough(this.pettingId, this.speed, this.velX, this.velY);
         this.pettingId = null;
-      } else if (this.speed < PET_SPEED_MAX) {
-        // Deixou de estar sobre a criatura: o carinho acaba.
-        if (this.probe.creatureAt(x, y) !== this.pettingId) {
-          this.pettingId = null;
-          this.state = 'open';
-        } else {
-          this.state = 'petting';
-        }
+      } else if (this.probe.stillTouching(x, y, this.pettingId)) {
+        // De volta em cima dela: o contato continua inteiro.
+        this.petAway = 0;
+        if (this.speed < PET_SPEED_MAX) this.state = 'petting';
       }
+      // Fora dela, quem desiste é o relógio, no `tick` — não este quadro.
       return;
+    }
+
+    // ENCOSTOU DE NOVO: o contato volta sem precisar soltar o botão.
+    //
+    // É o gesto do banho e o do carinho comprido: a mão sai de cima dela, ela
+    // anda, a mão a alcança outra vez. Sem isto, um contato perdido só voltava
+    // com um clique novo — e dar banho virava clicar trinta vezes num bicho
+    // que anda, em vez de esfregar.
+    // A única coisa que tem prioridade sobre isso é uma pegada em curso: quem
+    // apertou em cima de uma fruta para levantá-la está levantando a fruta.
+    const pegando = this.holdTarget?.kind === 'item' && this.probe.canGrab();
+    if (!pegando && this.heldItem === null && this.heldScenery === null && !this.marquee) {
+      const again = this.probe.creatureAt(x, y);
+      if (again !== null) {
+        this.pettingId = again;
+        this.petAway = 0;
+        this.holdTarget = null;
+        this.holdTime = 0;
+        if (this.speed < PET_SPEED_MAX) this.state = 'petting';
+        return;
+      }
     }
 
     // Pegar é assunto de `tick`: o relógio corre com o dedo parado ou andando,
