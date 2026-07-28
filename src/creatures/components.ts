@@ -99,6 +99,20 @@ export interface Needs {
    * prazo. Se a sujeira matasse, dar banho viraria obrigação.
    */
   dirt: number;
+  /**
+   * VONTADE DE BRINCAR, 0..1. Sobe sozinha e desce brincando.
+   *
+   * É a peça que faltava para a brincadeira ser um apetite e não um vício.
+   * Sem ela, a bola era a única coisa do jardim de que ninguém se cansava: a
+   * criatura empurrava a bola até a energia acabar, num canto, esquecida do
+   * resto do mundo — que é o oposto do que um brinquedo faz com um bicho de
+   * verdade. Um bicho brinca, se satisfaz e vai fazer outra coisa; e a vontade
+   * volta sozinha meia hora depois.
+   *
+   * Sobe mais depressa em filhote e em quem é brincalhão de nascença: é a
+   * mesma diferença entre um cachorro de dois anos e um de doze.
+   */
+  play: number;
 }
 export const Needs = defineComponent<Needs>('Needs');
 

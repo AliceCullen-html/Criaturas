@@ -28,6 +28,16 @@ const NUTRITION = 0.21;
 const PLANT_MIN_BIOMASS = 0.4;
 const TOXIN_DAMAGE = 0.22;
 const INTERACT_COOLDOWN = 2.5;
+/**
+ * Quanto de vontade de brincar sai a cada brincadeira.
+ *
+ * Um décimo: são umas dez trocas de bola até a satisfação, o que dura menos de
+ * um minuto de jardim e é mais ou menos o tempo em que uma brincadeira ainda é
+ * bonita de ver. Depois disso ela larga a bola por conta própria.
+ */
+const PLAY_SATED = 0.1;
+/** Faixa junto à borda do mundo onde o empurrão passa a apontar para dentro. */
+const EDGE = 60;
 
 const eaten: number[] = [];
 
@@ -191,8 +201,29 @@ export const actionSystem: System = {
               if (reach > attributes.size + 12) break;
               const away = reach > 0.001 ? 1 / reach : 0;
               const force = 90 + attributes.strength * 60;
-              ballItem.vx += (ballSpot.x - transform.x) * away * force;
-              ballItem.vy += (ballSpot.y - transform.y) * away * force;
+              let pushX = (ballSpot.x - transform.x) * away;
+              let pushY = (ballSpot.y - transform.y) * away;
+
+              // A BOLA NÃO VAI CONTRA A PAREDE DO MUNDO.
+              //
+              // Este era o buraco: com a bola encostada na beirada do jardim, o
+              // empurrão saía sempre para fora — a bola não andava, a criatura
+              // ia atrás, empurrava de novo, e ficava ali até cair de cansaço.
+              // Medido: dois minutos no canto, sete pixels percorridos. Não era
+              // uma brincadeira, era um bicho empurrando uma parede.
+              //
+              // Quem está com a bola encurralada dá a volta e joga para dentro,
+              // que é o que qualquer um faria. O empurrão que iria para fora é
+              // espelhado — a criatura passou para o outro lado dela.
+              const { width, height } = world.config;
+              if ((ballSpot.x < EDGE && pushX < 0) || (ballSpot.x > width - EDGE && pushX > 0)) {
+                pushX = -pushX;
+              }
+              if ((ballSpot.y < EDGE && pushY < 0) || (ballSpot.y > height - EDGE && pushY > 0)) {
+                pushY = -pushY;
+              }
+              ballItem.vx += pushX * force;
+              ballItem.vy += pushY * force;
               // O empurrão também LEVANTA a bola. Não é um chute calculado: é
               // um bicho batendo com o corpo numa coisa redonda, e coisa
               // redonda que apanha sobe. Quem é mais forte manda mais longe e
@@ -203,9 +234,16 @@ export const actionSystem: System = {
 
               // Brincar é bom, e fica na lembrança: é daqui que sai a criatura
               // que vem correndo quando você larga a bola.
+              //
+              // E SACIA. Cada empurrão gasta um pedaço da vontade de brincar —
+              // umas dez trocas de bola e ela está satisfeita, sai da bola e
+              // vai fazer outra coisa. Sem isto a bola era a única coisa do
+              // jardim de que ninguém se cansava: a criatura ficava num canto
+              // empurrando até a energia acabar, esquecida do mundo.
               emotions.happiness = clamp01(emotions.happiness + 0.06);
               emotions.loneliness = clamp01(emotions.loneliness - 0.05);
               needs.energy = clamp01(needs.energy - 0.01);
+              needs.play = clamp01(needs.play - PLAY_SATED);
               memory.record(subjects.player(), 0.12, 0.05);
               if (world.rng.chance(0.06)) {
                 memory.addEpisode({
@@ -238,6 +276,12 @@ export const actionSystem: System = {
           emotions.loneliness = clamp01(emotions.loneliness - 0.4);
           targetEmotions.happiness = clamp01(targetEmotions.happiness + joy * 0.8);
           targetEmotions.loneliness = clamp01(targetEmotions.loneliness - 0.35);
+
+          // Brincar com outra criatura sacia as duas: quem brinca junto se
+          // satisfaz junto.
+          needs.play = clamp01(needs.play - PLAY_SATED);
+          const targetNeeds = needsStore.get(targetId);
+          if (targetNeeds) targetNeeds.play = clamp01(targetNeeds.play - PLAY_SATED * 0.8);
 
           // Brincar cria amizade nos dois lados.
           memory.record(subjects.creature(targetId), 0.7, 0.3);

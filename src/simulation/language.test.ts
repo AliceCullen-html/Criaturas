@@ -212,7 +212,23 @@ describe('a linguagem', () => {
       world.store(Chatter).get(id);
     }
 
-    live(world, run, 20);
+    // VINTE MINUTOS DE RODA DE CONVERSA, com a barriga cheia.
+    //
+    // A fome entra aqui como ruído, não como assunto: um grupo inteiro parado
+    // no mesmo canto esgota a comida em volta e morre de fome antes de a
+    // palavra atravessar — nove das onze sabedoras morriam, e o que sobrava
+    // para medir era a sorte de duas se encontrarem vivas. Mantendo todas
+    // alimentadas, o que resta na medida é exatamente o que ela promete
+    // medir: se a palavra passa de uma cabeça para outra.
+    for (let minuto = 0; minuto < 20; minuto++) {
+      for (const id of ids) {
+        const needs = world.store(Needs).get(id);
+        if (!needs) continue;
+        needs.hunger = Math.min(needs.hunger, 0.2);
+        needs.thirst = Math.min(needs.thirst, 0.2);
+      }
+      live(world, run, 1);
+    }
 
     const vivas = sages.filter((id) => world.store(Creature).has(id)).length;
     const alunos = ids.filter(

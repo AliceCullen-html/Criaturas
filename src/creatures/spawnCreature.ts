@@ -111,6 +111,7 @@ export function spawnCreature(
     // inteiro, e com ele todo mundo semeado que veio depois — quatro testes de
     // comportamento mudaram de resultado só por causa deste número.
     dirt: 0.12,
+    play: 0.5,
   });
 
   world.store(Emotions).set(entity, {

@@ -175,7 +175,8 @@ export function createUtilityBrain(): Brain {
           options.push(
             option(
               'play',
-              (traits.playfulness * 0.8 + (self.isBaby ? 0.7 : 0.15)) *
+              (0.15 + needs.play) *
+                (traits.playfulness * 0.8 + (self.isBaby ? 0.7 : 0.15)) *
                 emotions.curiosity *
                 noticing *
                 (1 - emotions.fear) *
@@ -198,7 +199,8 @@ export function createUtilityBrain(): Brain {
         options.push(
           option(
             'play',
-            (traits.playfulness * 0.9 + emotions.happiness * 0.4 + emotions.loneliness * 0.7) *
+            (0.15 + needs.play) *
+              (traits.playfulness * 0.9 + emotions.happiness * 0.4 + emotions.loneliness * 0.7) *
               proximity *
               (0.5 + liking) *
               (1 - emotions.fear) *
@@ -354,7 +356,14 @@ export function createUtilityBrain(): Brain {
         options.push(
           option(
             'play',
-            (traits.playfulness * 1.5 + emotions.curiosity * 0.7 + (self.isBaby ? 0.6 : 0)) *
+            // A VONTADE DE BRINCAR MANDA. Sem ela na conta, a bola era a única
+            // coisa do jardim de que ninguém se cansava: a criatura brincava
+            // até a energia acabar, num canto, esquecida do resto. Saciada, a
+            // nota cai a um sexto e qualquer outra coisa ganha — e a vontade
+            // volta sozinha em alguns minutos, que é quando ela procura a bola
+            // de novo.
+            (0.15 + needs.play) *
+              (traits.playfulness * 1.5 + emotions.curiosity * 0.7 + (self.isBaby ? 0.6 : 0)) *
               (0.35 + proximity) *
               (1 - emotions.fear) *
               (1 - needs.hunger * 0.9) *

@@ -1,9 +1,9 @@
 import { POSE, clamp01 } from '@core';
 import { Transform, Velocity, type System } from '@engine';
-import { Behavior, Bio, Creature, Emotions, Mind, Needs } from '@creatures';
+import { Behavior, Bio, Creature, Emotions, Mind, Needs, Personality } from '@creatures';
 import { TerrainResource, WeatherResource, findNearestWater } from '@world';
 import { DeathsResource } from './socialSystem';
-import { growthScale } from '../age';
+import { growthScale, isBaby } from '../age';
 
 const HUNGER_RATE = 0.011;
 const THIRST_RATE = 0.015;
@@ -19,6 +19,8 @@ const SLEEP_RECOVER = 0.09;
 const HEALTH_DRAIN = 0.05;
 const HEALTH_REGEN = 0.02;
 const DRINK_REACH = 24;
+/** Vontade de brincar recuperada por segundo. */
+const PLAY_RATE = 0.0022;
 /** Abaixo desta sede ela larga a água e vai viver a vida. */
 const SATED = 0.12;
 
@@ -40,6 +42,7 @@ export const metabolismSystem: System = {
     const velocities = world.store(Velocity);
     const terrain = world.getResource(TerrainResource);
     const behaviors = world.store(Behavior);
+    const traits = world.store(Personality);
     const rain = world.hasResource(WeatherResource)
       ? world.getResource(WeatherResource).intensity
       : 0;
@@ -76,6 +79,17 @@ export const metabolismSystem: System = {
           mind.commitment = Math.max(mind.commitment, 0.5);
         }
       }
+
+      // A VONTADE DE BRINCAR VOLTA SOZINHA.
+      //
+      // Devagar: da satisfação total ao tédio completo leva uns dez minutos de
+      // jardim. Filhote e brincalhona enchem esse tanque bem mais rápido — é a
+      // diferença entre um cachorro de dois anos e um de doze, e é o que faz
+      // duas criaturas do mesmo jardim terem relações diferentes com a bola.
+      const play = traits.get(entity);
+      needs.play = clamp01(
+        needs.play + PLAY_RATE * (0.5 + (play?.playfulness ?? 0.5)) * (isBaby(bio) ? 2 : 1) * dt,
+      );
 
       const velocity = velocities.get(entity);
       const moving = velocity ? velocity.x !== 0 || velocity.y !== 0 : false;
