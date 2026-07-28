@@ -2,91 +2,10 @@ import { createRng, type Rng } from '@core';
 import type { Texture } from 'pixi.js';
 import { PixelBuffer, mix, shade } from '../pixel/PixelBuffer';
 
-const GRASS_BASE = 0x5c9e48;
-const GRASS_DARK = 0x4e8c3f;
-const GRASS_LIGHT = 0x69ac52;
 const WATER_DEEP = 0x2f6aa0;
 const WATER_MID = 0x3f83bd;
 const WATER_LIGHT = 0x6fb0dd;
 const SAND = 0xcdb789;
-
-/**
- * Casas do tabuleiro.
- *
- * Cada uma é um QUADRADO de `TILE` pixels desenhado dentro do container do
- * chão — e, como aquele container carrega a matriz isométrica, o quadrado sai
- * losango de graça. É daí que vem a cara de tabuleiro: não há nenhuma conta de
- * losango neste arquivo, só quadrados.
- *
- * O que faz a grade aparecer é o acabamento das bordas. Projetadas, a borda
- * direita e a de baixo do quadrado viram as duas arestas DA FRENTE do losango —
- * as que pegariam luz se a casa tivesse espessura. Escurecendo as duas, cada
- * casa ganha um beiral e o chão deixa de ser um lençol verde: vira piso.
- *
- * As variantes existem porque um tabuleiro de casas idênticas é uma planilha.
- * Elas diferem só no tom e nos fiapos de grama — o suficiente para o olho ver
- * um gramado dividido em canteiros, não um xadrez.
- */
-export function makeTileTextures(size: number): Texture[] {
-  const rng = createRng(0x7113);
-  const TAU = Math.PI * 2;
-  const tones = [
-    GRASS_BASE,
-    mix(GRASS_BASE, GRASS_LIGHT, 0.45),
-    GRASS_DARK,
-    mix(GRASS_BASE, GRASS_DARK, 0.5),
-    mix(GRASS_LIGHT, 0xd8e88a, 0.18),
-    GRASS_BASE,
-  ];
-
-  return tones.map((tone, index) => {
-    const buffer = new PixelBuffer(size, size);
-    const phase = rng.range(0, TAU);
-
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        // Ondulação suave dentro da casa: sem ela o quadrado é um adesivo de
-        // cor chapada, e o gramado inteiro fica plástico.
-        const value =
-          Math.sin((x / size) * TAU + phase) * Math.cos((y / size) * TAU * 2 - phase) * 0.5 +
-          (rng.next() - 0.5) * 0.3;
-        buffer.set(x, y, value < -0.25 ? shade(tone, 0.94) : value > 0.3 ? shade(tone, 1.06) : tone);
-      }
-    }
-
-    // Fiapos de grama em pé, longe das bordas para não sujar o contorno.
-    for (let i = 0; i < Math.round(size * 0.5); i++) {
-      const x = 3 + rng.int(size - 6);
-      const y = 3 + rng.int(size - 6);
-      buffer.set(x, y, mix(tone, 0xffffff, 0.16));
-      buffer.set(x, y - 1, shade(tone, 1.1));
-    }
-
-    // O beiral: duas bordas escuras e uma clara na quina de trás. Projetado,
-    // isso lê como um degrauzinho de terra entre uma casa e a seguinte.
-    const lip = shade(tone, 0.7);
-    const rim = shade(tone, 0.82);
-    for (let i = 0; i < size; i++) {
-      buffer.set(size - 1, i, lip);
-      buffer.set(size - 2, i, rim);
-      buffer.set(i, size - 1, lip);
-      buffer.set(i, size - 2, rim);
-      buffer.set(0, i, shade(tone, 1.08));
-      buffer.set(i, 0, shade(tone, 1.08));
-    }
-
-    // Uma casa em cada seis ganha uma pedrinha ou um tufo mais forte, para o
-    // olho ter onde parar quando corre o campo.
-    if (index === 5) {
-      const x = 12 + rng.int(size - 24);
-      const y = 12 + rng.int(size - 24);
-      buffer.ellipse(x, y, 3, 2, shade(0x9aa0ab, 0.9));
-      buffer.ellipse(x - 0.5, y - 0.5, 2.2, 1.4, 0x9aa0ab);
-    }
-
-    return buffer.toTexture();
-  });
-}
 
 /**
  * Quadros de água animados.
@@ -526,7 +445,12 @@ export function makeSceneryTextures(rng: Rng): SceneryTextures {
       for (let i = 0; i < 46; i++) {
         const angle = rng.range(0, Math.PI * 2);
         const radius = rng.range(0, 24);
-        b.disc(cx + Math.cos(angle) * radius, crownY - 4 + Math.sin(angle) * radius * 0.95, 2.2, petal);
+        b.disc(
+          cx + Math.cos(angle) * radius,
+          crownY - 4 + Math.sin(angle) * radius * 0.95,
+          2.2,
+          petal,
+        );
       }
       b.disc(cx - 12, crownY - 16, 3, mix(petal, 0xffffff, 0.5));
       b.disc(cx + 13, crownY - 6, 2.6, mix(petal, 0xffffff, 0.4));
@@ -549,7 +473,8 @@ export function makeSceneryTextures(rng: Rng): SceneryTextures {
       b.ellipse(nx, ny + 2, 10, 6, shade(straw, 0.78));
       b.ellipse(nx, ny, 8.4, 4.8, straw);
       b.ellipse(nx, ny + 0.4, 5.4, 2.7, shade(straw, 0.62));
-      for (let i = 0; i < 18; i++) b.set(nx - 8 + rng.int(17), ny - 4 + rng.int(9), shade(straw, 0.9));
+      for (let i = 0; i < 18; i++)
+        b.set(nx - 8 + rng.int(17), ny - 4 + rng.int(9), shade(straw, 0.9));
       // Ovinhos.
       b.ellipse(nx - 2.2, ny - 0.4, 2.1, 1.7, 0xeaf0f5);
       b.ellipse(nx + 2.2, ny - 0.4, 2.1, 1.7, 0xeaf0f5);

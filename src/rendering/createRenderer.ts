@@ -27,9 +27,9 @@ import {
   walkFrame,
   type Heading,
 } from './textures/tintimSheet';
+import { loadTerrainArt } from './textures/terrainSheet';
 import {
   makeDustTexture,
-  makeTileTextures,
   makeLeafTextures,
   makeResourceTextures,
   makeSandTexture,
@@ -196,6 +196,21 @@ const NIGHT_COLOR = 0x131c38;
 const FIREFLY_KIND = 7;
 /** Cogumelo luminoso em @world/items. Mesma razão. */
 const GLOW_MUSHROOM_VARIANT = 12;
+/**
+ * Índices de `PROP` em @world. Cópia local pelo mesmo motivo de sempre: o
+ * desenho não importa a simulação, e os dois combinaram este vocabulário.
+ */
+const PROP_GRASS_TALL = 0;
+const PROP_GRASS_LOW = 1;
+const PROP_FLOWER = 2;
+const PROP_LOG = 6;
+const PROP_REED = 9;
+/** Quadros de vento por segundo. Lento: é brisa, não ventania. */
+const WIND_SPEED = 3.5;
+/** Os três gramados da folha, na ordem em que ela os traz. */
+const GRASS_LIGHT = 0;
+const GRASS_MID = 1;
+const GRASS_DARK = 2;
 /** Água rasa da margem: mais clara que o fundo do lago. */
 const SHALLOW_TINT = 0xb9e2f2;
 /** O quanto o arco-íris é achatado em relação a um semicírculo perfeito. */
@@ -526,21 +541,6 @@ const SCREEN_WIDTH = 38;
 const PLAY_FIRST = 62;
 
 /**
- * Lado da casa do PISO, em pixels de mundo.
- *
- * São coisas diferentes do tabuleiro: o tabuleiro (`TILE`, 50) é regra de jogo —
- * uma árvore por casa, uma pedra por casa —, o piso é textura. Desenhados na
- * mesma medida, os losangos ficavam do tamanho da criatura e o jardim parecia um
- * tabuleiro de xadrez com um bicho em cima. A dezesseis, o chão recua para o
- * fundo, que é onde chão deve ficar, e a leitura de 8 bits aparece.
- *
- * INTEIRO, e não uma fração de `TILE`. A tentativa de usar `TILE / 3` derrubou
- * o jogo inteiro: o buffer de pixels não desenha em meia casa, e o erro sai
- * longe daqui, num "offset is out of bounds" que não fala de piso nenhum.
- */
-const FLOOR = 16;
-
-/**
  * As variantes de objeto que vêm do atlas de ícones, e qual ícone é cada uma.
  *
  * Cópia local dos números de `VARIANT` (@world) e `ICON` (@core): o renderer
@@ -697,6 +697,19 @@ export function createRenderer(options: RendererOptions): Renderer {
   let propTextures: Texture[][] = [];
   const tallProps: Array<{ sprite: Sprite; view: PropView }> = [];
   const treeSprites: Array<{ sprite: Sprite; phase: number; shake: number }> = [];
+  /**
+   * O RELÓGIO DO VENTO.
+   *
+   * Cada peça que o vento mexe guarda os seis quadros dela e uma defasagem
+   * própria. Sem a defasagem o jardim inteiro balançaria no mesmo instante,
+   * que é a cara de um papel de parede se repetindo; com ela, cada árvore tem
+   * o seu tempo e o mato parece mato.
+   */
+  /** Ciclos de vento por tipo de cenário e por variante. */
+  let sceneryWind: Record<string, Texture[][]> = {};
+  /** E por tipo de prop — o índice é o `PROP` de @world. */
+  let propWind: Array<Texture[] | undefined> = [];
+  const windy: Array<{ sprite: Sprite; frames: Texture[]; phase: number }> = [];
   /** Um por peça de cenário, na MESMA ordem de `sceneryList`: é o que permite
    *  levantar do chão exatamente a árvore que o dedo pegou. */
   const sceneryEntries: Array<{
@@ -1266,6 +1279,38 @@ export function createRenderer(options: RendererOptions): Renderer {
       propTextures = makePropTextures();
       rainTextures = makeRainTextures();
       scenery = makeSceneryTextures(createRng(7));
+
+      // A FOLHA DO TERRENO, desenhada à mão: o chão, as árvores, as moitas e o
+      // mato — cada um com os seis quadros de vento dele.
+      const art = await loadTerrainArt();
+
+      // O DESENHO DO CENÁRIO PASSA A SER A FOLHA.
+      //
+      // O procedural fica só onde a folha não chegou: o computador, que não é
+      // natureza e não foi desenhado nela. Árvore, moita e pedra vêm da mão do
+      // artista, com os quadros de vento junto.
+      const trees = [art.wind.tree, art.wind.fruitTree];
+      const bushes = [art.wind.bush, art.wind.mushroom];
+      sceneryWind = { tree: trees, bush: bushes, rock: [[art.statics.rock]], computer: [] };
+      scenery = {
+        ...scenery,
+        tree: trees.map((frames) => frames[0]!),
+        bush: bushes.map((frames) => frames[0]!),
+        rock: [art.statics.rock],
+      };
+
+      // E O MATO TAMBÉM. O procedural continua nas peças que a folha não traz
+      // — pedrinha, raiz, folha caída, musgo, vitória-régia, concha —, e essas
+      // são justamente as que não balançam.
+      propWind = [];
+      propWind[PROP_GRASS_TALL] = art.wind.tallGrass;
+      propWind[PROP_GRASS_LOW] = art.wind.grass;
+      propWind[PROP_FLOWER] = art.wind.flower;
+      propWind[PROP_REED] = art.wind.reed;
+      propTextures = propTextures.map((variants, kind) =>
+        propWind[kind] ? [propWind[kind]![0]!] : variants,
+      );
+      propTextures[PROP_LOG] = [art.statics.log];
       tintimFrames = await loadTintimFrames();
       // Os cinco quadros de brincar com a bola vêm de outra folha e entram na
       // sequência, a partir de 62 — é o que o índice `PLAY_FRAME` promete.
@@ -1304,25 +1349,41 @@ export function createRenderer(options: RendererOptions): Renderer {
       // fica com cara de tabuleiro de xadrez gigante — losangos enormes, a
       // criatura minúscula em cima de um deles. Miúdo, o chão vira textura: a
       // grade some para o fundo e o bicho volta a ser o assunto da tela.
-      const tileTextures = makeTileTextures(FLOOR);
+      // O CHÃO É DESENHADO À MÃO, UM LOSANGO POR CASA.
+      //
+      // E fica numa camada EM PÉ, não na do chão. Os losangos da folha já vêm
+      // desenhados em perspectiva; passá-los pela matriz isométrica seria
+      // projetar duas vezes e transformar cada casa num rombo torto. Aqui só a
+      // POSIÇÃO é projetada — que é a mesma regra das árvores e das criaturas.
+      //
+      // A casa do piso é a casa do TABULEIRO: a arte foi desenhada nessa
+      // medida (96×48 para uma casa de 50, uma diferença de quatro por cento
+      // que a escala resolve), e é por isso que a árvore preenche a casa dela
+      // como no papel.
       const tiles = new Container();
       const tileRng = createRng(0x7a11e);
-      const gridCols = Math.ceil(options.worldWidth / FLOOR);
-      const gridRows = Math.ceil(options.worldHeight / FLOOR);
-      // XADREZ, e não mosaico ao acaso.
-      //
-      // As variantes claras e as escuras se alternam pela paridade da casa, e o
-      // sorteio só escolhe QUAL clara ou QUAL escura. É o que dá a leitura de 8
-      // bits: o olho reconhece o padrão de tabuleiro antes de reparar em
-      // qualquer detalhe, e o gramado deixa de ser um borrão mosqueado.
-      const claras = [0, 1, 4];
-      const escuras = [2, 3, 5];
+      const gridCols = Math.ceil(options.worldWidth / TILE);
+      const gridRows = Math.ceil(options.worldHeight / TILE);
+      const tileArt = art.tiles;
+      // Um pelinho maior que a casa: sem essa sobra fica uma linha de fundo
+      // aparecendo entre um losango e o vizinho.
+      const tileScale = ((TILE * 2) / (tileArt[0]?.width ?? 96)) * 1.02;
+      // XADREZ, como antes: as claras e as escuras se alternam pela paridade
+      // da casa e o sorteio só escolhe QUAL. É o que faz o gramado ler como
+      // padrão em vez de borrão.
+      const claras = [GRASS_LIGHT, GRASS_MID];
+      const escuras = [GRASS_MID, GRASS_DARK];
       for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
           const paridade = (col + row) % 2 === 0 ? claras : escuras;
-          const variante = paridade[tileRng.int(paridade.length)]!;
-          const sprite = new Sprite(tileTextures[variante]!);
-          sprite.position.set(col * FLOOR, row * FLOOR);
+          const texture = tileArt[paridade[tileRng.int(paridade.length)]!];
+          if (!texture) continue;
+          const sprite = new Sprite(texture);
+          sprite.anchor.set(0.5, 0.5);
+          sprite.scale.set(tileScale);
+          const cx = (col + 0.5) * TILE;
+          const cy = (row + 0.5) * TILE;
+          sprite.position.set(isoX(cx, cy), isoY(cx, cy));
           tiles.addChild(sprite);
         }
       }
@@ -1358,17 +1419,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       ground.setFromMatrix(
         new Matrix(ISO_MATRIX.a, ISO_MATRIX.b, ISO_MATRIX.c, ISO_MATRIX.d, 0, 0),
       );
-      ground.addChild(
-        tiles,
-        sand,
-        water,
-        reflections,
-        ripplesG,
-        puddles,
-        tileCursor,
-        shadows,
-        selection,
-      );
+      ground.addChild(sand, water, reflections, ripplesG, puddles, tileCursor, shadows, selection);
 
       // O QUE FICA EM PÉ não é inclinado — só a POSIÇÃO é projetada. Uma
       // criatura girada 45 graus não é isométrica, é uma criatura tombada.
@@ -1379,7 +1430,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // frente — e com camadas separadas isso era inevitável.
       upright.addChild(groundProps, hiddenItems, resources, creatures, itemsLayer, marqueeRect);
 
-      root.addChild(ground, upright, ambient, particles, rain, tint, glow, rainbow, hand);
+      root.addChild(tiles, ground, upright, ambient, particles, rain, tint, glow, rainbow, hand);
       instance.stage.addChild(root);
 
       // Partículas de folhas.
@@ -1526,6 +1577,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       treeSprites.length = 0;
       reflections.length = 0;
       sceneryEntries.length = 0;
+      windy.length = 0;
       sceneryList = pieces;
       for (const piece of pieces) {
         const variants = scenery[piece.kind];
@@ -1551,6 +1603,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         });
         if (piece.kind === 'tree') {
           treeSprites.push({ sprite, phase: (piece.x + piece.y) * 0.05, shake: 0 });
+        }
+        // O ciclo de vento daquela peça, se ela tiver um. A defasagem sai da
+        // POSIÇÃO: duas árvores vizinhas balançam quase juntas, uma do outro
+        // lado do jardim balança em outro tempo — é o vento atravessando.
+        const cycles = sceneryWind[piece.kind];
+        const frames = cycles?.[piece.variant % Math.max(1, cycles.length)];
+        if (frames && frames.length > 1) {
+          windy.push({ sprite, frames, phase: (piece.x * 0.7 + piece.y * 1.3) * 0.05 });
         }
 
         if (piece.kind === 'computer') {
@@ -1593,6 +1653,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (!groundPropLayer || !creatureLayer || propTextures.length === 0) return;
       groundPropLayer.removeChildren();
       tallProps.length = 0;
+      // Os props somem junto com a camada; o cenário tem lista própria e é
+      // remontado noutro lugar, então aqui só saem os que são de prop.
+      for (let i = windy.length - 1; i >= 0; i--) {
+        if (!windy[i]!.sprite.parent) windy.splice(i, 1);
+      }
 
       for (const prop of props) {
         const variants = propTextures[prop.kind];
@@ -1600,6 +1665,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         const sprite = new Sprite(variants[prop.variant % variants.length]!);
         sprite.anchor.set(0.5, 0.9);
         sprite.position.set(isoX(prop.x, prop.y), isoY(prop.x, prop.y));
+        const frames = propWind[prop.kind];
+        if (frames && frames.length > 1) {
+          windy.push({ sprite, frames, phase: prop.phase });
+        }
         if (isTall(prop.kind)) {
           // Vegetação alta divide camada com as criaturas: quem está mais
           // abaixo na tela aparece na frente. É o que dá volume ao mundo.
@@ -2381,10 +2450,23 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       // Vento na copa das árvores; sacudir soma um tranco por cima.
+      // O VENTO, QUADRO A QUADRO.
+      //
+      // Cada planta anda pelos seis desenhos dela no seu próprio tempo. É
+      // desenho, não deformação: antes o mundo inteiro balançava girando os
+      // sprites alguns graus, o que dobra o pixel e borra a arte. Agora o
+      // tronco fica parado e a copa se mexe porque foi DESENHADA se mexendo.
+      for (const plant of windy) {
+        const step = Math.floor(elapsed * WIND_SPEED + plant.phase) % plant.frames.length;
+        const texture = plant.frames[step]!;
+        if (plant.sprite.texture !== texture) plant.sprite.texture = texture;
+      }
+
+      // A árvore ainda tem o TRANCO de quando alguém a sacode: isso é um
+      // acontecimento, não vento, e continua sendo torção.
       for (const tree of treeSprites) {
         if (tree.shake > 0) tree.shake = Math.max(0, tree.shake - dt * 2.2);
-        const wind = Math.sin(elapsed * 0.9 + tree.phase) * 0.022;
-        tree.sprite.rotation = wind + tree.shake * Math.sin(elapsed * 26) * 0.09;
+        tree.sprite.rotation = tree.shake * Math.sin(elapsed * 26) * 0.09;
       }
 
       // O reflexo na água nunca fica parado: ondula e respira com a superfície.
@@ -2396,10 +2478,10 @@ export function createRenderer(options: RendererOptions): Renderer {
         mirror.sprite.alpha = 0.42 + wobble * 0.06;
       }
 
-      // Vento e toque: a vegetação alta balança.
+      // O toque: quem passa a mão no mato faz o mato balançar. O vento dele
+      // já está nos quadros desenhados.
       for (const entry of tallProps) {
-        const wind = Math.sin(elapsed * 1.6 + entry.view.phase) * 0.05;
-        entry.sprite.rotation = wind + entry.view.sway * Math.sin(elapsed * 22) * 0.3;
+        entry.sprite.rotation = entry.view.sway * Math.sin(elapsed * 22) * 0.3;
       }
 
       // Ondas onde o jogador tocou a água.
