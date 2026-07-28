@@ -3,6 +3,7 @@ import { Sprite, Transform, defineComponent, type World, type WorldConfig } from
 import { isWaterAt } from './terrain';
 import { TerrainResource } from './terrainResource';
 import { countIn } from './density';
+import { Ball } from './ball';
 
 /**
  * Objeto físico do mundo: pode ser pego, arrastado, arremessado e — no caso
@@ -67,6 +68,13 @@ export const VARIANT = {
   pillow: 18,
   shinyRock: 19,
   giftFeather: 20,
+  // --- Os seis quadros da bola, na ordem da ficha ------------------------
+  ballAir: 21,
+  ballFall: 22,
+  ballHit: 23,
+  ballRise: 24,
+  ballRoll1: 25,
+  ballRoll2: 26,
 } as const;
 
 const TRINKET_VARIANT: Record<string, number> = {
@@ -190,6 +198,11 @@ export function spawnFruit(
  */
 export function spawnBall(world: World, x: number, y: number): number {
   const entity = world.createEntity();
+  // Nasce na altura da sua mão, não um palmo acima do chão: a bola CAI, quica
+  // quatro vezes e assenta. É a apresentação dela — antes de qualquer criatura
+  // chegar perto, o jardim inteiro já viu que essa coisa aqui pula.
+  world.register(Ball);
+  world.store(Ball).set(entity, { z: 58, prevZ: 58, vz: 0, roll: 0, hit: 0 });
   world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
   const item: Item = {
     kind: 'ball',

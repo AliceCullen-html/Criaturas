@@ -1,5 +1,5 @@
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
-import { Item } from '@world';
+import { Ball, Item } from '@world';
 import { Appearance, Attributes, Behavior, Bio, Creature, Egg, Mind, type Mood } from '@creatures';
 import { growthScale, lifeStage } from './age';
 
@@ -24,6 +24,39 @@ const carrying = new Set<number>();
 
 /** Marca de "esta linha é uma criatura, não um ovo". */
 const NOT_AN_EGG = -1;
+
+/** Distâncias que separam olhar de perseguir, de empurrar. */
+const PLAY_TOUCH = 22;
+const PLAY_NEAR = 70;
+
+/**
+ * QUAL QUADRO DE BRINCAR, se ela estiver brincando com a bola.
+ *
+ * A ficha da folha nomeia cinco: olha, empurra, pula, abraça, persegue. A
+ * escolha sai da distância e do que ela acabou de fazer — de longe ela
+ * PERSEGUE, chegando perto OLHA, encostada EMPURRA. É o mesmo princípio do
+ * resto do jogo: o desenho não decide nada, ele lê o que está acontecendo.
+ */
+function playFrame(
+  world: World,
+  mind: { intent: string; targetEntity: number; actionCooldown: number },
+  transform: { x: number; y: number },
+): number {
+  if (mind.intent !== 'play' || mind.targetEntity < 0) return 0;
+  if (!world.hasComponent(Ball)) return 0;
+  const ball = world.store(Ball).get(mind.targetEntity);
+  if (!ball) return 0;
+  const spot = world.store(Transform).get(mind.targetEntity);
+  if (!spot) return 0;
+
+  const distance = Math.hypot(spot.x - transform.x, spot.y - transform.y);
+  // Acabou de empurrar: o quadro do empurrão fica um instante no ar.
+  if (mind.actionCooldown > 0.55) return 2;
+  if (distance > PLAY_NEAR) return 5;
+  if (distance > PLAY_TOUCH) return 1;
+  // Coladinha: se a bola está no alto, ela pula atrás; no chão, abraça.
+  return ball.z > 14 ? 3 : 4;
+}
 
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
 export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer): void {
@@ -78,6 +111,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       poseTime,
       carrying.has(entity) ? 1 : 0,
       NOT_AN_EGG,
+      playFrame(world, mind, transform),
     );
   });
 
@@ -112,6 +146,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       0,
       0,
       Math.min(1, egg.time / egg.duration),
+      0,
     );
   });
 }

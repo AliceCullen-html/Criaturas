@@ -11,7 +11,15 @@ import {
   Needs,
   Personality,
 } from '@creatures';
-import { Item, Plant, RESOURCE_NAMES, isToxicVariant, itemRadius, radiusForBiomass } from '@world';
+import {
+  Ball,
+  Item,
+  Plant,
+  RESOURCE_NAMES,
+  isToxicVariant,
+  itemRadius,
+  radiusForBiomass,
+} from '@world';
 import { isBaby } from '../age';
 
 const EAT_RATE = 3.2;
@@ -152,6 +160,56 @@ export const actionSystem: System = {
         case 'play': {
           const targetId = mind.targetEntity;
           if (targetId < 0 || mind.actionCooldown > 0) break;
+
+          // BRINCAR COM A BOLA.
+          //
+          // O mesmo "brincar" serve para os dois casos, e o alvo decide qual:
+          // uma criatura brinca com outra criatura ou com a bola. Um segundo
+          // caso separado no `switch` seria a mesma intenção com dois nomes.
+          //
+          // O empurrão sai na direção em que ela chegou, não num rumo sorteado:
+          // é o corpo dela que joga. E a bola empurrada rola, quica e vai parar
+          // longe — é isso que faz a brincadeira continuar sozinha.
+          if (world.hasComponent(Ball)) {
+            const ball = world.store(Ball).get(targetId);
+            const ballItem = items.get(targetId);
+            const ballSpot = transforms.get(targetId);
+            if (ball && ballItem && ballSpot && !ballItem.held) {
+              const reach = Math.hypot(ballSpot.x - transform.x, ballSpot.y - transform.y);
+              if (reach > attributes.size + 12) break;
+              const away = reach > 0.001 ? 1 / reach : 0;
+              const force = 90 + attributes.strength * 60;
+              ballItem.vx += (ballSpot.x - transform.x) * away * force;
+              ballItem.vy += (ballSpot.y - transform.y) * away * force;
+              // O empurrão também LEVANTA a bola. Não é um chute calculado: é
+              // um bicho batendo com o corpo numa coisa redonda, e coisa
+              // redonda que apanha sobe. Quem é mais forte manda mais longe e
+              // mais alto — dá para ver a diferença entre um filhote e um
+              // adulto sem nenhum número na tela.
+              ball.vz = Math.max(ball.vz, 130 + attributes.strength * 70);
+              mind.actionCooldown = 0.9;
+
+              // Brincar é bom, e fica na lembrança: é daqui que sai a criatura
+              // que vem correndo quando você larga a bola.
+              emotions.happiness = clamp01(emotions.happiness + 0.06);
+              emotions.loneliness = clamp01(emotions.loneliness - 0.05);
+              needs.energy = clamp01(needs.energy - 0.01);
+              memory.record(subjects.player(), 0.12, 0.05);
+              if (world.rng.chance(0.06)) {
+                memory.addEpisode({
+                  text: 'Brinquei com a bola',
+                  valence: 0.7,
+                  intensity: 0.45,
+                  emotion: 'alegria',
+                  tick: world.tick,
+                  x: transform.x,
+                  y: transform.y,
+                });
+              }
+              break;
+            }
+          }
+
           const targetTransform = transforms.get(targetId);
           const targetEmotions = emotionsStore.get(targetId);
           const targetMemory = memories.get(targetId);

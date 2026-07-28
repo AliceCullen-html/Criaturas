@@ -1,7 +1,16 @@
 import { POSE, clamp, clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
-import { Attributes, Behavior, Creature, Emotions, Identity, Memory, Mind, Needs } from '@creatures';
-import { Item, MAX_STACK, SceneryResource, VARIANT, itemRadius } from '@world';
+import {
+  Attributes,
+  Behavior,
+  Creature,
+  Emotions,
+  Identity,
+  Memory,
+  Mind,
+  Needs,
+} from '@creatures';
+import { Item, MAX_STACK, SceneryResource, VARIANT, itemRadius, kickBall } from '@world';
 import { PlayerResource } from './player';
 
 /**
@@ -79,6 +88,10 @@ export function releaseItem(world: World, id: number, vx: number, vy: number): D
   if (!transform) return LOOSE_DROP;
 
   const speed = heavy ? 0 : Math.hypot(vx, vy);
+  // Bola arremessada VOA. A mão dá o rumo; a altura sai da força do gesto, e é
+  // por isso que atirar a bola de longe é diferente de largá-la aos pés de
+  // alguém: uma cruza o jardim quicando, a outra fica ali.
+  if (item.kind === 'ball') kickBall(world, id, Math.min(60 + speed * 0.45, 260));
   if (speed >= THROW_SPEED) {
     // Um objeto arremessado com força assusta quem estiver por perto.
     if (speed >= 220) scareNear(world, transform.x, transform.y, 60, 0.25);

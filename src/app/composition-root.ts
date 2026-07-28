@@ -31,6 +31,7 @@ import {
   DayNightResource,
   dayNightSystem,
   Item as ItemComponent,
+  ballSystem,
 } from '@world';
 import { Creature, Emotions, Mind } from '@creatures';
 import { TOOL, WORD, WORD_TEXT } from '@core';
@@ -172,6 +173,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(metabolismSystem)
     .add(confinementSystem)
     .add(itemSystem)
+    .add(ballSystem)
     .add(searchSystem)
     .add(weatherSystem)
     .add(dayNightSystem)
@@ -271,6 +273,29 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const creaturePoint = (id: number): [number, number] => {
     const spot = world.store(Transform).get(id);
     return [spot?.x ?? 0, spot?.y ?? 0];
+  };
+
+  /**
+   * Larga no chão o que a ferramenta atual segura — bola, presente ou ovo.
+   *
+   * Vive fora dos handlers porque o mesmo gesto chega por dois caminhos: um
+   * clique no chão limpo e um clique em cima de uma criatura. Para quem joga é
+   * o mesmo movimento, e por isso é o mesmo código.
+   */
+  const dropAt = (x: number, y: number): boolean => {
+    if (tool() === TOOL.ball) {
+      activeRenderer?.emit(placeBall(world, x, y) === 'placed' ? 'star' : 'question', x, y - 10);
+      return true;
+    }
+    if (tool() === TOOL.gift) {
+      activeRenderer?.emit(placeGift(world, x, y) >= 0 ? 'star' : 'question', x, y - 10);
+      return true;
+    }
+    if (tool() === TOOL.egg) {
+      activeRenderer?.emit(placeEgg(world, x, y) === 'placed' ? 'star' : 'question', x, y - 10);
+      return true;
+    }
+    return false;
   };
 
   /** Sinal visual sobre uma criatura (coração, gota, estrela). */
@@ -441,6 +466,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           clearSelection();
           return;
         }
+        // LARGAR EM CIMA DE ALGUÉM.
+        //
+        // Com a bola, o presente ou o ovo na mão, o clique é sempre "põe isso
+        // aqui" — e o lugar mais natural para largar uma bola é justamente aos
+        // pés de quem vai brincar com ela. Antes disso, a criatura interceptava
+        // o clique e virava seleção: a mão tinha uma bola e o jardim não fazia
+        // nada, que é exatamente a interface aparecendo onde não devia.
+        const dropping = tool() === TOOL.ball || tool() === TOOL.gift || tool() === TOOL.egg;
+        if (dropping) {
+          const [dx, dy] = creaturePoint(id);
+          dropAt(dx + 18, dy + 8);
+          return;
+        }
+
         // ENSINO: apontar uma criatura é dizer "amigo" para quem estiver
         // olhando — inclusive para ela mesma.
         if (tool() === TOOL.book && !isEgg(world, id)) {
@@ -559,6 +598,10 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           return;
         }
 
+        // A bola largada debaixo da árvore cai debaixo da árvore, e não sacode
+        // a árvore: quem tem uma bola na mão está largando uma bola.
+        if (piece && dropAt(piece.x, piece.y + 14)) return;
+
         // ENSINO: apontar uma árvore ou uma pedra é dizer o nome dela.
         if (tool() === TOOL.book && piece) {
           const named = wordForSpot(world, piece.x, piece.y, false);
@@ -616,22 +659,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       onPokeGround: (x, y) => {
         // O chão é onde as coisas nascem. Cada ferramenta larga a sua, e o
         // mundo responde na hora — sem diálogo, sem confirmação, sem janela.
-        if (tool() === TOOL.ball) {
-          activeRenderer?.emit(
-            placeBall(world, x, y) === 'placed' ? 'star' : 'question',
-            x,
-            y - 10,
-          );
-          return;
-        }
-        if (tool() === TOOL.gift) {
-          activeRenderer?.emit(placeGift(world, x, y) >= 0 ? 'star' : 'question', x, y - 10);
-          return;
-        }
-        if (tool() === TOOL.egg) {
-          activeRenderer?.emit(placeEgg(world, x, y) === 'placed' ? 'star' : 'question', x, y - 10);
-          return;
-        }
+        if (dropAt(x, y)) return;
         if (tool() === TOOL.book) {
           const named = wordForSpot(world, x, y, false);
           if (named) {

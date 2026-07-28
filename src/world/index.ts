@@ -24,6 +24,7 @@ export {
   BOULDER_RADIUS,
 } from './items';
 export type { ItemKind } from './items';
+export { Ball, ballSystem, ballVariant, kickBall } from './ball';
 export {
   SceneryResource,
   generateScenery,

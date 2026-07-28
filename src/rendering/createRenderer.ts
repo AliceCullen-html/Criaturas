@@ -21,6 +21,7 @@ import {
   eggFrame,
   frameFor,
   headingOf,
+  loadPlayFrames,
   loadTintimFrames,
   walkFrame,
   type Heading,
@@ -35,7 +36,7 @@ import {
   makeWaterTextures,
   type SceneryTextures,
 } from './textures/world';
-import { loadIconTextures } from './textures/toolIcons';
+import { loadBallTextures, loadIconTextures } from './textures/toolIcons';
 import { makeFeedbackTextures, type FeedbackKind } from './textures/feedback';
 import { makeHandTextures, type HandState } from './textures/hand';
 import { makeAmbientTextures, makeRainTextures } from './textures/ambient';
@@ -488,6 +489,13 @@ const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = {
  */
 const SCREEN_CENTER_Y = 32;
 const SCREEN_WIDTH = 38;
+
+/**
+ * O primeiro dos cinco quadros de brincar com a bola, na folha combinada.
+ * Cópia local de `PLAY_FRAME.look` — o índice é combinado com a folha, e um
+ * número solto aqui é melhor que uma importação para ler uma constante.
+ */
+const PLAY_FIRST = 62;
 
 /**
  * Lado da casa do PISO, em pixels de mundo.
@@ -1189,6 +1197,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       rainTextures = makeRainTextures();
       scenery = makeSceneryTextures(createRng(7));
       tintimFrames = await loadTintimFrames();
+      // Os cinco quadros de brincar com a bola vêm de outra folha e entram na
+      // sequência, a partir de 62 — é o que o índice `PLAY_FRAME` promete.
+      tintimFrames = tintimFrames.concat(await loadPlayFrames());
 
       // A bola e os presentes NÃO são desenhados por código: são os ícones
       // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
@@ -1198,6 +1209,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         const texture = icons[icon];
         if (texture) resourceTextures[Number(variant)] = texture;
       }
+
+      // Os seis quadros da bola entram como variantes 21 a 26: quem escolhe
+      // qual deles aparece é a FÍSICA, lá no mundo, não o desenho.
+      const ballFrames = await loadBallTextures();
+      for (let i = 0; i < ballFrames.length; i++) resourceTextures[21 + i] = ballFrames[i]!;
 
       const root = new Container();
       root.sortableChildren = false;
@@ -1870,6 +1886,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         // substitui o do humor: aquelas quatro direções só têm os quadros de
         // caminhada, e é o que basta — de longe, o que se lê é o rumo.
         if (moving && heading.facing !== FACING.s) frame = walkFrame(heading.facing, slot.step);
+
+        // BRINCAR MANDA EM TUDO.
+        //
+        // Perseguir, empurrar, pular e abraçar a bola são o que ela está
+        // fazendo — vêm na frente do rumo e do humor. Um bicho correndo atrás
+        // de uma bola com cara de sonolento seria a criatura mentindo.
+        const playing = creatures.playing[i]!;
+        if (playing > 0) frame = PLAY_FIRST + playing - 1;
         if (isEggSlot) frame = eggFrame(hatching);
         const texture = tintimFrames[frame];
         if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;

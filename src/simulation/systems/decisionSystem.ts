@@ -16,6 +16,7 @@ import {
 import type { PerceivedCreature, PerceivedFood, Perception } from '@ai';
 import {
   AmbientResource,
+  Ball,
   Item,
   Plant,
   SceneryResource,
@@ -58,6 +59,13 @@ const WORD_EYE = 1.35;
  * nunca no mundo. Uma luz que ninguém vê não ensina ninguém.
  */
 const MACHINE_SIGHT = 300;
+/**
+ * O quanto a bola chama a atenção além da vista comum.
+ *
+ * Uma coisa que se mexe sozinha no meio do mato é vista de longe — e a bola é a
+ * única coisa do jardim que quica.
+ */
+const BALL_SIGHT = 1.6;
 /** Segundos batendo no mesmo obstáculo antes de desistir do alvo. */
 const GIVE_UP_AFTER = 1.6;
 /** A que distância ela vai dar a volta ao desistir. */
@@ -304,6 +312,7 @@ export const decisionSystem: System = {
           ambient: nearestAmbient(ambient, transform.x, transform.y, attributes.vision),
           shelter: nearestTree(scenery, transform.x, transform.y),
           machine: nearestComputer(scenery, transform.x, transform.y, MACHINE_SIGHT),
+          ball: nearestBall(world, transform.x, transform.y, attributes.vision * BALL_SIGHT),
           hunch: nearestHunch(transform.x, transform.y, attributes.vision),
           rain: weather.intensity,
           home: nest ? { x: nest.x, y: nest.y, attachment: nest.attachment } : null,
@@ -369,18 +378,18 @@ export const decisionSystem: System = {
         mind.intent === 'sleep'
           ? SLEEP_REACH
           : mind.intent === 'seekFood' ||
-        mind.intent === 'seekWater' ||
-        mind.intent === 'search' ||
-        mind.intent === 'mate'
-          ? 2
-          : // Estudar é de perto, mas não colado: ela para DIANTE da tela.
-            mind.intent === 'study'
-            ? 30
-            : mind.intent === 'watch'
-              ? 34
-              : mind.intent === 'follow'
-                ? attributes.size * 2.2
-                : attributes.size;
+              mind.intent === 'seekWater' ||
+              mind.intent === 'search' ||
+              mind.intent === 'mate'
+            ? 2
+            : // Estudar é de perto, mas não colado: ela para DIANTE da tela.
+              mind.intent === 'study'
+              ? 30
+              : mind.intent === 'watch'
+                ? 34
+                : mind.intent === 'follow'
+                  ? attributes.size * 2.2
+                  : attributes.size;
 
       if (distance < stopAt) {
         velocity.x = 0;
@@ -417,6 +426,36 @@ function nearestAmbient(
     if (distance > vision) continue;
     if (!best || distance < best.distance) best = { x: being.x, y: being.y, distance };
   }
+  return best;
+}
+
+/** A bola mais próxima dentro do alcance, se houver alguma. */
+function nearestBall(
+  world: Parameters<typeof decisionSystem.update>[0],
+  x: number,
+  y: number,
+  reach: number,
+): { id: number; x: number; y: number; distance: number } | null {
+  if (!world.hasComponent(Ball)) return null;
+  const balls = world.store(Ball);
+  if (balls.size === 0) return null;
+  const transforms = world.store(Transform);
+  const items = world.store(Item);
+  let best: { id: number; x: number; y: number; distance: number } | null = null;
+  balls.forEach((ball, entity) => {
+    const item = items.get(entity);
+    const spot = transforms.get(entity);
+    // Na mão do jogador ela não está disponível: ninguém disputa a bola com a
+    // mão que a segura.
+    if (!item || !spot || item.held) return;
+    const distance = Math.hypot(spot.x - x, spot.y - y);
+    // Bola QUICANDO se vê de mais longe do que bola parada. É a diferença entre
+    // um objeto largado no mato e um movimento no canto do olho — e é o que faz
+    // o jardim inteiro virar a cabeça quando você joga a bola.
+    const moving = ball.z > 3 || Math.hypot(item.vx, item.vy) > 20;
+    if (distance > reach * (moving ? 1.7 : 1)) return;
+    if (!best || distance < best.distance) best = { id: entity, x: spot.x, y: spot.y, distance };
+  });
   return best;
 }
 

@@ -32,6 +32,14 @@ export class CreatureRenderBuffer {
    * ordenação por profundidade e se clica do mesmo jeito.
    */
   readonly egg: Float32Array;
+  /**
+   * 0 = não está brincando; 1..5 = o quadro de brincar com a bola (olhar,
+   * empurrar, pular, abraçar, perseguir).
+   *
+   * Canal próprio, e não mais uma pose: pose é maneirismo de quem não está
+   * fazendo nada, e brincar é o que ela ESTÁ fazendo.
+   */
+  readonly playing: Uint8Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -53,6 +61,7 @@ export class CreatureRenderBuffer {
     this.poseTime = new Float32Array(capacity);
     this.carrying = new Uint8Array(capacity);
     this.egg = new Float32Array(capacity);
+    this.playing = new Uint8Array(capacity);
   }
 
   clear(): void {
@@ -78,6 +87,7 @@ export class CreatureRenderBuffer {
     poseTime: number,
     carrying: number,
     egg: number,
+    playing: number,
   ): void {
     const i = this.count;
     if (i >= this.capacity) return;
@@ -99,6 +109,7 @@ export class CreatureRenderBuffer {
     this.poseTime[i] = poseTime;
     this.carrying[i] = carrying;
     this.egg[i] = egg;
+    this.playing[i] = playing;
     this.count = i + 1;
   }
 }

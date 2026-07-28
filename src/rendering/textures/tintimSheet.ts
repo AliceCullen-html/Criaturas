@@ -1,5 +1,6 @@
 import { EGG_CRACK_AT } from '@core';
 import { Rectangle, Texture } from 'pixi.js';
+import playUrl from '../../assets/anim/play.png';
 import sheetUrl from '../../assets/tintim.png';
 
 /**
@@ -112,6 +113,23 @@ export const FRAME = {
   hatch6: 48,
   /** O ovo parado, esperando. */
   egg: 49,
+} as const;
+
+/**
+ * BRINCANDO COM A BOLA — os cinco quadros da segunda folha.
+ *
+ * Vêm de outro arquivo, e por isso continuam depois dos sessenta e dois da
+ * folha principal. A folha traz pares (criatura, bola) lado a lado, porque na
+ * ficha os dois aparecem juntos; aqui só a metade da CRIATURA é recortada — a
+ * bola tem física e desenho próprios, e precisa estar onde a física a puser,
+ * não onde o desenho a colou.
+ */
+export const PLAY_FRAME = {
+  look: 62,
+  push: 63,
+  jump: 64,
+  hug: 65,
+  chase: 66,
 } as const;
 
 /**
@@ -398,6 +416,36 @@ export function frameFor(choice: FrameChoice): number {
  * desligada, e cada quadro vira um recorte dessa tira. Uma textura só, vinte
  * recortes: o Pixi desenha o rebanho inteiro numa levada de GPU.
  */
+/**
+ * Os cinco quadros de brincar, tirados dos pares da folha de animação.
+ *
+ * Os pares são (criatura, bola), (criatura, bola)... — só os índices pares
+ * interessam.
+ */
+export async function loadPlayFrames(): Promise<Texture[]> {
+  const image = new Image();
+  image.src = playUrl;
+  await image.decode();
+
+  const count = 5;
+  const strip = document.createElement('canvas');
+  strip.width = ART * count;
+  strip.height = ART;
+  const ctx = strip.getContext('2d');
+  if (!ctx) throw new Error('Tintim: contexto 2D indisponível para os quadros de brincar.');
+  ctx.imageSmoothingEnabled = false;
+  for (let i = 0; i < count; i++) {
+    // Índice par: a metade da criatura de cada par.
+    ctx.drawImage(image, i * 2 * CELL, 0, CELL, CELL, i * ART, 0, ART, ART);
+  }
+  const source = Texture.from(strip).source;
+  source.scaleMode = 'nearest';
+  return Array.from(
+    { length: count },
+    (_unused, i) => new Texture({ source, frame: new Rectangle(i * ART, 0, ART, ART) }),
+  );
+}
+
 export async function loadTintimFrames(): Promise<Texture[]> {
   const image = new Image();
   image.src = sheetUrl;

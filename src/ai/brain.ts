@@ -74,6 +74,14 @@ export interface Perception {
    * linguagem precisa para começar.
    */
   machine: { x: number; y: number; distance: number } | null;
+  /**
+   * A BOLA mais próxima, quando há uma no jardim.
+   *
+   * Separada da comida e dos objetos escondidos porque o que ela mobiliza é
+   * outra coisa: não é fome nem suspeita, é vontade de brincar. Uma criatura
+   * séria passa direto; uma brincalhona atravessa o jardim.
+   */
+  ball: { id: number; x: number; y: number; distance: number } | null;
   /** A melhor amiga e o maior desafeto, lidos da memória. */
   friend: { id: number; x: number; y: number; distance: number; strength: number } | null;
   rival: { id: number; strength: number } | null;

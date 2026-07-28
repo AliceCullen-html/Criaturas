@@ -335,6 +335,32 @@ export function createUtilityBrain(): Brain {
         );
       }
 
+      // ---- A BOLA -------------------------------------------------------
+      //
+      // A única coisa do jardim que não serve para nada — e por isso a única
+      // que se pode querer só por querer. Quem decide é o temperamento: a
+      // brincalhona atravessa o jardim atrás dela, a séria passa direto, e
+      // ninguém vai brincar com fome, com sede ou com medo.
+      if (perception.ball) {
+        const proximity = 1 - clamp01(perception.ball.distance / (attributes.vision * 1.6));
+        options.push(
+          option(
+            'play',
+            (traits.playfulness * 1.5 + emotions.curiosity * 0.7 + (self.isBaby ? 0.6 : 0)) *
+              (0.35 + proximity) *
+              (1 - emotions.fear) *
+              (1 - needs.hunger * 0.9) *
+              (1 - needs.thirst * 0.9) *
+              (0.4 + needs.energy * 0.6) *
+              1.25,
+            perception.ball.x,
+            perception.ball.y,
+            perception.ball.id,
+            3,
+          ),
+        );
+      }
+
       // ---- Estudar ------------------------------------------------------
       //
       // Ninguém nasce querendo aprender: o que existe é uma máquina piscando e
