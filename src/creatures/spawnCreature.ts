@@ -123,6 +123,7 @@ export function spawnCreature(
     sleepiness: rng.range(0, 0.2),
     loneliness: rng.range(0.1, 0.4),
     trauma: 0,
+    scar: 0,
     pain: 0,
   });
 

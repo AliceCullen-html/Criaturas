@@ -19,6 +19,8 @@ const SLEEP_RECOVER = 0.09;
 const HEALTH_DRAIN = 0.05;
 const HEALTH_REGEN = 0.02;
 const DRINK_REACH = 24;
+/** Abaixo desta sede ela larga a água e vai viver a vida. */
+const SATED = 0.12;
 
 const deaths: number[] = [];
 
@@ -58,9 +60,21 @@ export const metabolismSystem: System = {
       needs.hunger = clamp01(needs.hunger + HUNGER_RATE * bio.metabolism * body * dt);
       needs.thirst = clamp01(needs.thirst + THIRST_RATE * bio.metabolism * body * dt);
 
+      // BEBE ATÉ SACIAR.
+      //
+      // Beber já acontecia sozinho na beira da água, mas a criatura só ficava
+      // ali enquanto a sede fosse a coisa mais urgente do mundo: aos 50% de
+      // sede a nota caía, outra vontade ganhava, e ela saía do lago pela
+      // metade — para voltar dois minutos depois. Um bicho não bebe assim.
+      // Enquanto a boca está na água e a sede não acabou, o compromisso se
+      // renova sozinho; qualquer susto de verdade ainda o quebra, porque medo
+      // zera o compromisso em outro lugar.
       const transform = transforms.get(entity);
       if (transform && findNearestWater(terrain, transform.x, transform.y, DRINK_REACH)) {
         needs.thirst = clamp01(needs.thirst - DRINK_RATE * dt);
+        if (mind.intent === 'seekWater' && needs.thirst > SATED) {
+          mind.commitment = Math.max(mind.commitment, 0.5);
+        }
       }
 
       const velocity = velocities.get(entity);

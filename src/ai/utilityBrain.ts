@@ -80,8 +80,16 @@ export function createUtilityBrain(): Brain {
           threat = { x: other.x, y: other.y, weight };
         }
       }
+      // A CICATRIZ NO CORPO DA DECISÃO.
+      //
+      // Uma criatura marcada não precisa estar com medo AGORA para desconfiar
+      // de você: a marca entra na conta sozinha. É o que faz a diferença entre
+      // um bicho que levou um susto e um bicho que aprendeu a temer — o
+      // primeiro se recompõe e volta; o segundo mantém distância mesmo em dia
+      // calmo, e é isso que o jogador vê e entende sem nenhum texto.
+      const wary = Math.max(emotions.fear, emotions.scar * 0.9);
       const playerFear = perception.player?.present
-        ? clamp01(-self.memory.valenceOf('player')) * emotions.fear
+        ? clamp01(-self.memory.valenceOf('player')) * wary
         : 0;
       if (perception.player?.present && playerFear > 0.2) {
         const weight = playerFear;

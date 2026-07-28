@@ -65,6 +65,8 @@ export interface CreatureSnapshot {
 
   isElder: boolean;
   trauma: number;
+  /** A marca que não sai: 0 = nunca sofreu, 1 = vive com medo. */
+  scar: number;
   /** Vínculo com o jogador: -1 (teme) … +1 (confia plenamente). */
   bond: number;
   /**
@@ -147,6 +149,7 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     parentB: lineage.parentB,
     isElder: isElder(bio),
     trauma: emotions.trauma,
+    scar: emotions.scar,
     bond: memory.valenceOf(subjects.player()),
     words: (world.store(Words).get(id)?.known() ?? []).map((word) => WORD_TEXT[word] ?? '?'),
     memories: memory.episodes.slice(0, 8),

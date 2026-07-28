@@ -50,6 +50,19 @@ function mainNeed(creature: CreatureSnapshot): string {
   return worst[1] < 0.35 ? 'nada lhe falta' : worst[0];
 }
 
+/**
+ * O que dizer de uma criatura marcada.
+ *
+ * Sem número e sem barra: é uma frase sobre ela, do jeito que alguém falaria
+ * de um bicho que apanhou. A escala existe porque "assustadiça" e "vive com
+ * medo" são coisas diferentes, e o jogador merece saber qual delas ele fez.
+ */
+function scarLabel(scar: number): string {
+  if (scar > 0.5) return '💔 vive com medo — algo aconteceu com ela';
+  if (scar > 0.25) return '💔 desconfiada desde que se machucou';
+  return '💔 assustadiça';
+}
+
 function ageLabel(creature: CreatureSnapshot): string {
   if (creature.egg >= 0) return 'ovo';
   if (creature.isBaby) return 'filhote';
@@ -109,7 +122,10 @@ export function CreatureCard() {
         </div>
         <div className="card__need">{eggLabel(creature.egg)}</div>
         <div className="card__hatch">
-          <div className="card__hatchFill" style={{ width: `${Math.round(creature.egg * 100)}%` }} />
+          <div
+            className="card__hatchFill"
+            style={{ width: `${Math.round(creature.egg * 100)}%` }}
+          />
         </div>
       </div>
     );
@@ -127,6 +143,11 @@ export function CreatureCard() {
       {/* Se há uma história em curso, ela vem no lugar da necessidade: contar
           que ela está levando comida para alguém vale mais que "fome". */}
       <div className="card__need">{creature.story || mainNeed(creature)}</div>
+      {/* A MARCA.
+          Só aparece em quem tem — e quem tem, tem por algo que aconteceu no
+          jardim. É a única linha da ficha que acusa o jogador, e ela precisa
+          existir: sem isso, maltratar uma criatura é um número escondido. */}
+      {creature.scar > 0.08 && <div className="card__scar">{scarLabel(creature.scar)}</div>}
       {/* De quem ela gosta. Só aparece quando existe: uma linha vazia dizendo
           "sem amigos" seria uma acusação, não uma informação. */}
       {creature.friend && <div className="card__friend">amiga de {creature.friend}</div>}

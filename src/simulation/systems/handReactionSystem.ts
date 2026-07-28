@@ -50,11 +50,13 @@ export const handReactionSystem: System = {
       if (distance > CLOSE_RADIUS) return;
 
       // Perto demais: quem tem má lembrança do jogador fica tenso e se afasta.
-      if (bond < -0.15 || emotions.trauma > 0.3) {
+      // A cicatriz conta como trauma aqui: quem carrega a marca não relaxa
+      // perto da sua mão, mesmo num dia em que nada aconteceu.
+      if (bond < -0.15 || emotions.trauma > 0.3 || emotions.scar > 0.15) {
         emotions.fear = clamp01(emotions.fear + 0.25 * dt * (1 + emotions.trauma));
         emotions.stress = clamp01(emotions.stress + 0.15 * dt);
         if (mind.intent !== 'flee' && emotions.fear > 0.4) mind.commitment = 0;
-      } else if (bond > 0.25) {
+      } else if (bond > 0.25 && emotions.scar < 0.3) {
         // Quem confia relaxa perto da mão e busca companhia.
         emotions.loneliness = clamp01(emotions.loneliness - 0.15 * dt);
         emotions.stress = clamp01(emotions.stress - 0.08 * dt);

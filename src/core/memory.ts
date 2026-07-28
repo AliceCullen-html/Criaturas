@@ -17,6 +17,14 @@ export const subjects = {
   player: (): MemorySubject => 'player',
   food: (variant: number): MemorySubject => `food:${variant}`,
   creature: (id: number): MemorySubject => `creature:${id}`,
+  /**
+   * Uma COISA, pelo tipo dela: o ursinho, a flor, a almofada.
+   *
+   * É por aqui que nasce o gosto. Não existe "criatura que gosta de flores"
+   * escrito em lugar nenhum do genoma: existe uma criatura que topou com uma
+   * flor num dia bom e guardou a lembrança. Da segunda vez ela vai direto.
+   */
+  thing: (variant: number): MemorySubject => `thing:${variant}`,
   place: (x: number, y: number): MemorySubject =>
     `place:${Math.floor(x / 100)},${Math.floor(y / 100)}`,
 } as const;

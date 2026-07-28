@@ -1,7 +1,8 @@
 import { clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
-import { Emotions, Identity, Memory, Mind, Needs, Personality } from '@creatures';
-import { Item } from '@world';
+import { Emotions, Identity, Memory, Mind, Needs, Nest, Personality } from '@creatures';
+import { Item, VARIANT } from '@world';
+import { chronicle } from './chronicle';
 
 /**
  * Rotinas: pequenas histórias, em vez de ações soltas.
@@ -29,6 +30,8 @@ export const ROUTINE = {
   protest: 3,
   /** Procura quem brigou com ela e faz as pazes. */
   makeUp: 4,
+  /** Cata um objeto de que gostou e leva para o canto dela. */
+  keepGift: 5,
 } as const;
 
 export const ROUTINE_NAMES: readonly string[] = [
@@ -37,6 +40,7 @@ export const ROUTINE_NAMES: readonly string[] = [
   'rouba',
   'reclama',
   'faz as pazes',
+  'guarda um tesouro',
 ];
 
 /** Contexto que cada passo recebe. */
@@ -179,16 +183,19 @@ const bringFood: Step[] = [
 
       // O laço é o que fica: as duas guardam a cena.
       world.store(Memory).get(other)?.record(subjects.creature(self), 1, 0.7);
-      world.store(Memory).get(other)?.addEpisode({
-        text: `${nameOf(world, self)} me trouxe comida`,
-        valence: 1,
-        intensity: 0.8,
-        emotion: 'gratidão',
-        tick: world.tick,
-        x: at(world, other)?.x ?? 0,
-        y: at(world, other)?.y ?? 0,
-        actor: nameOf(world, self),
-      });
+      world
+        .store(Memory)
+        .get(other)
+        ?.addEpisode({
+          text: `${nameOf(world, self)} me trouxe comida`,
+          valence: 1,
+          intensity: 0.8,
+          emotion: 'gratidão',
+          tick: world.tick,
+          x: at(world, other)?.x ?? 0,
+          y: at(world, other)?.y ?? 0,
+          actor: nameOf(world, self),
+        });
       world.store(Memory).get(self)?.record(subjects.creature(other), 0.7, 0.5);
     },
   },
@@ -221,16 +228,19 @@ const steal: Step[] = [
       if (thief) thief.happiness = clamp01(thief.happiness + 0.1);
 
       world.store(Memory).get(other)?.record(subjects.creature(self), -0.8, 0.6);
-      world.store(Memory).get(other)?.addEpisode({
-        text: `${nameOf(world, self)} roubou minha comida`,
-        valence: -0.8,
-        intensity: 0.7,
-        emotion: 'indignação',
-        tick: world.tick,
-        x: at(world, other)?.x ?? 0,
-        y: at(world, other)?.y ?? 0,
-        actor: nameOf(world, self),
-      });
+      world
+        .store(Memory)
+        .get(other)
+        ?.addEpisode({
+          text: `${nameOf(world, self)} roubou minha comida`,
+          valence: -0.8,
+          intensity: 0.7,
+          emotion: 'indignação',
+          tick: world.tick,
+          x: at(world, other)?.x ?? 0,
+          y: at(world, other)?.y ?? 0,
+          actor: nameOf(world, self),
+        });
     },
   },
 ];
@@ -289,34 +299,120 @@ const makeUp: Step[] = [
         // Fazer as pazes não apaga a mágoa, mas empurra de volta para o azul.
         world.store(Memory).get(a)?.record(subjects.creature(b), 0.6, 0.45);
       }
-      world.store(Memory).get(self)?.addEpisode({
-        text: `Fiz as pazes com ${nameOf(world, other)}`,
-        valence: 0.7,
-        intensity: 0.5,
-        emotion: 'alívio',
-        tick: world.tick,
-        x: at(world, self)?.x ?? 0,
-        y: at(world, self)?.y ?? 0,
-        actor: nameOf(world, other),
-      });
+      world
+        .store(Memory)
+        .get(self)
+        ?.addEpisode({
+          text: `Fiz as pazes com ${nameOf(world, other)}`,
+          valence: 0.7,
+          intensity: 0.5,
+          emotion: 'alívio',
+          tick: world.tick,
+          x: at(world, self)?.x ?? 0,
+          y: at(world, self)?.y ?? 0,
+          actor: nameOf(world, other),
+        });
     },
   },
 ];
+
+/**
+ * GUARDAR UM TESOURO.
+ *
+ * A criatura vai até a coisa, para e olha, pega e leva para o canto dela. E
+ * então a coisa FICA lá — é o que transforma um ninho em casa: um lugar com as
+ * coisas dela dentro.
+ *
+ * É aqui que o gosto nasce. Nenhuma criatura vem do genoma gostando de flores;
+ * o que existe é uma curiosa que topou com uma flor e guardou a lembrança. Da
+ * segunda vez ela vai direto, e da terceira o jogador já sabe: essa é a que
+ * gosta de flores. O acaso oferece, a memória decide, e o gosto é a soma.
+ */
+const keepGift: Step[] = [
+  {
+    intent: 'search',
+    aim: ({ world, item }) => aimAt(world, item),
+    done: ({ world, self, item }) => near(world, self, item, 16),
+    limit: 18,
+  },
+  {
+    // O beat de reparar na coisa antes de pegar: é o que faz parecer escolha.
+    intent: 'search',
+    aim: ({ world, item }) => aimAt(world, item),
+    done: ({ elapsed }) => elapsed > 0.8,
+    limit: 2,
+    finish: ({ world, self, item }) => {
+      pickUp(world, self, item);
+    },
+  },
+  {
+    intent: 'sleep',
+    aim: ({ world, self }) => {
+      const nest = world.store(Nest).get(self);
+      return nest ? { x: nest.x, y: nest.y, entity: -1 } : null;
+    },
+    done: ({ world, self }) => {
+      const nest = world.store(Nest).get(self);
+      const here = at(world, self);
+      if (!nest || !here) return true;
+      return Math.hypot(nest.x - here.x, nest.y - here.y) < 18;
+    },
+    limit: 30,
+    finish: ({ world, self, item }) => {
+      const treasure = world.store(Item).get(item);
+      if (!treasure || treasure.carriedBy !== self) return;
+      treasure.carriedBy = -1;
+
+      const emotions = world.store(Emotions).get(self);
+      if (emotions) {
+        emotions.happiness = clamp01(emotions.happiness + 0.18);
+        emotions.loneliness = clamp01(emotions.loneliness - 0.2);
+        emotions.stress = clamp01(emotions.stress - 0.1);
+      }
+      // O gosto por AQUELE tipo de coisa, que é o que vai fazer ela escolher
+      // igual da próxima vez.
+      const memory = world.store(Memory).get(self);
+      memory?.record(subjects.thing(treasure.variant), 0.8, 0.4);
+      memory?.record(subjects.player(), 0.25, 0.1);
+      memory?.addEpisode({
+        text: `Achei ${THING_NAMES[treasure.variant] ?? 'uma coisa'} e guardei no meu canto`,
+        valence: 0.75,
+        intensity: 0.5,
+        emotion: 'contentamento',
+        tick: world.tick,
+        x: at(world, self)?.x ?? 0,
+        y: at(world, self)?.y ?? 0,
+        actor: null,
+      });
+      chronicle(
+        world,
+        `tesouro-${treasure.variant}`,
+        `${nameOf(world, self)} guardou ${THING_NAMES[treasure.variant] ?? 'uma coisa'} no canto dela`,
+        true,
+      );
+    },
+  },
+];
+
+/** Como cada presente se chama, para a lembrança e para o livro. */
+const THING_NAMES: Record<number, string> = {
+  [VARIANT.bear]: 'um ursinho',
+  [VARIANT.giftFlower]: 'uma flor',
+  [VARIANT.pillow]: 'uma almofada',
+  [VARIANT.shinyRock]: 'uma pedra bonita',
+  [VARIANT.giftFeather]: 'uma pena',
+};
 
 export const ROUTINE_STEPS: Record<number, Step[]> = {
   [ROUTINE.bringFood]: bringFood,
   [ROUTINE.steal]: steal,
   [ROUTINE.protest]: protest,
   [ROUTINE.makeUp]: makeUp,
+  [ROUTINE.keepGift]: keepGift,
 };
 
 /** Quanto uma criatura quer começar cada rotina, dado o que há por perto. */
-export function appetiteFor(
-  routine: number,
-  world: World,
-  self: number,
-  other: number,
-): number {
+export function appetiteFor(routine: number, world: World, self: number, other: number): number {
   const traits = world.store(Personality).get(self);
   const emotions = world.store(Emotions).get(self);
   const needs = world.store(Needs).get(self);
@@ -343,6 +439,14 @@ export function appetiteFor(
     case ROUTINE.makeUp:
       // Gentis e sociáveis não aguentam ficar de mal.
       return (traits.kindness * 1.1 + traits.sociability * 0.8) * (1 - emotions.anger) * 0.9;
+    case ROUTINE.keepGift:
+      // Curiosidade e brincadeira levam à coisa; o medo e a fome tiram a
+      // vontade. O gosto entra na conta em `begin`, que sabe QUAL coisa é.
+      return (
+        (traits.curiosity * 1.1 + traits.playfulness * 0.7 + emotions.curiosity * 0.5) *
+        (1 - needs.hunger * 0.8) *
+        (1 - emotions.fear)
+      );
     default:
       return 0;
   }

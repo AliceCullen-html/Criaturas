@@ -122,6 +122,21 @@ export interface Emotions {
    */
   trauma: number;
   /**
+   * A CICATRIZ: o fundo do poço do trauma, o que não passa.
+   *
+   * O trauma sobe rápido e desce devagar — mas desce. Isto não. A cicatriz só
+   * se forma quando o trauma fica ALTO POR MUITO TEMPO: um susto não deixa
+   * marca, um mês de maus-tratos deixa. Depois de formada, ela é o piso para
+   * onde o trauma volta e o piso do medo que a criatura vai ter para sempre.
+   *
+   * Existe porque sem ela toda crueldade era temporária. Bastava esperar vinte
+   * minutos e a criatura voltava a ser a mesma, como se nada tivesse
+   * acontecido — o que faz do sofrimento um número passageiro, e não uma
+   * história. Uma criatura marcada pode voltar a confiar, mas leva a vida
+   * inteira, e alguma coisa nela nunca mais é o que era.
+   */
+  scar: number;
+  /**
    * Dor aguda. Diferente do trauma, que é a marca psicológica: isto é o corpo
    * doendo AGORA. Some sozinha em minutos, mas enquanto dura ela encolhe, manca
    * e não consegue fazer mais nada.

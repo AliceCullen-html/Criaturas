@@ -18,7 +18,26 @@ import {
  * tristeza demora, a felicidade escorre devagar e a confiança se constrói aos
  * poucos. O trauma quase não cede — é o que dá peso às experiências ruins.
  */
-const FEAR_CALM = 0.012;
+/**
+ * O medo cede devagar.
+ *
+ * Era 0,012 — um susto inteiro passava em oitenta segundos, e o jogador podia
+ * bater numa criatura, esperar um minuto e meio e continuar de onde parou, com
+ * ela mansa de novo. Um bicho não funciona assim. Em 0,007, o mesmo susto leva
+ * uns dois minutos e meio para passar, e a criatura ainda passa um tempo
+ * evitando quem a assustou.
+ */
+const FEAR_CALM = 0.007;
+/** Acima deste trauma, e só acima dele, a cicatriz começa a se formar. */
+const SCAR_AT = 0.45;
+/** O quanto a cicatriz cresce por segundo de trauma alto. */
+const SCAR_RATE = 0.0025;
+/** E o teto dela: nem a pior das vidas apaga a criatura inteira. */
+const MAX_SCAR = 0.7;
+/** O quanto ela cede por segundo de vida boa — dez vezes mais devagar. */
+const SCAR_HEAL = 0.00025;
+/** Quanto medo de base uma cicatriz sustenta, para sempre. */
+const SCAR_FEAR = 0.5;
 const ANGER_CALM = 0.02;
 const STRESS_CALM = 0.01;
 const HAPPINESS_INERTIA = 0.035;
@@ -54,10 +73,40 @@ export const emotionSystem: System = {
       // de doer.
       emotions.pain = Math.max(0, emotions.pain - PAIN_HEAL * dt);
 
-      // O trauma sustenta um piso de medo: quem sofreu não volta ao normal.
-      emotions.trauma = Math.max(0, emotions.trauma - TRAUMA_CALM * dt);
+      // A CICATRIZ SE FORMA COM O TEMPO, NÃO COM O GOLPE.
+      //
+      // Enquanto o trauma fica lá em cima, alguma coisa vai ficando permanente.
+      // Um susto passa; viver assustada não. É por isso que a marca cresce por
+      // SEGUNDO de trauma alto, e não por pancada levada: o que adoece uma
+      // criatura não é o pior dia dela, é o tanto de dias ruins.
+      if (emotions.trauma > SCAR_AT) {
+        emotions.scar = Math.min(MAX_SCAR, emotions.scar + SCAR_RATE * dt);
+      }
+
+      // E cede — mas devagar como nada mais no jogo cede: só quando ela está
+      // bem, confiando e sem trauma novo. São horas de jardim para apagar o
+      // que uma tarde de maus-tratos escreveu, e nunca até o fim. Uma criatura
+      // marcada pode voltar a confiar; ela só não volta a ser a de antes.
+      //
+      // A condição é "não aconteceu mais nada": trauma parado no fundo do
+      // poço, ou seja, na própria cicatriz. Comparar com um valor absoluto não
+      // funcionava — a cicatriz é o piso do trauma, então uma criatura muito
+      // marcada nunca teria trauma baixo o bastante para se curar, e a cura
+      // era um caminho morto no código.
+      const calm = emotions.trauma <= emotions.scar + 0.02;
+      if (calm && emotions.happiness > 0.6 && emotions.trust > 0.5) {
+        emotions.scar = Math.max(0, emotions.scar - SCAR_HEAL * dt);
+      }
+
+      // O trauma sustenta um piso de medo: quem sofreu não volta ao normal. E
+      // ele não desce até zero: desce até a cicatriz.
+      emotions.trauma = Math.max(emotions.scar, emotions.trauma - TRAUMA_CALM * dt);
       // Doendo, o medo não cede: é difícil relaxar machucada.
-      const fearFloor = Math.max(emotions.trauma * 0.45, emotions.pain * 0.5);
+      const fearFloor = Math.max(
+        emotions.trauma * 0.45,
+        emotions.scar * SCAR_FEAR,
+        emotions.pain * 0.5,
+      );
       emotions.fear = Math.max(
         fearFloor,
         approach(emotions.fear, fearFloor, FEAR_CALM * (0.6 + traits.bravery), dt),

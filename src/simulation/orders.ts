@@ -1,4 +1,4 @@
-import { clamp01, subjects } from '@core';
+import { clamp, clamp01, subjects } from '@core';
 import { Transform, defineComponent, type World } from '@engine';
 import { Emotions, Memory, Mind, Needs } from '@creatures';
 import { Item } from '@world';
@@ -46,6 +46,20 @@ export interface Order {
   item: number;
   /** Segundos restantes de obediência. Uma ordem não vale para sempre. */
   patience: number;
+  /**
+   * O DESVIO: um ponto intermediário, quando o caminho reto não dá.
+   *
+   * Ninguém aqui calcula rota — a criatura anda reto e escorrega no obstáculo.
+   * Fora de uma ordem isso se resolve sozinho (ela desiste do alvo e dá uma
+   * volta), mas a ordem reimpõe o mesmo destino a cada tique, e o resultado era
+   * uma criatura encostada numa pedra até a paciência acabar: obedecendo com
+   * todas as forças, sem sair do lugar. Empacada, ela agora contorna — o que um
+   * bicho faria, e o que o jogador espera ver de quem está tentando obedecer.
+   */
+  detourX: number;
+  detourY: number;
+  /** Segundos restantes indo pelo desvio. */
+  detour: number;
 }
 export const Order = defineComponent<Order>('Order');
 
@@ -55,6 +69,11 @@ const PATIENCE = 22;
 const STUDY_PATIENCE = 70;
 /** Chegou: a partir daqui a ordem de andar está cumprida. */
 const ARRIVED = 18;
+/** Segundos batendo no mesmo obstáculo antes de tentar contornar. */
+const STUCK = 1.2;
+/** O quanto ela se desloca para o lado ao contornar, e por quanto tempo. */
+const DETOUR = 60;
+const DETOUR_TIME = 2.5;
 /** Acima disto ela tem problema próprio e a ordem não se sustenta. */
 const PANIC_HUNGER = 0.8;
 const PANIC_THIRST = 0.8;
@@ -104,6 +123,9 @@ export function issueOrder(
     kind,
     x,
     y,
+    detourX: 0,
+    detourY: 0,
+    detour: 0,
     item,
     patience: kind === ORDER.learn ? STUDY_PATIENCE : PATIENCE,
   });
@@ -205,9 +227,26 @@ export const orderSystem = {
       }
 
       // Andar até o ponto. Chegando, a ordem termina e ela volta a viver.
+      //
+      // Empacada no caminho, ela contorna: o destino continua o mesmo, o
+      // caminho é que muda. O desvio dura poucos segundos e sai perpendicular
+      // ao rumo — o bastante para escapar da quina de uma pedra.
+      order.detour = Math.max(0, order.detour - dt);
+      if (order.detour <= 0 && mind.blocked > STUCK) {
+        const dx = order.x - here.x;
+        const dy = order.y - here.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const side = world.rng.chance(0.5) ? 1 : -1;
+        order.detourX = clamp(here.x + (-dy / len) * DETOUR * side, 6, world.config.width - 6);
+        order.detourY = clamp(here.y + (dx / len) * DETOUR * side, 6, world.config.height - 6);
+        order.detour = DETOUR_TIME;
+        mind.blocked = 0;
+      }
+      const goingTo = order.detour > 0 ? { x: order.detourX, y: order.detourY } : order;
+
       mind.intent = 'wander';
-      mind.targetX = order.x;
-      mind.targetY = order.y;
+      mind.targetX = goingTo.x;
+      mind.targetY = goingTo.y;
       mind.targetEntity = -1;
       mind.commitment = 2;
       if (Math.hypot(here.x - order.x, here.y - order.y) < ARRIVED) {

@@ -16,6 +16,7 @@ export { writeCreatureBuffer } from './creatureRender';
 export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
+export { fearLearningSystem } from './systems/fearLearningSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { idleSystem } from './systems/idleSystem';
 export { confinementSystem } from './systems/confinementSystem';

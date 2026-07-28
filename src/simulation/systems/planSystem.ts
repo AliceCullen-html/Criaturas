@@ -245,10 +245,41 @@ function begin(world: World, self: number, plan: Plan): void {
     // ---- Fazer as pazes: briguei com essa e não estou mais com raiva ------
     const grudge = memory?.valenceOf(subjects.creature(other)) ?? 0;
     if (grudge < -0.25) {
-      const score = appetiteFor(ROUTINE.makeUp, world, self, other) * closeness * (0.5 - grudge * 0.5);
+      const score =
+        appetiteFor(ROUTINE.makeUp, world, self, other) * closeness * (0.5 - grudge * 0.5);
       if (score > best.score) best = { routine: ROUTINE.makeUp, score, other, item: -1 };
     }
   });
+
+  // ---- Guardar um tesouro: tem uma coisa bonita largada no chão ----------
+  //
+  // Não depende de outra criatura, então fica fora do laço de vizinhos. E a
+  // nota carrega o GOSTO: uma criatura que já guardou uma flor atravessa o
+  // jardim pela próxima; uma que nunca viu decide por curiosidade. É o que faz
+  // duas criaturas do mesmo jardim colecionarem coisas diferentes.
+  {
+    const wish = appetiteFor(ROUTINE.keepGift, world, self, -1);
+    if (wish > 0) {
+      let treasure = -1;
+      let bestScore = 0;
+      items.forEach((item, entity) => {
+        if (item.kind !== 'gift' || item.held || item.carriedBy >= 0) return;
+        const spot = transforms.get(entity);
+        if (!spot) return;
+        const distance = Math.hypot(spot.x - here.x, spot.y - here.y);
+        if (distance > NOTICE) return;
+        const taste = memory?.valenceOf(subjects.thing(item.variant)) ?? 0;
+        const score = wish * (0.45 + (1 - distance / NOTICE) * 0.55) * (1 + taste);
+        if (score > bestScore) {
+          bestScore = score;
+          treasure = entity;
+        }
+      });
+      if (treasure >= 0 && bestScore > best.score) {
+        best = { routine: ROUTINE.keepGift, score: bestScore, other: -1, item: treasure };
+      }
+    }
+  }
 
   if (best.routine === ROUTINE.none) return;
   plan.routine = best.routine;

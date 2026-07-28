@@ -158,6 +158,15 @@ body {
   opacity: 0.75;
 }
 
+/* A marca. Cor própria, porque não é uma informação como as outras: é a única
+   linha da ficha que fala do que o JOGADOR fez. */
+.card__scar {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #d98a8a;
+  opacity: 0.9;
+}
+
 /* O quanto falta para o ovo romper. É a única barra do jogo — e existe porque
    uma espera sem sinal nenhum parece um jogo travado. */
 .card__hatch {
