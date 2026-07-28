@@ -11,6 +11,10 @@ import { countIn } from './density';
 export type ItemKind =
   | 'fruit'
   | 'toy'
+  /** A bola que o jogador larga: rola, quica e é disputada. */
+  | 'ball'
+  /** Um presente: ursinho, flor, almofada, pedra bonita, pena. */
+  | 'gift'
   | 'stick'
   | 'seed'
   | 'feather'
@@ -56,6 +60,13 @@ export const VARIANT = {
   glowMushroom: 12,
   shinyStone: 13,
   boulder: 14,
+  // --- Desenhados à mão, vindos do atlas do cinto -----------------------
+  ball: 15,
+  bear: 16,
+  giftFlower: 17,
+  pillow: 18,
+  shinyRock: 19,
+  giftFeather: 20,
 } as const;
 
 const TRINKET_VARIANT: Record<string, number> = {
@@ -126,7 +137,9 @@ export function spawnBoulder(world: World, x: number, y: number): number {
     vx: 0,
     vy: 0,
   });
-  world.store(Sprite).set(entity, { radius: BOULDER_RADIUS, color: 0x8d8f95, variant: VARIANT.boulder });
+  world
+    .store(Sprite)
+    .set(entity, { radius: BOULDER_RADIUS, color: 0x8d8f95, variant: VARIANT.boulder });
   return entity;
 }
 
@@ -164,6 +177,74 @@ export function spawnFruit(
   };
   world.store(Item).set(entity, item);
   world.store(Sprite).set(entity, { radius: itemRadius(item), color: 0xffffff, variant });
+  return entity;
+}
+
+/**
+ * A BOLA.
+ *
+ * Um objeto como os outros — o mesmo corpo físico que já rola e desacelera —,
+ * mas com um significado próprio: é a única coisa do jardim que não serve para
+ * nada. Não se come, não se planta, não protege da chuva. Existe para ser
+ * empurrada, e é isso que a torna interessante para uma criatura curiosa.
+ */
+export function spawnBall(world: World, x: number, y: number): number {
+  const entity = world.createEntity();
+  world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
+  const item: Item = {
+    kind: 'ball',
+    variant: VARIANT.ball,
+    freshness: 1,
+    toxic: false,
+    held: false,
+    carriedBy: -1,
+    hidden: false,
+    stack: 0,
+    vx: 0,
+    vy: 0,
+  };
+  world.store(Item).set(entity, item);
+  world
+    .store(Sprite)
+    .set(entity, { radius: itemRadius(item), color: 0xffffff, variant: item.variant });
+  return entity;
+}
+
+/** As coisas que se pode dar de presente, na ordem em que o atlas as desenhou. */
+export const GIFTS: readonly number[] = [
+  VARIANT.bear,
+  VARIANT.giftFlower,
+  VARIANT.pillow,
+  VARIANT.shinyRock,
+  VARIANT.giftFeather,
+];
+
+/**
+ * UM PRESENTE.
+ *
+ * O que sai é sorteado, e é assim que nasce o gosto: uma criatura que encontrou
+ * três flores e nunca guardou uma pedra vira a criatura que gosta de flores. O
+ * jogo não escolhe isso por ela — o acaso oferece, e a memória decide.
+ */
+export function spawnGift(world: World, x: number, y: number, variant?: number): number {
+  const entity = world.createEntity();
+  world.store(Transform).set(entity, { x, y, prevX: x, prevY: y });
+  const item: Item = {
+    kind: 'gift',
+    variant: variant ?? world.rng.pick(GIFTS),
+    freshness: 1,
+    toxic: false,
+    held: false,
+    carriedBy: -1,
+    hidden: false,
+    stack: 0,
+    vx: 0,
+    vy: 0,
+  };
+  world.store(Item).set(entity, item);
+  world
+    .store(Sprite)
+    .set(entity, { radius: itemRadius(item), color: 0xffffff, variant: item.variant });
   return entity;
 }
 

@@ -91,6 +91,14 @@ export interface Needs {
   thirst: number;
   energy: number;
   health: number;
+  /**
+   * Sujeira, 0..1. Sobe sozinha, devagar — viver no mato suja.
+   *
+   * Não mata nem adoece: incomoda. Uma criatura encardida fica um pouco menos
+   * feliz, e é só isso — o banho existe para ser um CUIDADO, não uma tarefa com
+   * prazo. Se a sujeira matasse, dar banho viraria obrigação.
+   */
+  dirt: number;
 }
 export const Needs = defineComponent<Needs>('Needs');
 

@@ -1,7 +1,7 @@
-import { clamp01 } from '@core';
+import { POSE, clamp01 } from '@core';
 import { Transform, Velocity, type System } from '@engine';
-import { Bio, Creature, Emotions, Mind, Needs } from '@creatures';
-import { TerrainResource, findNearestWater } from '@world';
+import { Behavior, Bio, Creature, Emotions, Mind, Needs } from '@creatures';
+import { TerrainResource, WeatherResource, findNearestWater } from '@world';
 import { DeathsResource } from './socialSystem';
 import { growthScale } from '../age';
 
@@ -10,6 +10,11 @@ const THIRST_RATE = 0.015;
 const DRINK_RATE = 0.3;
 const MOVE_DRAIN = 0.012;
 const REST_RECOVER = 0.03;
+/** Quanto um corpo se suja por segundo: do limpo ao encardido em ~15 minutos. */
+const DIRT_RATE = 0.0011;
+/** E o quanto sai quando ela se cata, ou quando chove em cima dela. */
+const GROOM_WASH = 0.035;
+const RAIN_WASH = 0.02;
 const SLEEP_RECOVER = 0.09;
 const HEALTH_DRAIN = 0.05;
 const HEALTH_REGEN = 0.02;
@@ -32,6 +37,10 @@ export const metabolismSystem: System = {
     const transforms = world.store(Transform);
     const velocities = world.store(Velocity);
     const terrain = world.getResource(TerrainResource);
+    const behaviors = world.store(Behavior);
+    const rain = world.hasResource(WeatherResource)
+      ? world.getResource(WeatherResource).intensity
+      : 0;
 
     deaths.length = 0;
 
@@ -59,6 +68,24 @@ export const metabolismSystem: System = {
       const sleeping = mind.intent === 'sleep';
       const energyDelta = sleeping ? SLEEP_RECOVER : moving ? -MOVE_DRAIN : REST_RECOVER;
       needs.energy = clamp01(needs.energy + energyDelta * dt);
+
+      // A SUJEIRA, E COMO ELA SAI SOZINHA.
+      //
+      // Sobe devagar — um dia inteiro de jardim encarde um bicho — e pesa de
+      // leve no humor. Mas o bicho se limpa: quando ela se cata (o gesto que já
+      // existia), a sujeira cai; na chuva, cai mais rápido ainda.
+      //
+      // Isso não é conforto: é obrigação do projeto. Sem uma saída natural, o
+      // jardim inteiro ficava encardido e infeliz para sempre a menos que o
+      // jogador passasse a esponja em cada um — e o mundo tem de continuar
+      // vivo sozinho, com ou sem alguém olhando. Medido: com a sujeira sem
+      // saída, dois testes de comportamento longo mudaram de resultado.
+      const grooming = behaviors.get(entity)?.pose === POSE.groom;
+      const washing = rain > 0.3 ? rain * RAIN_WASH : 0;
+      needs.dirt = clamp01(
+        needs.dirt + DIRT_RATE * dt - (grooming ? GROOM_WASH : 0) * dt - washing * dt,
+      );
+      if (needs.dirt > 0.75) emotions.happiness = clamp01(emotions.happiness - 0.002 * dt);
 
       bio.age += dt;
       bio.matingCooldown = Math.max(0, bio.matingCooldown - dt);

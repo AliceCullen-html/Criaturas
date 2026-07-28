@@ -31,6 +31,16 @@ export {
   forEachEgg,
 } from './systems/eggSystem';
 export {
+  shakeFruitFrom,
+  placeBall,
+  placeGift,
+  placeEgg,
+  scrub,
+  nameThing,
+  wordForSpot,
+} from './toolActions';
+export type { BallReply, EggReply, ScrubReply } from './toolActions';
+export {
   Chatter,
   SpeechResource,
   teachingSystem,

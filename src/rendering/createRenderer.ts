@@ -35,6 +35,7 @@ import {
   makeWaterTextures,
   type SceneryTextures,
 } from './textures/world';
+import { loadIconTextures } from './textures/toolIcons';
 import { makeFeedbackTextures, type FeedbackKind } from './textures/feedback';
 import { makeHandTextures, type HandState } from './textures/hand';
 import { makeAmbientTextures, makeRainTextures } from './textures/ambient';
@@ -91,6 +92,22 @@ export interface Renderer {
   /** Quem está dentro do retângulo de seleção (cantos em coordenadas de mundo). */
   creaturesInBox(x1: number, y1: number, x2: number, y2: number): number[];
   setHandlers(handlers: GestureHandlers): void;
+  /**
+   * Quem responde se a ferramenta na mão levanta objetos.
+   *
+   * O renderer não sabe o que é um cinto de ferramentas — ele só pergunta, na
+   * hora de fechar a mão, se aquilo pega. É a camada de cima que sabe o quê.
+   */
+  setGrabTest(test: () => boolean): void;
+  /**
+   * Quem responde se um toque no chão, com alguém selecionado, é uma ORDEM.
+   *
+   * Existe por um conflito de verdade: depois que o cinto chegou, um toque no
+   * chão com uma criatura selecionada virava ordem de andar e a ferramenta na
+   * mão não fazia nada — a bola não caía, o presente não aparecia. Mandar é
+   * gesto de mão VAZIA; com um objeto na mão, o toque é o objeto.
+   */
+  setOrderTest(test: () => boolean): void;
   /** Sinal visual acima de uma criatura (coração, gota, estrela...). */
   emit(kind: FeedbackKind, worldX: number, worldY: number): void;
   /** Alguém disse uma palavra: aparece uma bolha com ela por cima da cabeça. */
@@ -472,6 +489,22 @@ const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = {
 const SCREEN_CENTER_Y = 32;
 const SCREEN_WIDTH = 38;
 
+/**
+ * As variantes de objeto que vêm do atlas de ícones, e qual ícone é cada uma.
+ *
+ * Cópia local dos números de `VARIANT` (@world) e `ICON` (@core): o renderer
+ * não importa a simulação nem o mundo, e nunca importou. É uma tabela pequena e
+ * o preço de manter a fronteira.
+ */
+const ICON_FOR_VARIANT: Record<number, number> = {
+  15: 1, // bola
+  16: 10, // ursinho
+  17: 11, // flor
+  18: 12, // almofada
+  19: 13, // pedra bonita
+  20: 14, // pena
+};
+
 /** Uma muda não é uma árvore em miniatura: começa baixinha e engrossa depois. */
 const growthScale = (growth: number): number => 0.35 + growth * 0.65;
 
@@ -652,6 +685,10 @@ export function createRenderer(options: RendererOptions): Renderer {
   let puddleG: Graphics | null = null;
   let weatherTint: Graphics | null = null;
   let selectedScreenCb: ((x: number, y: number, visible: boolean) => void) | null = null;
+  /** Pergunta feita à camada de cima: a ferramenta atual pega coisas? */
+  let canGrab: () => boolean = () => true;
+  /** E manda? Com um objeto na mão, tocar o chão é usar o objeto, não mandar. */
+  let canOrder: () => boolean = () => true;
   let dustTexture: Texture | null = null;
   let feedbackTextures: Record<FeedbackKind, Texture> | null = null;
   let handTextures: Record<HandState, Texture> | null = null;
@@ -1138,6 +1175,15 @@ export function createRenderer(options: RendererOptions): Renderer {
       scenery = makeSceneryTextures(createRng(7));
       tintimFrames = await loadTintimFrames();
 
+      // A bola e os presentes NÃO são desenhados por código: são os ícones
+      // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
+      // segura e o que ele larga na grama têm de ser a mesma coisa.
+      const icons = await loadIconTextures();
+      for (const [variant, icon] of Object.entries(ICON_FOR_VARIANT)) {
+        const texture = icons[icon];
+        if (texture) resourceTextures[Number(variant)] = texture;
+      }
+
       const root = new Container();
       root.sortableChildren = false;
 
@@ -1465,6 +1511,14 @@ export function createRenderer(options: RendererOptions): Renderer {
       selectedScreenCb = callback;
     },
 
+    setGrabTest(test: () => boolean): void {
+      canGrab = test;
+    },
+
+    setOrderTest(test: () => boolean): void {
+      canOrder = test;
+    },
+
     setHandlers(next: GestureHandlers): void {
       // O renderer se intromete no arrasto do cenário porque a peça na mão é
       // um assunto SÓ dele: a simulação não precisa saber que uma árvore está
@@ -1502,7 +1556,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       };
       gestures = new GestureRecognizer(watched, {
         creatureAt: pickCreature,
-        hasSelection: () => selectedNow.size > 0,
+        canGrab: () => canGrab(),
+        hasSelection: () => selectedNow.size > 0 && canOrder(),
         itemAt: pickItem,
         sceneryAt: pickScenery,
         isWater: (x, y) => waterProbe?.(x, y) ?? false,

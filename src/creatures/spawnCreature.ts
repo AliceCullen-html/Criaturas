@@ -107,6 +107,10 @@ export function spawnCreature(
     thirst: rng.range(0.1, 0.35),
     energy: rng.range(0.7, 1),
     health: 1,
+    // Fixa, não sorteada: um sorteio a mais aqui desloca o fluxo do gerador
+    // inteiro, e com ele todo mundo semeado que veio depois — quatro testes de
+    // comportamento mudaram de resultado só por causa deste número.
+    dirt: 0.12,
   });
 
   world.store(Emotions).set(entity, {

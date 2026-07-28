@@ -33,7 +33,7 @@ import {
   Item as ItemComponent,
 } from '@world';
 import { Creature, Emotions, Mind } from '@creatures';
-import { WORD, WORD_TEXT } from '@core';
+import { TOOL, WORD, WORD_TEXT } from '@core';
 import {
   actionSystem,
   BrainResource,
@@ -93,6 +93,13 @@ import {
   hatchNow,
   isEgg,
   forEachEgg,
+  shakeFruitFrom,
+  placeBall,
+  placeGift,
+  placeEgg,
+  scrub,
+  nameThing,
+  wordForSpot,
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
 import { createMusic } from '@audio';
@@ -185,6 +192,16 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   const store = useUiStore;
   const CARD_SECONDS = 7;
 
+  /**
+   * O QUE ESTÁ NA MÃO.
+   *
+   * Uma leitura, não um modo: o cinto guarda a ferramenta no estado da
+   * interface e o mundo pergunta na hora de agir. É o que faz o mesmo gesto —
+   * apertar em cima de um bicho — ser carinho com o coração na mão, banho com a
+   * esponja e nada com o ovo.
+   */
+  const tool = (): number => store.getState().tool;
+
   /** Aquele objeto é uma fruta que dá para mandar comer? */
   const edible = (entity: number): boolean => {
     const item = world.store(ItemComponent).get(entity);
@@ -248,6 +265,12 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     const reply = showAndTell(world, creatureId, word);
     if (reply === 'learned') signal('star', creatureId);
     else if (reply === 'listening') signal('question', creatureId);
+  };
+
+  /** Onde uma criatura está, para as ferramentas que miram nela. */
+  const creaturePoint = (id: number): [number, number] => {
+    const spot = world.store(Transform).get(id);
+    return [spot?.x ?? 0, spot?.y ?? 0];
   };
 
   /** Sinal visual sobre uma criatura (coração, gota, estrela). */
@@ -418,6 +441,15 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           clearSelection();
           return;
         }
+        // ENSINO: apontar uma criatura é dizer "amigo" para quem estiver
+        // olhando — inclusive para ela mesma.
+        if (tool() === TOOL.book && !isEgg(world, id)) {
+          nameThing(world, ...creaturePoint(id), WORD.friend);
+          const spot = world.store(Transform).get(id);
+          if (spot) activeRenderer?.say(WORD.friend, spot.x, spot.y - 24);
+          return;
+        }
+
         // O PRIMEIRO ovo nasce no toque.
         //
         // Enquanto não há nenhuma criatura viva, o jardim inteiro é uma casca
@@ -465,6 +497,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           if (Math.random() < dt * 1.2) signal('heart', creatureId);
           return;
         }
+
+        // BANHO: a esponja na mão transforma o mesmo gesto em esfregar. A
+        // espuma sai enquanto a sujeira sai, e quem tem medo não deixa
+        // encostar.
+        if (tool() === TOOL.bath) {
+          const reply = scrub(world, creatureId, dt);
+          if (reply === 'scrubbing' && Math.random() < dt * 6) signal('bubble', creatureId);
+          else if (reply === 'refused' && Math.random() < dt * 1.5) signal('question', creatureId);
+          else if (reply === 'clean' && Math.random() < dt * 1.5) signal('star', creatureId);
+          return;
+        }
+
+        // ENSINO: o livro em cima da criatura diz o nome dela — "amigo".
+        if (tool() === TOOL.book) return;
         if (petCreature(world, creatureId, dt) === 'accepted') {
           if (Math.random() < dt * 1.5) signal('heart', creatureId);
         }
@@ -501,6 +547,29 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       // Mexer no cenário tem consequência: cai fruta, insetos voam, e as
       // criaturas curiosas vêm ver o que aconteceu.
       onPokeScenery: (kind, index) => {
+        const piece = scenery[index];
+
+        // COMIDA: sacudir a árvore com a maçã na mão derruba uma fruta de
+        // verdade — é assim que o jogador alimenta sem nenhum menu.
+        if (tool() === TOOL.food && piece) {
+          const fruit = shakeFruitFrom(world, piece);
+          activeRenderer?.shakeTreeAt(index);
+          if (fruit >= 0) activeRenderer?.emit('star', piece.x, piece.y - 20);
+          else activeRenderer?.emit('question', piece.x, piece.y - 20);
+          return;
+        }
+
+        // ENSINO: apontar uma árvore ou uma pedra é dizer o nome dela.
+        if (tool() === TOOL.book && piece) {
+          const named = wordForSpot(world, piece.x, piece.y, false);
+          if (named) {
+            const heard = nameThing(world, named.x, named.y, named.word);
+            activeRenderer?.say(named.word, piece.x, piece.y - 26);
+            if (heard === 0) activeRenderer?.emit('question', piece.x, piece.y - 20);
+          }
+          return;
+        }
+
         if (kind === 'tree') {
           const spot = shakeTree(world, index);
           if (spot.kind !== 'none') {
@@ -544,7 +613,35 @@ export function createApp(rootElement: HTMLElement): AppInstance {
           activeRenderer?.emit('question', drop.x, drop.y - 14);
         }
       },
-      onPokeGround: (x, y) => pokeProps(world, x, y),
+      onPokeGround: (x, y) => {
+        // O chão é onde as coisas nascem. Cada ferramenta larga a sua, e o
+        // mundo responde na hora — sem diálogo, sem confirmação, sem janela.
+        if (tool() === TOOL.ball) {
+          activeRenderer?.emit(
+            placeBall(world, x, y) === 'placed' ? 'star' : 'question',
+            x,
+            y - 10,
+          );
+          return;
+        }
+        if (tool() === TOOL.gift) {
+          activeRenderer?.emit(placeGift(world, x, y) >= 0 ? 'star' : 'question', x, y - 10);
+          return;
+        }
+        if (tool() === TOOL.egg) {
+          activeRenderer?.emit(placeEgg(world, x, y) === 'placed' ? 'star' : 'question', x, y - 10);
+          return;
+        }
+        if (tool() === TOOL.book) {
+          const named = wordForSpot(world, x, y, false);
+          if (named) {
+            nameThing(world, named.x, named.y, named.word);
+            activeRenderer?.say(named.word, named.x, named.y - 20);
+          }
+          return;
+        }
+        pokeProps(world, x, y);
+      },
       // --- Comando de grupo -------------------------------------------
       // O retângulo em si é desenho puro; a simulação só recebe o resultado.
       onMarquee: () => {},
@@ -597,10 +694,25 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         if (obedeceram > 0) activeRenderer?.emit('star', destinoX, destinoY - 8);
       },
       onPokeWater: (x, y) => {
+        if (tool() === TOOL.book) {
+          const named = wordForSpot(world, x, y, true);
+          if (named) {
+            nameThing(world, named.x, named.y, named.word);
+            activeRenderer?.say(named.word, x, y - 12);
+          }
+          return;
+        }
         touchWater(world, x, y);
         activeRenderer?.ripple(x, y);
       },
     });
+
+    // Só a mão e a comida levantam coisas do chão. Com a esponja, o livro ou o
+    // ovo, apertar em cima de uma fruta não a arranca do mundo.
+    renderer.setGrabTest(() => tool() === TOOL.hand || tool() === TOOL.food);
+    // E mandar é gesto de mão vazia: com a bola, o presente ou o ovo na mão, o
+    // toque no chão é aquilo, não uma ordem.
+    renderer.setOrderTest(() => tool() === TOOL.hand);
 
     void renderer.mount(container).then(() => {
       if (cancelled) return;

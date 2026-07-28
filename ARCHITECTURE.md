@@ -208,6 +208,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
 | — ✅  | O ovo: toda criatura nasce de uma casca, e a mão do jogador a choca          |
 | — ✅  | Oito direções de caminhada a partir de cinco desenhos (as outras, espelhadas) |
+| G ✅  | O cinto: oito ferramentas, o cursor vira o objeto, e nenhuma janela         |
 | D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
 | — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
 | — ✅  | Origem da espécie: um ancestral, brotamento com mutação, transição evolutiva |
@@ -251,6 +252,39 @@ Duas consequências valem o registro. A profundidade passa a ser `x + y`, não
 isso o cenário virou parte da mesma camada ordenada das criaturas. E o clique
 precisa do inverso exato da projeção (`unIso`): sem ele o jogador acerta um
 lugar e o jogo entende outro.
+
+### O cinto: o menu é o que está na sua mão
+
+A regra do projeto sempre foi *a tela é do mundo*. O cinto de ferramentas é o
+teste dessa regra, e a saída foi tratá-lo como um OBJETO e não como um painel:
+oito ícones encostados na borda, e escolher um não abre nada, não pausa nada e
+não pergunta nada — **o cursor vira aquele objeto**. Alimentar, dar banho, fazer
+carinho e ensinar acontecem no jardim, com o mouse, em cima do bicho. Não existe
+botão "alimentar".
+
+Três consequências de projeto valem o registro:
+
+- **A ferramenta é um estado só, e mora em `@core`.** A interface pinta o cinto,
+  o navegador troca o cursor e a simulação decide o que um toque significa: os
+  três precisam concordar sobre o que está na mão, e nenhum manda nos outros.
+- **O mesmo gesto muda de sentido conforme o que se segura.** Apertar em cima de
+  uma criatura é carinho com o coração na mão e banho com a esponja. Tocar o
+  chão larga a bola, o presente ou o ovo. É o que faz cada ícone significar
+  alguma coisa em vez de ser uma mão com enfeite diferente.
+- **Mandar virou gesto de mão VAZIA.** Este foi um conflito real, achado no
+  navegador: com uma criatura selecionada, todo toque no chão virava ordem de
+  andar e as ferramentas não faziam nada — a bola não caía. As ordens do jogador
+  passaram a valer só com a mão aberta; com um objeto na mão, o toque é o objeto.
+
+A arte veio com os nomes dos arquivos trocados entre si (o próprio README chegou
+como um `.png`). Cada um foi identificado pelo conteúdo e renomeado; a nota está
+em `src/assets/ui/SPRITES.md`, para ninguém precisar redescobrir isso.
+
+E a sujeira, que entrou com o banho, obrigou uma regra: **ela tem de sair
+sozinha**. Sem uma saída natural — catar-se, tomar chuva — o jardim inteiro
+ficaria encardido e infeliz para sempre a menos que o jogador passasse a esponja
+em cada um, e o mundo tem de continuar vivo com ou sem alguém olhando. Foi um
+teste de comportamento longo que apontou isso, ao mudar de resultado.
 
 ### Oito direções, cinco desenhos
 

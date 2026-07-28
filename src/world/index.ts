@@ -17,6 +17,9 @@ export {
   VARIANT,
   isRare,
   spawnTrinket,
+  spawnBall,
+  spawnGift,
+  GIFTS,
   spawnBoulder,
   BOULDER_RADIUS,
 } from './items';

@@ -1,3 +1,22 @@
+<!--
+  NOTA DE ARQUIVAMENTO — os nomes chegaram trocados.
+
+  Os arquivos vieram do upload com os nomes embaralhados entre si (o próprio
+  README chegou como `anim_banho_4x.png`). Foram identificados pelo CONTEÚDO,
+  um a um, e renomeados aqui:
+
+    appleBit_4x.png       →  ui/icons.png    15 ícones de 16x16 em 4x, 8 colunas
+    atlas_icones_1x.png   →  ui/belt.png     8 ferramentas x 4 estados, 24x24 em 4x
+    anim_bola_4x.png      →  anim/bath.png   4 quadros: a espuma na cabeça
+    anim_brincando_4x.png →  anim/ball.png   6 quadros: a bola quicando e rolando
+    atlas_botoes_1x.png   →  anim/play.png   5 pares (criatura, bola) para compor
+    anim_banho_4x.png     →  este arquivo
+
+  As versões 1x e os quinze ícones soltos foram descartados: são a mesma arte do
+  atlas, e os nomes soltos também estavam trocados. O jogo lê tudo dos atlas em
+  4x e reduz na hora de recortar, como já faz com a folha do Tintim.
+-->
+
 # Sprites do cinto — Tintim
 
 Paleta:

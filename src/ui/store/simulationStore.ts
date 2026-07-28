@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TOOL } from '@core';
 import type { ChronicleEntry, CreatureSnapshot } from '@simulation';
 
 /**
@@ -32,6 +33,13 @@ interface UiState {
   recent: ChronicleEntry[];
   /** O livro inteiro, da mais recente para a mais antiga. */
   book: ChronicleEntry[];
+  /**
+   * A ferramenta na mão, índice em `TOOL` de @core.
+   *
+   * É o único estado de interface que muda o significado de um clique no
+   * mundo — e por isso mora aqui, onde o cinto escreve e o jogo lê.
+   */
+  tool: number;
   setRunning: (running: boolean) => void;
   toggleRunning: () => void;
   setSpeed: (speed: SimulationSpeed) => void;
@@ -41,6 +49,7 @@ interface UiState {
   setFollowId: (id: number | null) => void;
   setSelected: (snapshot: CreatureSnapshot | null) => void;
   setChronicle: (recent: ChronicleEntry[], book: ChronicleEntry[]) => void;
+  setTool: (tool: number) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -53,6 +62,8 @@ export const useUiStore = create<UiState>((set) => ({
   selected: null,
   recent: [],
   book: [],
+  // A mão aberta é o começo: pegar as coisas é o gesto mais antigo do jogo.
+  tool: TOOL.hand,
   toggleRunning: () => set((state) => ({ isRunning: !state.isRunning })),
   setRunning: (running) => set({ isRunning: running }),
   setSpeed: (speed) => set({ speed }),
@@ -62,4 +73,5 @@ export const useUiStore = create<UiState>((set) => ({
   setFollowId: (id) => set({ followId: id }),
   setSelected: (snapshot) => set({ selected: snapshot }),
   setChronicle: (recent, book) => set({ recent, book }),
+  setTool: (tool) => set({ tool }),
 }));

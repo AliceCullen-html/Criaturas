@@ -19,6 +19,8 @@ export {
 } from './grid';
 export { TINTIM } from './tintim';
 export { EGG_CRACK_AT } from './egg';
+export { TOOL, TOOL_COUNT, TOOL_NAMES, TOOL_HINTS, ICON, ICON_COUNT } from './tools';
+export type { ToolId } from './tools';
 export { Lexicon, WORD, WORD_TEXT, WORD_COUNT, KNOWN } from './language';
 export type { WordId } from './language';
 export { POSE, POSE_COUNT, POSE_DURATION, POSE_NAMES } from './poses';

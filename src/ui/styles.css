@@ -192,6 +192,65 @@ body {
   color: #8ef0d4;
 }
 
+/* --- O CINTO ------------------------------------------------------------
+   Encostado na borda esquerda, no meio da altura: perto do polegar de quem
+   joga com uma mão no mouse, e fora do caminho do jardim. Ele não tem fundo
+   próprio — cada botão já vem com a sua moldura de madeira desenhada. */
+.belt {
+  position: fixed;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+
+.belt__grid {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 2px;
+}
+
+.belt__slot {
+  border: none;
+  padding: 0;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  cursor: inherit;
+  transition: transform 0.08s;
+}
+
+.belt__slot:active {
+  transform: translateY(1px);
+}
+
+/* O nome do que está na mão, e uma linha dizendo o que fazer com aquilo.
+   É a única explicação que o jogo dá — e some da vista sozinha, porque é
+   pequena e discreta. */
+.belt__name {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.belt__hint {
+  max-width: 104px;
+  text-align: center;
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  opacity: 0.75;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 /* A maçaneta do livro: o único botão do jogo.
    Fica no canto, do tamanho de um dedo, e some do caminho — mas existe, porque
    um atalho de teclado que ninguém descobre é o mesmo que um livro que não

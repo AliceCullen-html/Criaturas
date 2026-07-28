@@ -71,6 +71,15 @@ export interface OrderTarget {
 
 export interface WorldProbe {
   creatureAt: (x: number, y: number) => number | null;
+  /**
+   * A ferramenta na mão pega coisas?
+   *
+   * Só a mão e a comida levantam objetos. Com a esponja ou o livro, apertar em
+   * cima de uma fruta não pode arrancá-la do chão — senão o cinto viraria um
+   * conjunto de mãos com enfeite diferente, e cada ferramenta deixaria de
+   * significar alguma coisa.
+   */
+  canGrab: () => boolean;
   /** Há alguém selecionado agora? Decide se um toque no chão é ordem ou cutucão. */
   hasSelection: () => boolean;
   itemAt: (x: number, y: number) => number | null;
@@ -202,7 +211,7 @@ export class GestureRecognizer {
         }
       }
       const target = this.holdTarget;
-      if (target && this.pettingId === null) {
+      if (target && this.pettingId === null && this.probe.canGrab()) {
         const needed = target.kind === 'item' ? HOLD_ITEM : HOLD_LIFT;
         if (this.holdTime >= needed) {
           if (target.kind === 'item') {

@@ -26,7 +26,10 @@ const layerRules = [
   // ele só precisa do núcleo e dos arquivos.
   { from: 'audio', allow: ['core', 'assets'] },
   { from: 'save', allow: ['core', 'engine', 'world'] },
-  { from: 'ui', allow: ['core', 'engine', 'simulation'] },
+  // `assets` entra para a UI pelo mesmo motivo que entrou para o renderer: o
+  // cinto de ferramentas é feito dos ícones desenhados à mão, e a camada de
+  // arquivos existe para ser consumida — ela não depende de ninguém.
+  { from: 'ui', allow: ['core', 'engine', 'simulation', 'assets'] },
   {
     from: 'app',
     allow: [

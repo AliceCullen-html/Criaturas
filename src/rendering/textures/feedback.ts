@@ -2,7 +2,7 @@ import type { Texture } from 'pixi.js';
 import { PixelBuffer } from '../pixel/PixelBuffer';
 
 /** Sinais visuais que substituem texto e menus: o mundo se explica sozinho. */
-export type FeedbackKind = 'heart' | 'drop' | 'star' | 'sleep' | 'anger' | 'question';
+export type FeedbackKind = 'heart' | 'drop' | 'star' | 'sleep' | 'anger' | 'question' | 'bubble';
 
 export function makeFeedbackTextures(): Record<FeedbackKind, Texture> {
   const heart = (): Texture => {
@@ -76,6 +76,23 @@ export function makeFeedbackTextures(): Record<FeedbackKind, Texture> {
     return b.toTexture();
   };
 
+  /**
+   * Bolha de sabão: o sinal do banho.
+   *
+   * Redonda, quase transparente, com um brilho no canto de cima — é o mesmo
+   * desenho que qualquer um faz quando quer dizer "espuma", e por isso não
+   * precisa de legenda.
+   */
+  const bubble = (): Texture => {
+    const b = new PixelBuffer(9, 9);
+    const skin = 0xdff0f7;
+    const glass = 0xa9d8ea;
+    b.disc(4.5, 4.5, 3.6, glass, 130);
+    b.disc(4.5, 4.5, 2.4, skin, 90);
+    b.disc(3.2, 3.2, 1.1, 0xffffff, 220);
+    return b.toTexture();
+  };
+
   return {
     heart: heart(),
     drop: drop(),
@@ -83,5 +100,6 @@ export function makeFeedbackTextures(): Record<FeedbackKind, Texture> {
     sleep: sleep(),
     anger: anger(),
     question: question(),
+    bubble: bubble(),
   };
 }
