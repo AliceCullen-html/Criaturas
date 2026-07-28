@@ -417,6 +417,61 @@ export function frameFor(choice: FrameChoice): number {
  * recortes: o Pixi desenha o rebanho inteiro numa levada de GPU.
  */
 /**
+ * A PALETA DA CRIATURA — a do ZX Spectrum, chapada.
+ *
+ * Sete cores, e nenhuma a mais. É a paleta da folha principal, e é ela que
+ * define como o Tintim é.
+ */
+const PALETTE: ReadonlyArray<readonly [number, number, number]> = [
+  [245, 208, 16], // amarelo
+  [255, 0, 0], // vermelho
+  [255, 255, 255], // branco
+  [0, 0, 0], // contorno
+  [0, 255, 255], // ciano
+  [0, 0, 215], // azul das lágrimas
+  [255, 0, 255], // magenta
+];
+
+/**
+ * ENCOSTA CADA PIXEL NA COR MAIS PRÓXIMA DA PALETA.
+ *
+ * A folha de brincar veio de outra mão, com um vermelho de tijolo e um
+ * contorno marrom no lugar do vermelho puro e do preto. De longe passava; na
+ * hora em que a criatura chegava na bola, ela trocava de cor no meio do gesto
+ * — o mesmo bicho, dois desenhos diferentes.
+ *
+ * Em vez de repintar a arte, o desenho é encostado na paleta na hora de
+ * recortar: um pixel de tijolo vira o vermelho da folha, um marrom vira preto.
+ * Como o desenho já é de sete cores chapadas, "a mais próxima" acerta sempre —
+ * e os pixels de borda que sobraram do desenho original acertam também, que é
+ * de graça.
+ */
+function snapToPalette(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const image = ctx.getImageData(0, 0, width, height);
+  const { data } = image;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3]! < 128) continue;
+    let best = PALETTE[0]!;
+    let bestDistance = Infinity;
+    for (const color of PALETTE) {
+      const dr = data[i]! - color[0];
+      const dg = data[i + 1]! - color[1];
+      const db = data[i + 2]! - color[2];
+      const distance = dr * dr + dg * dg + db * db;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = color;
+      }
+    }
+    data[i] = best[0];
+    data[i + 1] = best[1];
+    data[i + 2] = best[2];
+    data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+/**
  * Os cinco quadros de brincar, tirados dos pares da folha de animação.
  *
  * Os pares são (criatura, bola), (criatura, bola)... — só os índices pares
@@ -438,6 +493,7 @@ export async function loadPlayFrames(): Promise<Texture[]> {
     // Índice par: a metade da criatura de cada par.
     ctx.drawImage(image, i * 2 * CELL, 0, CELL, CELL, i * ART, 0, ART, ART);
   }
+  snapToPalette(ctx, strip.width, strip.height);
   const source = Texture.from(strip).source;
   source.scaleMode = 'nearest';
   return Array.from(
