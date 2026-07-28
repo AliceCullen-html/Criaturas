@@ -1,5 +1,5 @@
 import { TAU, clamp, type Rng } from '@core';
-import { Sprite, Transform, defineComponent, type World, type WorldConfig } from '@engine';
+import { Transform, defineComponent, type World, type WorldConfig } from '@engine';
 import { isWaterAt } from './terrain';
 import { TerrainResource } from './terrainResource';
 import { countIn } from './density';
@@ -145,9 +145,6 @@ export function spawnBoulder(world: World, x: number, y: number): number {
     vx: 0,
     vy: 0,
   });
-  world
-    .store(Sprite)
-    .set(entity, { radius: BOULDER_RADIUS, color: 0x8d8f95, variant: VARIANT.boulder });
   return entity;
 }
 
@@ -184,7 +181,6 @@ export function spawnFruit(
     vy: 0,
   };
   world.store(Item).set(entity, item);
-  world.store(Sprite).set(entity, { radius: itemRadius(item), color: 0xffffff, variant });
   return entity;
 }
 
@@ -217,9 +213,6 @@ export function spawnBall(world: World, x: number, y: number): number {
     vy: 0,
   };
   world.store(Item).set(entity, item);
-  world
-    .store(Sprite)
-    .set(entity, { radius: itemRadius(item), color: 0xffffff, variant: item.variant });
   return entity;
 }
 
@@ -255,9 +248,6 @@ export function spawnGift(world: World, x: number, y: number, variant?: number):
     vy: 0,
   };
   world.store(Item).set(entity, item);
-  world
-    .store(Sprite)
-    .set(entity, { radius: itemRadius(item), color: 0xffffff, variant: item.variant });
   return entity;
 }
 
@@ -284,7 +274,6 @@ export function spawnTrinket(
     vy: 0,
   };
   world.store(Item).set(entity, item);
-  world.store(Sprite).set(entity, { radius: itemRadius(item), color: 0xffffff, variant });
   return entity;
 }
 
@@ -304,9 +293,6 @@ export function spawnToy(world: World, x: number, y: number): number {
     vy: 0,
   };
   world.store(Item).set(entity, item);
-  world
-    .store(Sprite)
-    .set(entity, { radius: itemRadius(item), color: 0xffffff, variant: TOY_VARIANT });
   return entity;
 }
 

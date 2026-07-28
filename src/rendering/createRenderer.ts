@@ -2071,7 +2071,11 @@ export function createRenderer(options: RendererOptions): Renderer {
           const itemX = px + (items.x[i]! - px) * input.alpha;
           const itemY = py + (items.y[i]! - py) * input.alpha;
           sprite.position.set(isoX(itemX, itemY), isoY(itemX, itemY));
-          sprite.scale.set(clamp(items.radius[i]! * 0.14, 0.4, 1.2));
+          // Mesma escala da camada de recursos: até agora todo objeto era
+          // desenhado duas vezes, uma aqui e outra lá, e o que o jogador via
+          // era o de lá. Ao apagar a cópia, o tamanho tinha de continuar o
+          // mesmo — senão o jardim inteiro encolheria de repente.
+          sprite.scale.set(clamp(items.radius[i]! * 0.16, 0.35, 1.15));
           // Frutas passadas escurecem: dá para ver que estão apodrecendo.
           const packed = items.color[i]!;
           const freshness = (packed & 0xff) / 255;
