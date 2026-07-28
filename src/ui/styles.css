@@ -224,13 +224,18 @@ body {
   gap: 2px;
 }
 
+.belt__drop {
+  opacity: 0.6;
+}
+
 .belt__slot {
   border: none;
   padding: 0;
   background-color: transparent;
   background-repeat: no-repeat;
   image-rendering: pixelated;
-  cursor: inherit;
+  /* Botão é botão: sobre o cinto vale a seta do sistema, não a ferramenta. */
+  cursor: pointer;
   transition: transform 0.08s;
 }
 

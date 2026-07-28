@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { SystemScheduler, Transform, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
-import { Creature, Emotions, Mind, Needs, Personality } from '@creatures';
-import { createWorld, Item, itemSystem, ballSystem, spawnBall } from '@world';
+import { Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
+import { subjects } from '@core';
+import { createWorld, Item, itemSystem, ballSystem, spawnBall, spawnGift, VARIANT } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { creatureIndexSystem } from './creatureIndex';
 import { foodIndexSystem } from './foodIndex';
@@ -11,6 +12,7 @@ import { movementSystem } from './systems/movementSystem';
 import { actionSystem } from './systems/actionSystem';
 import { metabolismSystem } from './systems/metabolismSystem';
 import { emotionSystem } from './systems/emotionSystem';
+import { offerItem } from './handActions';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
 
@@ -58,6 +60,44 @@ const scheduler = (): SystemScheduler =>
     .add(emotionSystem)
     .add(itemSystem)
     .add(ballSystem);
+
+describe('a bola oferecida na mão', () => {
+  /**
+   * A BOLA NÃO SE COME.
+   *
+   * Encostar a bola na criatura fazia a bola SUMIR: tudo que não fosse
+   * brinquedo caía no caminho da comida, e o caminho da comida termina em
+   * destruir o objeto. Valia para a bola, para os presentes e para as
+   * bugigangas do chão — ofereceu, engoliu.
+   */
+  it('encostada na criatura, a bola continua existindo', () => {
+    const { world, id } = comBola();
+    let bola = -1;
+    world.store(Item).forEach((item, entity) => {
+      if (item.kind === 'ball') bola = entity;
+    });
+    const spot = world.store(Transform).get(id)!;
+    const onde = world.store(Transform).get(bola)!;
+    onde.x = spot.x + 6;
+    onde.y = spot.y + 6;
+
+    expect(offerItem(world, bola, id), 'ela nem reparou na bola').toBe(true);
+    expect(world.store(Item).has(bola), 'a criatura COMEU a bola').toBe(true);
+    // E ficou com vontade de brincar: mostrar o brinquedo é um convite.
+    expect(world.store(Needs).get(id)!.play).toBeGreaterThan(0.9);
+  });
+
+  it('e um presente também fica — e vira gosto', () => {
+    const { world, id } = comBola();
+    const spot = world.store(Transform).get(id)!;
+    const presente = spawnGift(world, spot.x + 6, spot.y + 6, VARIANT.bear);
+    world.store(Needs).get(id)!.hunger = 0.9; // com fome, para provar que não come
+
+    expect(offerItem(world, presente, id)).toBe(true);
+    expect(world.store(Item).has(presente), 'a criatura comeu o ursinho').toBe(true);
+    expect(world.store(Memory).get(id)!.valenceOf(subjects.thing(VARIANT.bear))).toBeGreaterThan(0);
+  });
+});
 
 describe('a bola no canto', () => {
   it('a criatura não fica presa empurrando a bola contra a parede do mundo', () => {

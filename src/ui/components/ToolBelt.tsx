@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { TOOL_COUNT, TOOL_HINTS, TOOL_NAMES } from '@core';
+import { TOOL, TOOL_COUNT, TOOL_HINTS, TOOL_NAMES } from '@core';
 import { useUiStore } from '../store/simulationStore';
 import beltUrl from '../../assets/ui/belt.png';
-import { loadToolCursors } from '../toolCursor';
 
 /**
  * O CINTO.
+ *
+ * O CURSOR DA FERRAMENTA NÃO MORA AQUI. Ele é desenhado DENTRO do jardim, pelo
+ * renderer, junto com a mão — porque é lá que a maçã encosta na criatura. Já
+ * existiu uma versão que trocava o cursor do documento inteiro, e o efeito era
+ * a esponja seguindo o mouse por cima do próprio cinto e do livro: a interface
+ * ficava sem ponteiro e ninguém sabia mais onde estava clicando.
  *
  * É a única coisa parada na tela, e existe para poder ser esquecida: oito
  * botões desenhados como objetos pendurados, sem janela, sem aba, sem
@@ -30,34 +35,21 @@ export function ToolBelt() {
   const tool = useUiStore((state) => state.tool);
   const setTool = useUiStore((state) => state.setTool);
   const [hover, setHover] = useState(-1);
-  const [cursors, setCursors] = useState<string[]>([]);
-
-  // Os cursores são recortados uma vez, na abertura.
-  useEffect(() => {
-    let alive = true;
-    void loadToolCursors().then((list) => {
-      if (alive) setCursors(list);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // A ferramenta na mão vira o cursor do jogo inteiro. Fica no `body` porque a
-  // mão atravessa tudo: o jardim, o cinto, o livro da história.
-  useEffect(() => {
-    if (cursors.length === 0) return;
-    const previous = document.body.style.cursor;
-    document.body.style.cursor = cursors[tool] ?? 'auto';
-    return () => {
-      document.body.style.cursor = previous;
-    };
-  }, [cursors, tool]);
 
   // Os números escolhem a ferramenta sem tirar a mão do mouse. Não é um menu:
   // é o mesmo cinto, alcançado por outro caminho.
+  //
+  // E o ESC larga o que está na mão. A ferramenta ficar até ser trocada é a
+  // regra certa — só faltava um jeito de NÃO estar com nada: antes, escolher a
+  // esponja era ficar com a esponja para sempre, e a única saída era escolher
+  // outra coisa. Largar volta para a mão vazia, que é a ferramenta que pega,
+  // arrasta e manda.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setTool(TOOL.hand);
+        return;
+      }
       const digit = Number(event.key);
       if (Number.isInteger(digit) && digit >= 1 && digit <= TOOL_COUNT) setTool(digit - 1);
     };
@@ -81,7 +73,9 @@ export function ToolBelt() {
         }}
         onMouseEnter={() => setHover(i)}
         onMouseLeave={() => setHover((was) => (was === i ? -1 : was))}
-        onClick={() => setTool(i)}
+        // Clicar na ferramenta que já está na mão a devolve ao cinto: é o
+        // mesmo gesto de guardar, sem precisar procurar outra.
+        onClick={() => setTool(tool === i ? TOOL.hand : i)}
         title={`${TOOL_NAMES[i]} — ${TOOL_HINTS[i]}`}
         aria-label={TOOL_NAMES[i]}
       />,
@@ -92,7 +86,12 @@ export function ToolBelt() {
     <div className="belt">
       <div className="belt__grid">{slots}</div>
       <div className="belt__name">{TOOL_NAMES[tool]}</div>
-      <div className="belt__hint">{TOOL_HINTS[tool]}</div>
+      <div className="belt__hint">
+        {TOOL_HINTS[tool]}
+        {/* Com algo na mão, o jogo diz como largar. Sem isto, a única saída
+            era pegar outra ferramenta — e ficar com a esponja para sempre. */}
+        {tool !== TOOL.hand && <span className="belt__drop"> · esc larga</span>}
+      </div>
     </div>
   );
 }

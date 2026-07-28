@@ -353,6 +353,37 @@ export function offerItem(world: World, itemId: number, creatureId: number): boo
   const bond = memory.valenceOf(subjects.player());
   const opinion = memory.valenceOf(subjects.food(item.variant));
 
+  // A BOLA NÃO SE COME.
+  //
+  // Este era o buraco por onde a bola sumia: tudo que não fosse `toy` caía no
+  // caminho da comida, e o caminho da comida termina em `destroyEntity`.
+  // Encostar a bola na criatura ERA dar a bola para ela comer. O mesmo valia
+  // para os presentes e para as bugigangas do chão — graveto, pena, pedrinha:
+  // ofereceu, sumiu.
+  //
+  // Oferecer a bola é mostrar o brinquedo: ela se anima e passa a reparar
+  // nele. A bola continua no mundo, que é onde uma bola tem de ficar.
+  if (item.kind === 'ball') {
+    if (emotions.fear > 0.5) return false;
+    emotions.happiness = clamp01(emotions.happiness + 0.08);
+    needs.play = clamp01(needs.play + 0.25);
+    mind.attention = Math.max(mind.attention, 2);
+    memory.record(subjects.player(), 0.4, 0.08);
+    return true;
+  }
+
+  // O PRESENTE também fica. Oferecer é apresentar a coisa: se ela gostar, mais
+  // tarde vai buscá-la e guardá-la no canto dela por conta própria.
+  if (item.kind === 'gift') {
+    if (emotions.fear > 0.5) return false;
+    emotions.happiness = clamp01(emotions.happiness + 0.14);
+    emotions.loneliness = clamp01(emotions.loneliness - 0.2);
+    memory.record(subjects.thing(item.variant), 0.5, 0.2);
+    memory.record(subjects.player(), 0.7, 0.2);
+    mind.affection = 2.5;
+    return true;
+  }
+
   if (item.kind === 'toy') {
     // Brinquedo: aceita se não estiver com medo.
     if (emotions.fear > 0.5) return false;
@@ -369,6 +400,10 @@ export function offerItem(world: World, itemId: number, creatureId: number): boo
     mind.affection = 2.5;
     return true;
   }
+
+  // Daqui para baixo é COMIDA — e só fruta é comida. Um graveto, uma pena ou
+  // uma concha se pega, se empilha e se esconde, mas não se engole.
+  if (item.kind !== 'fruit') return false;
 
   // Recusa: com medo, sem fome, ou se aprendeu que aquilo faz mal.
   const hungry = needs.hunger > 0.25;
