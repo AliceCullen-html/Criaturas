@@ -14,7 +14,17 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { ART, FRAME, eggFrame, frameFor, loadTintimFrames } from './textures/tintimSheet';
+import {
+  ART,
+  FACING,
+  FRAME,
+  eggFrame,
+  frameFor,
+  headingOf,
+  loadTintimFrames,
+  walkFrame,
+  type Heading,
+} from './textures/tintimSheet';
 import {
   makeDustTexture,
   makeTileTextures,
@@ -291,7 +301,13 @@ function animateBody(
  *
  * `t` é o progresso dentro da pose, de 0 a 1.
  */
-function animatePose(pose: number, t: number, elapsed: number, size: number, out: BodyMotion): void {
+function animatePose(
+  pose: number,
+  t: number,
+  elapsed: number,
+  size: number,
+  out: BodyMotion,
+): void {
   // Entra e sai suave: sem isto o bicho "estala" para dentro do gesto.
   const ease = Math.min(1, Math.min(t, 1 - t) * 6);
 
@@ -513,6 +529,11 @@ interface CreatureSlot {
   lastY: number;
   /** Defasagem própria do relógio de respiração e de gesto. */
   phase: number;
+  /**
+   * O rumo em que ela está virada. Guardado entre quadros porque ele sobrevive
+   * à parada: ela para virada para onde estava indo, e só depois se volta.
+   */
+  heading: Heading;
   blinkIn: number;
   blinking: number;
   yawnIn: number;
@@ -690,7 +711,12 @@ export function createRenderer(options: RendererOptions): Renderer {
    * mão do jogador deixaria de coincidir com o que ele enxerga, e todo o jogo
    * (que é só gesto) desmoronaria.
    */
-  const screenToWorld = (sx: number, sy: number, sw: number, sh: number): { x: number; y: number } =>
+  const screenToWorld = (
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+  ): { x: number; y: number } =>
     unIso((sx - sw / 2) / camera.zoom + camera.isoX, (sy - sh / 2) / camera.zoom + camera.isoY);
 
   /**
@@ -813,7 +839,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       const piece = sceneryList[i]!;
       const box = sceneryEntries[i];
       if (!box) continue;
-      if (!insideSprite(worldX, worldY, piece.x, piece.y, box.halfWidth, box.up, box.down)) continue;
+      if (!insideSprite(worldX, worldY, piece.x, piece.y, box.halfWidth, box.up, box.down))
+        continue;
       // Várias copas se sobrepõem: ganha a que está desenhada por cima.
       const depth = isoDepth(piece.x, piece.y);
       if (depth > bestDepth) {
@@ -1074,7 +1101,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       (event) => {
         event.preventDefault();
         const rect = canvas.getBoundingClientRect();
-        zoomAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.12 : 1 / 1.12);
+        zoomAt(
+          event.clientX - rect.left,
+          event.clientY - rect.top,
+          event.deltaY < 0 ? 1.12 : 1 / 1.12,
+        );
       },
       { passive: false },
     );
@@ -1661,6 +1692,7 @@ export function createRenderer(options: RendererOptions): Renderer {
             phase: (id % 17) * 0.41,
             lastX: cx,
             lastY: cy,
+            heading: { facing: FACING.s, mirror: false },
             blinkIn: 1 + (id % 7) * 0.5,
             blinking: 0,
             yawnIn: 6 + (id % 5) * 3,
@@ -1680,6 +1712,11 @@ export function createRenderer(options: RendererOptions): Renderer {
         // o ciclo trocava de quadro a cada quadro — de longe, isso não lê como
         // andar, lê como tremer parado. Era o que estava acontecendo.
         const movedNow = Math.hypot(cx - slot.lastX, cy - slot.lastY);
+        // Para ONDE ela andou, em coordenadas de tela. O passo é medido no
+        // mundo, mas a direção que o jogador vê é a projetada: andar para o
+        // leste do mundo, aqui, é subir e ir para a direita.
+        const wentX = cx - slot.lastX;
+        const wentY = cy - slot.lastY;
         slot.lastX = cx;
         slot.lastY = cy;
         const speed = movedNow / Math.max(dt, 1 / 240);
@@ -1713,6 +1750,18 @@ export function createRenderer(options: RendererOptions): Renderer {
         const hatching = creatures.egg[i]!;
         const isEggSlot = hatching >= 0;
 
+        // A DIREÇÃO em que ela caminha escolhe o desenho.
+        //
+        // Enquanto anda, manda o rumo: de costas, de perfil, de três quartos.
+        // Parada, manda o resto do sistema — humor, gesto, o que ela carrega —,
+        // porque é de frente que ela tem rosto, e é o rosto que conta o que ela
+        // sente. Uma criatura que para e se vira para quem olha não é um
+        // artifício: é o que um bicho faz.
+        if (movedNow > 0.001) {
+          slot.heading = headingOf(wentX - wentY, (wentX + wentY) * ISO_SQUASH);
+        }
+        const heading = slot.heading;
+
         const pose = creatures.pose[i]!;
         let frame = frameFor({
           mood,
@@ -1730,12 +1779,21 @@ export function createRenderer(options: RendererOptions): Renderer {
           if (slot.yawning > 0) frame = FRAME.surprised;
           else if (slot.blinking > 0 && eyesOpen) frame = FRAME.blink;
         }
+        // Andando para qualquer lado que não seja o SUL, o desenho da direção
+        // substitui o do humor: aquelas quatro direções só têm os quadros de
+        // caminhada, e é o que basta — de longe, o que se lê é o rumo.
+        if (moving && heading.facing !== FACING.s) frame = walkFrame(heading.facing, slot.step);
         if (isEggSlot) frame = eggFrame(hatching);
         const texture = tintimFrames[frame];
         if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
 
-        // O olhar acompanha o movimento; se parada e curiosa, olha para a mão.
-        if (dx > 0.05) slot.facing = 1;
+        // De que lado ela está virada.
+        //
+        // Andando, quem decide é o rumo: as quatro direções da esquerda são o
+        // espelho das da direita, e é esse espelho. Parada, vale o de sempre —
+        // o último movimento, ou a mão do jogador se ela estiver curiosa.
+        if (moving) slot.facing = heading.mirror ? -1 : 1;
+        else if (dx > 0.05) slot.facing = 1;
         else if (dx < -0.05) slot.facing = -1;
         else if (mood === MOOD.curious && handWorld.inside) {
           slot.facing = handWorld.x >= cx ? 1 : -1;

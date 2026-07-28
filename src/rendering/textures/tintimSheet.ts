@@ -5,7 +5,7 @@ import sheetUrl from '../../assets/tintim.png';
 /**
  * A FOLHA DE SPRITES DO TINTIM.
  *
- * Desenhada à mão, 512×448, oito colunas por sete linhas de células de 64×64.
+ * Desenhada à mão, 512×512, oito colunas por oito linhas de células de 64×64.
  * Dentro de cada célula o desenho tem 16×16 pixels de verdade, ampliados
  * quatro vezes — verificado pixel a pixel: a folha é um upscale 4× exato, sem
  * meio-tom nem antialiasing. Por isso a leitura aqui **desfaz a ampliação** e
@@ -23,10 +23,11 @@ export const ART = 16;
 const CELL = 64;
 const COLS = 8;
 /**
- * Quadros que a folha traz — os quarenta e três da criatura e os sete do
- * começo da vida: seis do nascimento e um do ovo parado.
+ * Quadros que a folha traz: os quarenta e três da criatura de frente, os sete
+ * do começo da vida (seis do nascimento e o ovo parado) e os doze das outras
+ * quatro direções.
  */
-const COUNT = 50;
+const COUNT = 62;
 /** Destes o jogo já sabe o significado. */
 export const NAMED = 20;
 
@@ -112,6 +113,103 @@ export const FRAME = {
   /** O ovo parado, esperando. */
   egg: 49,
 } as const;
+
+/**
+ * AS OITO DIREÇÕES, EM CINCO DESENHOS.
+ *
+ * O mundo é isométrico, então uma criatura pode ir para oito lados — e a folha
+ * traz cinco: SUL (de frente, que é o resto da folha inteira), SUDESTE, LESTE,
+ * NORDESTE e NORTE. As quatro que faltam são o espelho horizontal das quatro da
+ * direita, e o espelho é de graça: o renderer já virava o sprite para a
+ * esquerda desde sempre.
+ *
+ * Cinco desenhos em vez de oito não é economia de trabalho — é o que mantém a
+ * arte consistente. Oito conjuntos desenhados à mão divergem: a criatura muda
+ * de tamanho ou de cor ao virar, e o olho pega isso na hora.
+ *
+ * De costas o rosto some e aparece a costura ciana do macacão; de perfil sobra
+ * um olho e o narizinho para fora. É por esses dois detalhes que se enxerga
+ * para onde ela vai, mesmo de longe.
+ */
+export const FACING = {
+  s: 0,
+  se: 1,
+  e: 2,
+  ne: 3,
+  n: 4,
+} as const;
+
+/** O quadro de cada conjunto quando ela está parada naquela direção. */
+const FACING_IDLE: readonly number[] = [FRAME.idle, 50, 53, 56, 59];
+
+/**
+ * O ciclo de passos de cada direção.
+ *
+ * De frente são os quatro quadros que a folha sempre teve; nas outras quatro
+ * direções são três — o desenho parado e os dois passos. Três quadros bastam:
+ * o que faz ler como caminhada é o ciclo avançar com a DISTÂNCIA percorrida, e
+ * não a quantidade de desenhos.
+ */
+const FACING_WALK: readonly (readonly number[])[] = [
+  [FRAME.walk1, FRAME.walk2, FRAME.walk3, FRAME.walk4],
+  [50, 51, 52],
+  [53, 54, 55],
+  [56, 57, 58],
+  [59, 60, 61],
+];
+
+/** Para onde ela vai, medido em coordenadas de TELA, e se o desenho espelha. */
+export interface Heading {
+  /** Índice em `FACING`. */
+  facing: number;
+  /** Vai para a esquerda: o mesmo desenho, virado. */
+  mirror: boolean;
+}
+
+const HEADING_S: Heading = { facing: FACING.s, mirror: false };
+
+/**
+ * A direção do movimento vira um dos cinco desenhos (e talvez um espelho).
+ *
+ * O vetor chega em coordenadas de TELA — quem projeta é o renderer, e este
+ * módulo não sabe o que é isometria. Oito fatias de 45 graus a partir do
+ * leste, no sentido horário da tela: L, SE, S, SO, O, NO, N, NE.
+ */
+export function headingOf(screenDx: number, screenDy: number): Heading {
+  if (screenDx === 0 && screenDy === 0) return HEADING_S;
+  const angle = Math.atan2(screenDy, screenDx);
+  // Fatia de 45°, deslocada de meia fatia para o leste ficar no MEIO da sua.
+  const slice = ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
+  switch (slice) {
+    case 0:
+      return { facing: FACING.e, mirror: false };
+    case 1:
+      return { facing: FACING.se, mirror: false };
+    case 2:
+      return HEADING_S;
+    case 3:
+      return { facing: FACING.se, mirror: true };
+    case 4:
+      return { facing: FACING.e, mirror: true };
+    case 5:
+      return { facing: FACING.ne, mirror: true };
+    case 6:
+      return { facing: FACING.n, mirror: false };
+    default:
+      return { facing: FACING.ne, mirror: false };
+  }
+}
+
+/** O quadro do passo naquela direção, dado o relógio de passos da criatura. */
+export function walkFrame(facing: number, step: number): number {
+  const cycle = FACING_WALK[facing] ?? FACING_WALK[FACING.s]!;
+  return cycle[Math.floor(step) % cycle.length]!;
+}
+
+/** O quadro parado naquela direção. */
+export function idleFrame(facing: number): number {
+  return FACING_IDLE[facing] ?? FRAME.idle;
+}
 
 export type FrameId = (typeof FRAME)[keyof typeof FRAME];
 

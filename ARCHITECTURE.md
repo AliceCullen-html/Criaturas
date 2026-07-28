@@ -207,6 +207,7 @@ personalidade própria. Nada entra se não servir a isso.
 | — ✅  | Tabuleiro: chão em casas, uma peça por casa; arrastar cenário e plantar      |
 | — ✅  | Tintim: a folha de sprites desenhada à mão substitui a arte procedural       |
 | — ✅  | O ovo: toda criatura nasce de uma casca, e a mão do jogador a choca          |
+| — ✅  | Oito direções de caminhada a partir de cinco desenhos (as outras, espelhadas) |
 | D ✅  | Vida social e ninhos: melhores amigas, desafetos, dormir junto, luto      |
 | — ✅  | Comando de grupo: seleção por retângulo e ordens que podem ser recusadas  |
 | — ✅  | Origem da espécie: um ancestral, brotamento com mutação, transição evolutiva |
@@ -250,6 +251,29 @@ Duas consequências valem o registro. A profundidade passa a ser `x + y`, não
 isso o cenário virou parte da mesma camada ordenada das criaturas. E o clique
 precisa do inverso exato da projeção (`unIso`): sem ele o jogador acerta um
 lugar e o jogo entende outro.
+
+### Oito direções, cinco desenhos
+
+O mundo é isométrico, então uma criatura pode ir para oito lados. A folha traz
+**cinco**: sul (de frente — que é a folha inteira), sudeste, leste, nordeste e
+norte. As quatro que faltam são o espelho horizontal das quatro da direita, e o
+espelho sai de graça: o renderer já virava o sprite desde sempre.
+
+Cinco em vez de oito não é economia de trabalho — é o que mantém a arte
+coerente. Oito conjuntos desenhados à mão divergem entre si, e o olho pega na
+hora que a criatura mudou de tamanho ao virar.
+
+A armadilha do sistema está na projeção, e o teste existe por causa dela:
+**andar para o leste do mundo não é andar para a direita da tela**. Um passo em
+`+x` desce pela direita; um em `+y` desce pela esquerda; o "para a direita" que
+o jogador vê é `+x` e `-y` ao mesmo tempo. Quem escolhe o desenho raciocina em
+coordenadas de TELA — quem projeta é o renderer, e o módulo da folha não sabe o
+que é isometria.
+
+Uma regra de prioridade fecha o desenho: **andando, manda o rumo; parada, manda
+o resto** — humor, gesto, o que ela carrega. É de frente que ela tem rosto, e é
+o rosto que conta o que ela sente; uma criatura que para de andar e se vira para
+quem olha não é um artifício de arte, é o que um bicho faz.
 
 ### O que cobre a tela não pertence ao mundo
 
