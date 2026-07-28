@@ -1,4 +1,4 @@
-import { POSE, POSE_DURATION, type Rng } from '@core';
+import { FORCED_POSES, POSE, POSE_DURATION, type Rng } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import { Behavior, Bio, Creature, Emotions, Mind, Needs, Personality } from '@creatures';
 import type { PersonalityTraits } from '@genetics';
@@ -147,9 +147,15 @@ export const idleSystem: System = {
 
       // Pose em curso: corre o relógio e segura a criatura parada. É isso que
       // faz "parar para ouvir um pássaro" ser realmente uma parada.
+      //
+      // Comer e tomar banho não são ócio: vêm do mundo — a fruta na boca dela,
+      // a esponja na mão do jogador — e a urgência não os cancela. Sem esta
+      // exceção, comer com fome apagava a pose de comer no mesmo quadro em que
+      // ela era posta, e a criatura comia sem nunca abrir a boca.
       if (behavior.pose !== POSE.none) {
+        const forced = FORCED_POSES.includes(behavior.pose);
         behavior.elapsed += dt;
-        if (behavior.elapsed >= behavior.duration || urgent) {
+        if (behavior.elapsed >= behavior.duration || (urgent && !forced)) {
           behavior.pose = POSE.none;
           behavior.elapsed = 0;
           behavior.cooldown = rng.range(MIN_GAP, MAX_GAP);
@@ -235,7 +241,10 @@ function choose(self: Self, around: Surroundings, rng: Rng): number {
   add(POSE.lie, (shade ? 1.6 : 0.25) * (0.2 + lazy * lazy * 2.6 + emotions.sleepiness));
 
   // ---- Brincalhona ------------------------------------------------------
-  add(POSE.roll, (0.1 + traits.playfulness * traits.playfulness * 2.6) * (baby ? 1.8 : 1) * emotions.happiness);
+  add(
+    POSE.roll,
+    (0.1 + traits.playfulness * traits.playfulness * 2.6) * (baby ? 1.8 : 1) * emotions.happiness,
+  );
   add(POSE.shake, 0.3 + traits.playfulness * 0.6);
   add(POSE.perk, (0.2 + traits.playfulness * 0.8) * emotions.happiness);
   if (propNear(props, PROP.fallenLeaf, x, y, FLOWER_REACH)) {

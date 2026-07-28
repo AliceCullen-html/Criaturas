@@ -50,6 +50,14 @@ const WORD_RECALL = 260;
 /** E "fruta" faz reparar em comida que os outros passam sem ver. */
 const WORD_EYE = 1.35;
 /**
+ * O quanto a fome estica a vista.
+ *
+ * Com fome cheia, a criatura enxerga comida ao dobro da distância. Não é
+ * super-visão: é atenção. O mesmo já valia para a sede, que puxa a água de
+ * setecentos pixels — a comida era a única necessidade que dependia de sorte.
+ */
+const HUNGER_EYE = 1.2;
+/**
  * De quão longe a máquina chama a atenção.
  *
  * Bem mais que a visão comum, e por um motivo concreto: ela é a coisa mais alta
@@ -217,8 +225,19 @@ export const decisionSystem: System = {
 
         // Quem sabe a palavra "fruta" repara em comida mais longe: ter o nome
         // da coisa é ter a coisa na cabeça enquanto se olha o mundo.
+        //
+        // E QUEM ESTÁ COM FOME repara mais ainda. É o mesmo princípio da sede,
+        // que já puxava a água de bem longe: com fome, a atenção se estreita no
+        // que resolve a fome. Sem isto, uma criatura faminta só achava comida
+        // por acaso — a vista dela alcança oitenta pixels num jardim de
+        // novecentos, e medindo dava nisto: fome em 0,95, fruta a cinquenta
+        // pixels, e ela ali brincando de bola. Não era falta de vontade de
+        // comer; era não ver a comida.
         const words = lexicons.get(entity);
-        const foodSight = attributes.vision * (words?.knows(WORD.food) ? WORD_EYE : 1);
+        const foodSight =
+          attributes.vision *
+          (words?.knows(WORD.food) ? WORD_EYE : 1) *
+          (1 + needs.hunger * HUNGER_EYE);
 
         perceivedFood.length = 0;
         foodIndex.query(transform.x, transform.y, foodSight, candidates);

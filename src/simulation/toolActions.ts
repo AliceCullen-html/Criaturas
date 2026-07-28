@@ -1,6 +1,6 @@
-import { WORD, clamp01, subjects } from '@core';
+import { POSE, POSE_DURATION, WORD, clamp01, subjects } from '@core';
 import { Transform, type World } from '@engine';
-import { Creature, Egg, Emotions, Memory, Mind, Needs } from '@creatures';
+import { Behavior, Creature, Egg, Emotions, Memory, Mind, Needs } from '@creatures';
 import {
   Item,
   SceneryResource,
@@ -139,6 +139,16 @@ export function scrub(world: World, id: number, dt: number): ScrubReply {
     return 'refused';
   }
   if (needs.dirt <= 0.02) return 'clean';
+
+  // TOMANDO BANHO: a pose vem do mundo, e por isso o ócio não a interrompe. É
+  // a mesma ideia de comer — o desenho conta o que está acontecendo, e o que
+  // está acontecendo é a sua esponja.
+  const behavior = world.store(Behavior).get(id);
+  if (behavior) {
+    behavior.pose = POSE.bathe;
+    behavior.elapsed = 0;
+    behavior.duration = POSE_DURATION[POSE.bathe] ?? 0.5;
+  }
 
   needs.dirt = clamp01(needs.dirt - SCRUB_RATE * dt);
   emotions.stress = clamp01(emotions.stress - SCRUB_CALM * dt);

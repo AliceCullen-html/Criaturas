@@ -1,7 +1,8 @@
-import { clamp01, subjects } from '@core';
+import { POSE, POSE_DURATION, clamp01, subjects } from '@core';
 import { Transform, type System } from '@engine';
 import {
   Attributes,
+  Behavior,
   Bio,
   Creature,
   Emotions,
@@ -48,6 +49,7 @@ export const actionSystem: System = {
     const memories = world.store(Memory);
     const identities = world.store(Identity);
     const bios = world.store(Bio);
+    const behaviors = world.store(Behavior);
     const plants = world.store(Plant);
     const items = world.store(Item);
 
@@ -82,6 +84,16 @@ export const actionSystem: System = {
           const variant = plant ? plant.variant : item!.variant;
           const toxic = plant ? isToxicVariant(variant) : item!.toxic;
           const bite = Math.min(EAT_RATE * dt, plant ? plant.biomass : 5 * item!.freshness);
+          // COMENDO: a boca abre e fecha enquanto a mordida acontece. A pose é
+          // reposta a cada tique e dura meio segundo além da última mordida —
+          // assim a animação existe enquanto a refeição existe, sem que ninguém
+          // precise cronometrar nada.
+          const behavior = behaviors.get(entity);
+          if (behavior) {
+            behavior.pose = POSE.eat;
+            behavior.elapsed = 0;
+            behavior.duration = POSE_DURATION[POSE.eat] ?? 0.8;
+          }
           if (plant) plant.biomass -= bite;
           needs.hunger = clamp01(needs.hunger - bite * NUTRITION);
 

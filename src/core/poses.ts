@@ -49,11 +49,18 @@ export const POSE = {
   sigh: 17,
   /** Encolhida de dor, depois de apanhar. */
   hurt: 18,
+  /**
+   * Sendo esfregada pelo jogador. Diferente de `groom`: aquilo é ela se
+   * catando sozinha, isto é a esponja na mão de alguém.
+   */
+  bathe: 19,
+  /** Comendo: a boca abre e fecha na fruta. */
+  eat: 20,
 } as const;
 
 export type PoseId = (typeof POSE)[keyof typeof POSE];
 
-export const POSE_COUNT = 19;
+export const POSE_COUNT = 21;
 
 /** Quanto tempo cada pose dura, em segundos. */
 export const POSE_DURATION: readonly number[] = [
@@ -76,6 +83,8 @@ export const POSE_DURATION: readonly number[] = [
   1, // perk
   1.6, // sigh
   3, // hurt
+  0.5, // bathe — enquanto a esponja passa, e nem um segundo a mais
+  0.8, // eat
 ];
 
 /** Nome legível — usado nos relatórios de observação, não na tela. */
@@ -99,4 +108,16 @@ export const POSE_NAMES: readonly string[] = [
   'se anima',
   'suspira',
   'encolhida de dor',
+  'tomando banho',
+  'comendo',
 ];
+
+/**
+ * As poses que NÃO nascem do ócio.
+ *
+ * As outras são microcomportamento: a criatura escolhe, e o sistema de ócio as
+ * sorteia quando não há nada acontecendo. Estas duas vêm do mundo — a esponja
+ * na mão do jogador e a fruta na boca dela — e por isso o ócio não pode
+ * sorteá-las nem interrompê-las.
+ */
+export const FORCED_POSES: readonly number[] = [POSE.bathe, POSE.eat];

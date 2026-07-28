@@ -1,5 +1,6 @@
 import { EGG_CRACK_AT } from '@core';
 import { Rectangle, Texture } from 'pixi.js';
+import bathUrl from '../../assets/anim/bath.png';
 import playUrl from '../../assets/anim/play.png';
 import sheetUrl from '../../assets/tintim.png';
 
@@ -133,6 +134,17 @@ export const PLAY_FRAME = {
 } as const;
 
 /**
+ * O BANHO — os quatro quadros da terceira folha.
+ *
+ * Entram depois dos de brincar, e são o desenho do que a esponja está fazendo:
+ * a criatura ensaboada, esfregando, se sacudindo. Sem eles, dar banho era só um
+ * número descendo na ficha — o jogador esfregava e o bicho continuava parado
+ * com a mesma cara.
+ */
+export const BATH_FIRST = 67;
+export const BATH_COUNT = 4;
+
+/**
  * AS OITO DIREÇÕES, EM CINCO DESENHOS.
  *
  * O mundo é isométrico, então uma criatura pode ir para oito lados — e a folha
@@ -253,6 +265,8 @@ export const LOOK_AROUND: readonly number[] = [
   FRAME.look,
 ];
 export const EAT: readonly number[] = [FRAME.eat1, FRAME.eat2];
+/** Os quatro quadros do banho, na ordem em que a folha os trouxe. */
+export const BATH: readonly number[] = [BATH_FIRST, BATH_FIRST + 1, BATH_FIRST + 2, BATH_FIRST + 3];
 export const FALL: readonly number[] = [FRAME.fall1, FRAME.fall2, FRAME.fall3];
 export const DIZZY: readonly number[] = [FRAME.dizzy1, FRAME.dizzy2, FRAME.dizzy3];
 /**
@@ -337,11 +351,15 @@ const POSE_CYCLE: readonly (readonly number[])[] = [
   CHEER, // 16 se anima do nada
   BREATHE, // 17 suspira
   [FRAME.sad], // 18 encolhida de dor
+  BATH, // 19 tomando banho — a folha do banho, os quatro quadros
+  EAT, // 20 comendo
 ];
 
 const POSE_NONE = 0;
 const POSE_HURT = 18;
 const POSE_LIE = 4;
+/** Índice de `POSE.bathe` em @core — o mesmo vocabulário combinado. */
+const POSE_BATHE = 19;
 
 /** Acima disto o passo vira corrida, em pixels de mundo por segundo. */
 export const RUN_SPEED = 42;
@@ -383,6 +401,11 @@ export function frameFor(choice: FrameChoice): number {
 
   if (pose === POSE_HURT) return FRAME.sad;
   if (pose === POSE_LIE) return FRAME.sleeping;
+  // O BANHO ATROPELA ATÉ A CAMINHADA. É a única pose que vem da mão do
+  // jogador, e ele precisa VER que a esponja está pegando — inclusive quando a
+  // criatura resolve andar no meio do banho, que é justamente quando ele mais
+  // duvida de que esteja funcionando.
+  if (pose === POSE_BATHE) return BATH[Math.floor(breath * GESTURE_SPEED) % BATH.length]!;
   if (mood === 3 && !moving) return FRAME.sleeping; // humor sonolento
 
   if (carrying) return FRAME.carry;
@@ -478,20 +501,34 @@ function snapToPalette(ctx: CanvasRenderingContext2D, width: number, height: num
  * interessam.
  */
 export async function loadPlayFrames(): Promise<Texture[]> {
+  // Índices pares: a metade da CRIATURA de cada par (criatura, bola).
+  return loadStrip(playUrl, 5, 2);
+}
+
+/** Os quatro quadros do banho — a folha traz só a criatura, um atrás do outro. */
+export async function loadBathFrames(): Promise<Texture[]> {
+  return loadStrip(bathUrl, BATH_COUNT, 1);
+}
+
+/**
+ * Recorta uma folha de animação em texturas de 16×16, encostadas na paleta.
+ *
+ * `stride` é de quantas em quantas células andar: a folha de brincar traz
+ * pares (criatura, bola) e só a criatura interessa; a do banho vem seguida.
+ */
+async function loadStrip(url: string, count: number, stride: number): Promise<Texture[]> {
   const image = new Image();
-  image.src = playUrl;
+  image.src = url;
   await image.decode();
 
-  const count = 5;
   const strip = document.createElement('canvas');
   strip.width = ART * count;
   strip.height = ART;
   const ctx = strip.getContext('2d');
-  if (!ctx) throw new Error('Tintim: contexto 2D indisponível para os quadros de brincar.');
+  if (!ctx) throw new Error('Tintim: contexto 2D indisponível para uma folha de animação.');
   ctx.imageSmoothingEnabled = false;
   for (let i = 0; i < count; i++) {
-    // Índice par: a metade da criatura de cada par.
-    ctx.drawImage(image, i * 2 * CELL, 0, CELL, CELL, i * ART, 0, ART, ART);
+    ctx.drawImage(image, i * stride * CELL, 0, CELL, CELL, i * ART, 0, ART, ART);
   }
   snapToPalette(ctx, strip.width, strip.height);
   const source = Texture.from(strip).source;

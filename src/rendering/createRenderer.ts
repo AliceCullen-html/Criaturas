@@ -21,6 +21,7 @@ import {
   eggFrame,
   frameFor,
   headingOf,
+  loadBathFrames,
   loadPlayFrames,
   loadTintimFrames,
   walkFrame,
@@ -1260,6 +1261,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Os cinco quadros de brincar com a bola vêm de outra folha e entram na
       // sequência, a partir de 62 — é o que o índice `PLAY_FRAME` promete.
       tintimFrames = tintimFrames.concat(await loadPlayFrames());
+      // E os quatro do banho, logo depois — é o índice que `BATH_FIRST` promete.
+      tintimFrames = tintimFrames.concat(await loadBathFrames());
 
       // A bola e os presentes NÃO são desenhados por código: são os ícones
       // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
@@ -1701,6 +1704,24 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (!particleLayer || bubbles.length > 16) return;
       const text = WORD_TEXT[word];
       if (!text) return;
+      // A MESMA PALAVRA NÃO SE EMPILHA.
+      //
+      // Uma bolha sobe devagar e fica dois segundos no ar; dizer a mesma coisa
+      // outra vez antes disso montava uma coluna de palavras iguais sobre a
+      // cabeça da criatura — que é o desenho de um jogo travado, não o de
+      // alguém falando. Enquanto a primeira ainda está no ar, a repetição não
+      // vira bolha nova.
+      const spotX = isoX(worldX, worldY);
+      const spotY = isoY(worldX, worldY) - 16;
+      for (const alive of bubbles) {
+        if (alive.text.text !== text) continue;
+        if (
+          Math.abs(alive.text.position.x - spotX) < 40 &&
+          Math.abs(alive.text.position.y - spotY) < 60
+        ) {
+          return;
+        }
+      }
       const bubble = new Text({
         text,
         style: {
@@ -1715,7 +1736,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Metade do tamanho: o texto é desenhado grande e reduzido, senão fica
       // serrilhado quando a câmera se aproxima.
       bubble.scale.set(0.5);
-      bubble.position.set(isoX(worldX, worldY), isoY(worldX, worldY) - 16);
+      bubble.position.set(spotX, spotY);
       particleLayer.addChild(bubble);
       bubbles.push({ text: bubble, life: 2.2 });
     },

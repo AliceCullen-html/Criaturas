@@ -299,10 +299,30 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     return false;
   };
 
-  /** Sinal visual sobre uma criatura (coração, gota, estrela). */
+  /**
+   * SINAL VISUAL SOBRE UMA CRIATURA (coração, gota, estrela).
+   *
+   * Com espaçamento no tempo e no espaço, e os dois por um motivo só: sem
+   * eles, um gesto contínuo — a esponja, a mão parada — cuspia seis ícones por
+   * segundo no MESMO ponto, e eles subiam empilhados numa coluna reta. O
+   * jogador não via "está funcionando": via um carimbo repetido, que é
+   * exatamente a cara de um jogo travado.
+   *
+   * Meio segundo entre dois sinais iguais, e um empurrãozinho lateral
+   * sorteado. Um sinal a cada meio segundo lê como resposta; seis por segundo
+   * lê como defeito.
+   */
+  const lastSignal = new Map<string, number>();
+  const SIGNAL_GAP = 0.5;
   const signal = (kind: FeedbackKind, id: number): void => {
     const transform = world.store(Transform).get(id);
-    if (transform) activeRenderer?.emit(kind, transform.x, transform.y - 18);
+    if (!transform) return;
+    const key = `${kind}:${id}`;
+    const now = world.tick * FIXED_DT;
+    if (now - (lastSignal.get(key) ?? -Infinity) < SIGNAL_GAP) return;
+    lastSignal.set(key, now);
+    const drift = (Math.random() - 0.5) * 16;
+    activeRenderer?.emit(kind, transform.x + drift, transform.y - 18);
   };
 
   const clearSelection = (): void => {
@@ -546,7 +566,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         // saiu dele.
         if (isEgg(world, creatureId)) {
           warmEgg(world, creatureId, dt);
-          if (Math.random() < dt * 1.2) signal('heart', creatureId);
+          signal('heart', creatureId);
           return;
         }
 
@@ -554,18 +574,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         // espuma sai enquanto a sujeira sai, e quem tem medo não deixa
         // encostar.
         if (tool() === TOOL.bath) {
+          // Um sinal por resposta; quem dá o ritmo é o `signal`, não um sorteio
+          // por quadro. A espuma é o que diz "está saindo", a interrogação é
+          // "ela não deixa" e a estrela é "já está limpa" — três respostas
+          // diferentes para três coisas diferentes.
           const reply = scrub(world, creatureId, dt);
-          if (reply === 'scrubbing' && Math.random() < dt * 6) signal('bubble', creatureId);
-          else if (reply === 'refused' && Math.random() < dt * 1.5) signal('question', creatureId);
-          else if (reply === 'clean' && Math.random() < dt * 1.5) signal('star', creatureId);
+          if (reply === 'scrubbing') signal('bubble', creatureId);
+          else if (reply === 'refused') signal('question', creatureId);
+          else signal('star', creatureId);
           return;
         }
 
         // ENSINO: o livro em cima da criatura diz o nome dela — "amigo".
         if (tool() === TOOL.book) return;
-        if (petCreature(world, creatureId, dt) === 'accepted') {
-          if (Math.random() < dt * 1.5) signal('heart', creatureId);
-        }
+        if (petCreature(world, creatureId, dt) === 'accepted') signal('heart', creatureId);
       },
       onPetRemembered: (creatureId) => {
         rememberPetting(world, creatureId);
