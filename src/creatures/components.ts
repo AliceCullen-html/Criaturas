@@ -1,4 +1,4 @@
-import type { CreatureMemory, Lexicon } from '@core';
+import type { CreatureMemory, Intent, Lexicon, Mood } from '@core';
 import { defineComponent } from '@engine';
 import type { Genome, PersonalityTraits } from '@genetics';
 
@@ -13,42 +13,17 @@ import type { Genome, PersonalityTraits } from '@genetics';
  */
 export type Sex = 'M' | 'F' | 'none';
 
-/** O que a criatura está fazendo agora. Escolhido por pontuação, não por script. */
-export type Intent =
-  | 'wander'
-  | 'seekFood'
-  | 'seekWater'
-  | 'sleep'
-  | 'flee'
-  | 'approachPlayer'
-  | 'socialize'
-  | 'play'
-  | 'attack'
-  | 'share'
-  | 'mate'
-  | 'watch'
-  | 'shelter'
-  | 'sunbathe'
-  | 'search'
-  | 'follow'
-  /** Parada diante do computador, aprendendo palavras. */
-  | 'study';
-
-/** Expressão facial dominante, derivada das emoções. */
-export type Mood =
-  | 'neutral'
-  | 'happy'
-  | 'needy'
-  | 'sleepy'
-  | 'surprised'
-  | 'angry'
-  | 'sad'
-  | 'loved'
-  | 'afraid'
-  | 'curious'
-  | 'hungry'
-  | 'thirsty'
-  | 'playful';
+/**
+ * O que a criatura está fazendo agora (escolhido por pontuação, não por
+ * script) e a expressão que isso lhe dá.
+ *
+ * Os dois vocabulários vieram para o kernel junto com as poses, e pelo mesmo
+ * motivo: quem ESCOLHE a intenção é esta camada, mas quem a DESENHA é o
+ * renderer, e os dois só podem se encontrar no núcleo. Aqui ficou o
+ * reencaminhamento, para o resto do jogo continuar pedindo `Intent` e `Mood` a
+ * @creatures, que é onde eles fazem sentido.
+ */
+export type { Intent, Mood };
 
 /** Marca uma entidade como criatura. */
 export const Creature = defineComponent<true>('Creature');

@@ -1,24 +1,18 @@
+import { INTENT, MOOD } from '@core';
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
 import { Ball, Item } from '@world';
-import { Appearance, Attributes, Behavior, Bio, Creature, Egg, Mind, type Mood } from '@creatures';
+import {
+  Appearance,
+  Attributes,
+  Behavior,
+  Bio,
+  Creature,
+  Egg,
+  Emotions,
+  Mind,
+  Needs,
+} from '@creatures';
 import { growthScale, lifeStage } from './age';
-
-/** Códigos de expressão consumidos pelo renderer. */
-const MOOD_CODES: Record<Mood, number> = {
-  neutral: 0,
-  happy: 1,
-  needy: 2,
-  sleepy: 3,
-  surprised: 4,
-  angry: 5,
-  sad: 6,
-  loved: 7,
-  afraid: 8,
-  curious: 9,
-  hungry: 10,
-  thirsty: 11,
-  playful: 12,
-};
 
 const carrying = new Set<number>();
 
@@ -77,6 +71,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const bios = world.store(Bio);
   const velocities = world.store(Velocity);
   const behaviors = world.store(Behavior);
+  const emotions = world.store(Emotions);
+  const needs = world.store(Needs);
 
   // Quem está com alguma coisa na boca. Uma passada só pela lista de objetos,
   // em vez de uma busca por criatura — são poucos objetos e muitas criaturas.
@@ -101,27 +97,36 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
     const poseTime =
       behavior && behavior.duration > 0 ? Math.min(1, behavior.elapsed / behavior.duration) : 0;
 
-    buffer.push(
-      entity,
-      transform.x,
-      transform.y,
-      transform.prevX,
-      transform.prevY,
-      attribute.size * growthScale(bio),
-      appearance.bodyColor,
-      appearance.eyeColor,
-      appearance.accentColor,
-      appearance.features,
-      appearance.speciesIndex,
-      MOOD_CODES[mind.mood],
-      lifeStage(bio),
-      moving ? 1 : 0,
+    const emotion = emotions.get(entity);
+    const need = needs.get(entity);
+
+    buffer.push({
+      id: entity,
+      x: transform.x,
+      y: transform.y,
+      prevX: transform.prevX,
+      prevY: transform.prevY,
+      size: attribute.size * growthScale(bio),
+      bodyColor: appearance.bodyColor,
+      eyeColor: appearance.eyeColor,
+      accentColor: appearance.accentColor,
+      dna: appearance.features,
+      species: appearance.speciesIndex,
+      mood: MOOD[mind.mood],
+      stage: lifeStage(bio),
+      moving: moving ? 1 : 0,
       pose,
       poseTime,
-      carrying.has(entity) ? 1 : 0,
-      NOT_AN_EGG,
-      playFrame(world, mind, transform, moving),
-    );
+      carrying: carrying.has(entity) ? 1 : 0,
+      egg: NOT_AN_EGG,
+      playing: playFrame(world, mind, transform, moving),
+      intent: INTENT[mind.intent],
+      scar: emotion?.scar ?? 0,
+      fear: emotion?.fear ?? 0,
+      happiness: emotion?.happiness ?? 0.5,
+      energy: need?.energy ?? 1,
+      health: need?.health ?? 1,
+    });
   });
 
   // Os ovos entram na mesma lista. Eles não são criaturas — nenhum sistema do
@@ -135,27 +140,33 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
     const bio = bios.get(entity);
     if (!transform || !attribute || !appearance || !bio) return;
 
-    buffer.push(
-      entity,
-      transform.x,
-      transform.y,
-      transform.prevX,
-      transform.prevY,
+    buffer.push({
+      id: entity,
+      x: transform.x,
+      y: transform.y,
+      prevX: transform.prevX,
+      prevY: transform.prevY,
       // Um ovo não cresce com a idade: é do tamanho que é.
-      attribute.size,
-      appearance.bodyColor,
-      appearance.eyeColor,
-      appearance.accentColor,
-      appearance.features,
-      appearance.speciesIndex,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      Math.min(1, egg.time / egg.duration),
-      0,
-    );
+      size: attribute.size,
+      bodyColor: appearance.bodyColor,
+      eyeColor: appearance.eyeColor,
+      accentColor: appearance.accentColor,
+      dna: appearance.features,
+      species: appearance.speciesIndex,
+      mood: 0,
+      stage: 0,
+      moving: 0,
+      pose: 0,
+      poseTime: 0,
+      carrying: 0,
+      egg: Math.min(1, egg.time / egg.duration),
+      playing: 0,
+      intent: 0,
+      scar: 0,
+      fear: 0,
+      happiness: 0.5,
+      energy: 1,
+      health: 1,
+    });
   });
 }

@@ -25,4 +25,6 @@ export { Lexicon, WORD, WORD_TEXT, WORD_COUNT, KNOWN } from './language';
 export type { WordId } from './language';
 export { FORCED_POSES, POSE, POSE_COUNT, POSE_DURATION, POSE_NAMES } from './poses';
 export type { PoseId } from './poses';
+export { INTENT, INTENT_NAMES, INTENT_COUNT, MOOD, MOOD_NAMES, MOOD_COUNT } from './minds';
+export type { Intent, Mood } from './minds';
 export type { MemorySubject, MemoryTrace, Episode, EpisodeInput } from './memory';

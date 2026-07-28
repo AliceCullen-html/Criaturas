@@ -3,7 +3,42 @@
  * pré-alocado. Diferente do `RenderBuffer` (plantas em batch), carrega o `id`
  * de cada criatura — necessário para o render manter uma view por criatura
  * (corpo + rosto animados) e para o *hit-test* de seleção por clique.
+ *
+ * O QUE ATRAVESSA A FRONTEIRA. Este buffer é a única coisa que o renderer sabe
+ * sobre uma criatura, e por isso ele carrega mais do que posição e cor: a
+ * intenção, o medo, a cicatriz, a saúde. Não é vazamento de simulação para
+ * dentro do desenho — é o contrário. Quem escolhe a animação é a máquina de
+ * estados do renderer, e ela precisa dos MESMOS sinais que a criatura tem, ou
+ * volta a ser um desenho que não sabe o que está acontecendo com o corpo.
  */
+export interface CreatureRenderRow {
+  id: number;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  size: number;
+  bodyColor: number;
+  eyeColor: number;
+  accentColor: number;
+  dna: number;
+  species: number;
+  mood: number;
+  stage: number;
+  moving: number;
+  pose: number;
+  poseTime: number;
+  carrying: number;
+  egg: number;
+  playing: number;
+  intent: number;
+  scar: number;
+  fear: number;
+  happiness: number;
+  energy: number;
+  health: number;
+}
+
 export class CreatureRenderBuffer {
   readonly id: Int32Array;
   readonly x: Float32Array;
@@ -40,6 +75,14 @@ export class CreatureRenderBuffer {
    * fazendo nada, e brincar é o que ela ESTÁ fazendo.
    */
   readonly playing: Uint8Array;
+  /** O que ela está tentando fazer (índice em INTENT, de @core). */
+  readonly intent: Uint8Array;
+  /** A marca que não passa, 0..1 — o corpo de uma criatura marcada é outro. */
+  readonly scar: Float32Array;
+  readonly fear: Float32Array;
+  readonly happiness: Float32Array;
+  readonly energy: Float32Array;
+  readonly health: Float32Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -62,54 +105,55 @@ export class CreatureRenderBuffer {
     this.carrying = new Uint8Array(capacity);
     this.egg = new Float32Array(capacity);
     this.playing = new Uint8Array(capacity);
+    this.intent = new Uint8Array(capacity);
+    this.scar = new Float32Array(capacity);
+    this.fear = new Float32Array(capacity);
+    this.happiness = new Float32Array(capacity);
+    this.energy = new Float32Array(capacity);
+    this.health = new Float32Array(capacity);
   }
 
   clear(): void {
     this.count = 0;
   }
 
-  push(
-    id: number,
-    x: number,
-    y: number,
-    prevX: number,
-    prevY: number,
-    size: number,
-    bodyColor: number,
-    eyeColor: number,
-    accentColor: number,
-    dna: number,
-    species: number,
-    mood: number,
-    stage: number,
-    moving: number,
-    pose: number,
-    poseTime: number,
-    carrying: number,
-    egg: number,
-    playing: number,
-  ): void {
+  /**
+   * Uma criatura por chamada.
+   *
+   * Passa por objeto, e não por vinte e cinco argumentos posicionais: com essa
+   * quantidade de canais, trocar dois de lugar é um erro que o compilador não
+   * pega e que aparece como uma criatura desenhando sono quando está com sede.
+   * O objeto some no `push` — o que fica guardado continua sendo o array de
+   * números.
+   */
+  push(row: CreatureRenderRow): void {
     const i = this.count;
     if (i >= this.capacity) return;
-    this.id[i] = id;
-    this.x[i] = x;
-    this.y[i] = y;
-    this.prevX[i] = prevX;
-    this.prevY[i] = prevY;
-    this.size[i] = size;
-    this.bodyColor[i] = bodyColor;
-    this.eyeColor[i] = eyeColor;
-    this.accentColor[i] = accentColor;
-    this.dna[i] = dna;
-    this.species[i] = species;
-    this.mood[i] = mood;
-    this.stage[i] = stage;
-    this.moving[i] = moving;
-    this.pose[i] = pose;
-    this.poseTime[i] = poseTime;
-    this.carrying[i] = carrying;
-    this.egg[i] = egg;
-    this.playing[i] = playing;
+    this.id[i] = row.id;
+    this.x[i] = row.x;
+    this.y[i] = row.y;
+    this.prevX[i] = row.prevX;
+    this.prevY[i] = row.prevY;
+    this.size[i] = row.size;
+    this.bodyColor[i] = row.bodyColor;
+    this.eyeColor[i] = row.eyeColor;
+    this.accentColor[i] = row.accentColor;
+    this.dna[i] = row.dna;
+    this.species[i] = row.species;
+    this.mood[i] = row.mood;
+    this.stage[i] = row.stage;
+    this.moving[i] = row.moving;
+    this.pose[i] = row.pose;
+    this.poseTime[i] = row.poseTime;
+    this.carrying[i] = row.carrying;
+    this.egg[i] = row.egg;
+    this.playing[i] = row.playing;
+    this.intent[i] = row.intent;
+    this.scar[i] = row.scar;
+    this.fear[i] = row.fear;
+    this.happiness[i] = row.happiness;
+    this.energy[i] = row.energy;
+    this.health[i] = row.health;
     this.count = i + 1;
   }
 }

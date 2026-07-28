@@ -1,6 +1,7 @@
 import { Application, Container, Graphics, Matrix, Sprite, Text, type Texture } from 'pixi.js';
 import {
-  POSE,
+  INTENT_NAMES,
+  MOOD,
   TILE,
   WORD_TEXT,
   clamp,
@@ -14,19 +15,16 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
+import { FACING, headingOf, type Heading } from './textures/tintimSheet';
+import { AnimationController } from './anim/AnimationController';
 import {
-  ART,
-  FACING,
-  FRAME,
-  eggFrame,
-  frameFor,
-  headingOf,
-  loadBathFrames,
-  loadPlayFrames,
-  loadTintimFrames,
-  walkFrame,
-  type Heading,
-} from './textures/tintimSheet';
+  ANCHOR_X,
+  ANCHOR_Y,
+  BODY_HEIGHT,
+  loadClipCatalog,
+  type ClipCatalog,
+} from './anim/clipCatalog';
+import { PRIORITY, type CreatureSignals } from './anim/states';
 import { loadTerrainArt } from './textures/terrainSheet';
 import {
   makeDustTexture,
@@ -216,298 +214,24 @@ const SHALLOW_TINT = 0xb9e2f2;
 /** O quanto o arco-íris é achatado em relação a um semicírculo perfeito. */
 const RAINBOW_SQUASH = 0.62;
 
-const MOOD = {
-  neutral: 0,
-  happy: 1,
-  needy: 2,
-  sleepy: 3,
-  surprised: 4,
-  angry: 5,
-  sad: 6,
-  loved: 7,
-  afraid: 8,
-  curious: 9,
-  hungry: 10,
-  thirsty: 11,
-  playful: 12,
-} as const;
-
-/** Como o corpo se mexe em cada estado. Não é só trocar o rosto. */
-interface BodyMotion {
-  bob: number;
-  jitter: number;
-  squashX: number;
-  squashY: number;
-  tilt: number;
-  yOffset: number;
-}
-
-const motion: BodyMotion = { bob: 0, jitter: 0, squashX: 1, squashY: 1, tilt: 0, yOffset: 0 };
-
-function animateBody(
-  mood: number,
-  t: number,
-  seed: number,
-  size: number,
-  moving: boolean,
-  stage: number,
-): BodyMotion {
-  // Respiração de base, sempre presente.
-  motion.bob = 0;
-  motion.jitter = 0;
-  motion.squashX = 1;
-  motion.squashY = 1 + Math.sin(t * 2.4 + seed) * 0.035;
-  motion.tilt = 0;
-  motion.yOffset = 0;
-
-  if (moving) {
-    // Filhotes dão passinhos rápidos e desajeitados; idosos, lentos.
-    const cadence = stage === 0 ? 14 : stage === 2 ? 5.5 : 9;
-    const clumsy = stage === 0 ? 1.6 : 1;
-    motion.bob = Math.abs(Math.sin(t * cadence + seed)) * size * 0.1 * clumsy;
-    motion.tilt = Math.sin(t * cadence + seed) * 0.06 * clumsy;
-  }
-
-  switch (mood) {
-    case MOOD.happy:
-      // Pula e balança o corpo.
-      motion.bob += Math.abs(Math.sin(t * 6 + seed)) * size * 0.2;
-      motion.tilt += Math.sin(t * 3 + seed) * 0.1;
-      break;
-
-    case MOOD.playful: {
-      // Gira e dá pulos altos.
-      motion.bob += Math.abs(Math.sin(t * 8 + seed)) * size * 0.28;
-      motion.tilt += Math.sin(t * 7 + seed) * 0.35;
-      break;
-    }
-
-    case MOOD.loved:
-      motion.bob += Math.abs(Math.sin(t * 5 + seed)) * size * 0.12;
-      motion.squashY *= 1.03;
-      break;
-
-    case MOOD.afraid:
-      // Encolhe e treme.
-      motion.jitter = Math.sin(t * 34 + seed) * size * 0.07;
-      motion.squashX = 0.86;
-      motion.squashY *= 0.88;
-      motion.yOffset = size * 0.08;
-      break;
-
-    case MOOD.sad:
-      // Cabeça baixa: afunda um pouco e inclina para a frente.
-      motion.bob *= 0.3;
-      motion.squashY *= 0.95;
-      motion.yOffset = size * 0.07;
-      motion.tilt += 0.08;
-      break;
-
-    case MOOD.needy:
-      motion.bob *= 0.4;
-      motion.tilt += Math.sin(t * 1.6 + seed) * 0.06;
-      break;
-
-    case MOOD.curious:
-      // Inclina a cabeça e olha para os lados.
-      motion.tilt += Math.sin(t * 1.5 + seed) * 0.22;
-      motion.bob *= 0.6;
-      break;
-
-    case MOOD.angry:
-      // Encara: firme, inclinada para a frente, com tremor curto de fúria.
-      motion.tilt += 0.05;
-      motion.jitter = Math.sin(t * 22 + seed) * size * 0.02;
-      motion.squashX = 1.05;
-      break;
-
-    case MOOD.hungry:
-      // Segura a barriga: encolhe um pouco e balança devagar.
-      motion.squashY *= 0.94;
-      motion.tilt += Math.sin(t * 2 + seed) * 0.08;
-      break;
-
-    case MOOD.thirsty:
-      motion.tilt += Math.sin(t * 2.4 + seed) * 0.06;
-      motion.yOffset = size * 0.03;
-      break;
-
-    case MOOD.sleepy:
-      // Respiração lenta e profunda, sentada no chão.
-      motion.squashY = 1 + Math.sin(t * 1.4 + seed) * 0.07;
-      motion.squashX = 1.06;
-      motion.bob = 0;
-      motion.yOffset = size * 0.12;
-      break;
-
-    case MOOD.surprised:
-      motion.bob += size * 0.14;
-      motion.squashY *= 1.06;
-      break;
-
-    default:
-      break;
-  }
-
-  return motion;
-}
-
 /**
- * Anima o microcomportamento no CORPO.
+ * A VIDA DE FUNDO — o pouco que ainda é feito por código.
  *
- * O rosto continua contando a emoção (isso é do `mood`); a pose conta a
- * ocupação. Como só temos translação, rotação e escala, cada gesto é escrito
- * como linguagem corporal: espreguiçar é esticar e inclinar para trás, cheirar
- * é abaixar a frente, escutar é congelar com um tremor de orelha.
+ * Aqui existiam duas tabelas: uma que dizia como o corpo se mexe em cada
+ * HUMOR e outra que dizia como ele se mexe em cada POSE — trinta e tantos
+ * gestos escritos em seno e cosseno, porque na época o desenho era um quadro
+ * parado e a única animação possível era deformar esse quadro.
  *
- * `t` é o progresso dentro da pose, de 0 a 1.
+ * Agora cada estado é uma animação desenhada à mão, com quadros próprios, e
+ * insistir na deformação por cima seria animar duas vezes: o corpo pulando no
+ * desenho e o sprite inteiro pulando junto. As duas tabelas saíram, e no lugar
+ * delas ficou só a RESPIRAÇÃO — discreta, com o tempo de cada criatura, para
+ * que nem no quadro mais parado ela fique completamente imóvel. O resto da
+ * promessa de "nunca parada" é das microanimações do ocioso, que são desenho e
+ * não conta.
  */
-function animatePose(
-  pose: number,
-  t: number,
-  elapsed: number,
-  size: number,
-  out: BodyMotion,
-): void {
-  // Entra e sai suave: sem isto o bicho "estala" para dentro do gesto.
-  const ease = Math.min(1, Math.min(t, 1 - t) * 6);
-
-  switch (pose) {
-    case POSE.scratch:
-      // Pata coçando atrás da orelha: tremor curto e uma leve inclinação.
-      out.tilt += 0.13 * ease;
-      out.jitter += Math.sin(elapsed * 30) * size * 0.05 * ease;
-      break;
-
-    case POSE.stretch: {
-      // Alonga: estica para cima, depois relaxa.
-      const arc = Math.sin(t * Math.PI);
-      out.squashY *= 1 + 0.22 * arc;
-      out.squashX *= 1 - 0.1 * arc;
-      out.tilt -= 0.18 * arc;
-      out.yOffset -= size * 0.1 * arc;
-      break;
-    }
-
-    case POSE.sit:
-      out.squashY *= 1 - 0.16 * ease;
-      out.squashX *= 1 + 0.1 * ease;
-      out.yOffset += size * 0.16 * ease;
-      out.bob *= 0.2;
-      break;
-
-    case POSE.lie:
-      // Deitada de lado: achata, alarga e tomba.
-      out.squashY *= 1 - 0.3 * ease;
-      out.squashX *= 1 + 0.18 * ease;
-      out.yOffset += size * 0.26 * ease;
-      out.tilt += 0.36 * ease;
-      out.bob = 0;
-      break;
-
-    case POSE.lookUp:
-      out.tilt -= 0.26 * ease;
-      out.yOffset -= size * 0.05 * ease;
-      out.bob *= 0.3;
-      break;
-
-    case POSE.sniff:
-      // Abaixa a frente até o chão e fareja em pulsos curtos.
-      out.tilt += 0.34 * ease;
-      out.yOffset += size * 0.14 * ease;
-      out.jitter += Math.sin(elapsed * 16) * size * 0.025 * ease;
-      break;
-
-    case POSE.listen:
-      // Congela. O corpo mal respira e dá tremores curtos de orelha.
-      out.bob = 0;
-      out.squashY = 1;
-      out.tilt += Math.sin(elapsed * 13) * 0.05 * ease;
-      break;
-
-    case POSE.lookDown:
-      out.tilt += 0.24 * ease;
-      out.yOffset += size * 0.1 * ease;
-      out.bob *= 0.2;
-      break;
-
-    case POSE.shake:
-      // Sacode o corpo inteiro, rápido.
-      out.tilt += Math.sin(elapsed * 34) * 0.3 * ease;
-      out.squashX *= 1 + Math.sin(elapsed * 34) * 0.08 * ease;
-      break;
-
-    case POSE.roll:
-      // Rola no chão: uma volta completa, achatada.
-      out.tilt += t * Math.PI * 2;
-      out.squashY *= 1 - 0.2 * ease;
-      out.yOffset += size * 0.2 * ease;
-      break;
-
-    case POSE.groom:
-      // Se cata: cabeça em circulinhos.
-      out.tilt += Math.sin(elapsed * 6) * 0.16 * ease;
-      out.jitter += Math.cos(elapsed * 6) * size * 0.035 * ease;
-      out.yOffset += size * 0.05 * ease;
-      break;
-
-    case POSE.dig:
-      // Cava: mergulha para a frente em batidas.
-      out.tilt += (0.24 + Math.abs(Math.sin(elapsed * 9)) * 0.16) * ease;
-      out.yOffset += size * (0.1 + Math.abs(Math.sin(elapsed * 9)) * 0.08) * ease;
-      break;
-
-    case POSE.slip: {
-      // Escorrega para um lado e se recupera num susto.
-      const slip = Math.sin(t * Math.PI);
-      out.tilt += 0.75 * slip;
-      out.yOffset += size * 0.22 * slip;
-      out.jitter += Math.sin(elapsed * 26) * size * 0.06 * slip;
-      break;
-    }
-
-    case POSE.ponder:
-      // Olhando o nada: cabeça pendida, respiração muito lenta.
-      out.tilt += 0.16 * ease;
-      out.bob *= 0.15;
-      out.squashY = 1 + Math.sin(elapsed * 1.1) * 0.03;
-      break;
-
-    case POSE.play:
-      // Brinca com uma folha: pulinhos e giros de um lado para o outro.
-      out.bob += Math.abs(Math.sin(elapsed * 7)) * size * 0.16 * ease;
-      out.tilt += Math.sin(elapsed * 5) * 0.3 * ease;
-      break;
-
-    case POSE.perk:
-      // Se anima do nada: um pulo seco e um esticão.
-      out.bob += Math.sin(t * Math.PI) * size * 0.3;
-      out.squashY *= 1 + Math.sin(t * Math.PI) * 0.12;
-      break;
-
-    case POSE.hurt: {
-      // Encolhida: afunda, aperta o corpo e treme. O tremor é forte no começo
-      // e vai cedendo, como dor que passa.
-      const throb = 1 - t * 0.6;
-      out.squashY *= 1 - 0.2 * ease;
-      out.squashX *= 1 + 0.12 * ease;
-      out.yOffset += size * 0.2 * ease;
-      out.tilt += 0.2 * ease;
-      out.jitter += Math.sin(elapsed * 26) * size * 0.07 * ease * throb;
-      out.bob = 0;
-      break;
-    }
-
-    case POSE.sigh:
-      // Suspiro: enche e esvazia devagar, e afunda um pouco.
-      out.squashY *= 1 + Math.sin(t * Math.PI) * 0.1;
-      out.yOffset += size * 0.05 * Math.sin(t * Math.PI);
-      out.bob *= 0.3;
-      break;
-
-    default:
-      break;
-  }
+function breathOf(t: number, seed: number): number {
+  return 1 + Math.sin(t * 2.4 + seed) * 0.03;
 }
 
 /**
@@ -532,13 +256,6 @@ const FOOT_ANCHOR: Record<ScenerySpot['kind'], number> = {
  */
 const SCREEN_CENTER_Y = 32;
 const SCREEN_WIDTH = 38;
-
-/**
- * O primeiro dos cinco quadros de brincar com a bola, na folha combinada.
- * Cópia local de `PLAY_FRAME.look` — o índice é combinado com a folha, e um
- * número solto aqui é melhor que uma importação para ler uma constante.
- */
-const PLAY_FIRST = 62;
 
 /**
  * As variantes de objeto que vêm do atlas de ícones, e qual ícone é cada uma.
@@ -574,54 +291,54 @@ const TALL_PROP_KINDS = new Set([0, 6, 9]);
 const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
 
 /**
- * Um quadro de passo a cada tantos pixels andados. Sete dá uma passada por
- * meio segundo numa criatura de velocidade média — o bastante para ler como
- * caminhada, sem virar corridinha de desenho animado.
+ * Divisor do tamanho que dá a escala do sprite.
+ *
+ * A folha de animação é exportada em 4×: o corpo tem 72 pixels de textura para
+ * 18 de desenho. Vinte e nove é o número que devolve à criatura EXATAMENTE a
+ * altura que ela tinha na folha antiga (16 px a 6,5 de divisor, isto é, duas
+ * vezes e meia o tamanho dela no mundo) — a arte mudou, o tamanho do bicho no
+ * jardim não.
  */
-const STEPS_PER_PIXEL = 1 / 7;
-/** Divisor do tamanho que dá a escala do sprite de 16 pixels. */
-const CREATURE_SCALE = 6.5;
+const CREATURE_SCALE = 29;
 /**
  * A que distância do centro do corpo fica a sola do pé, em fração do tamanho.
  * É o mesmo número que posiciona a sombra: os dois têm de bater, senão a
  * criatura descola do chão.
  */
 const GROUND_CONTACT = 0.42;
-/** O quanto das deformações do corpo sobra, agora que o desenho é à mão. */
-const SQUASH_DAMPING = 0.34;
-/** Num gesto deliberado, quase tudo: é o movimento que conta o gesto. */
-const POSE_GIVE = 0.85;
-const BLINK_DURATION = 0.11;
 const DUST_INTERVAL = 0.22;
 
 /**
  * Uma criatura na tela.
  *
- * Era corpo + rosto em duas camadas, porque a arte era gerada por código e
- * trocar de emoção não podia redesenhar o corpo. Com a folha desenhada à mão,
- * cada estado é UM quadro inteiro: um sprite só, e a troca é de textura.
+ * DOIS sprites, não um. O de cima é a animação que está tocando; o de baixo é a
+ * que está saindo, enquanto a travessia dura. Sem o segundo, trocar de estado
+ * seria um corte seco de textura — e é justamente o corte seco que faz um jogo
+ * parecer feito de bonecos trocados por um interruptor.
+ *
+ * Quem escolhe O QUE tocar é o `AnimationController`: ele olha para os sinais
+ * da criatura (intenção, humor, medo, cicatriz, velocidade) e resolve o estado,
+ * a travessia, a fila e as microanimações. O slot aqui só desenha o que ele
+ * disser.
  */
 interface CreatureSlot {
   container: Container;
   sprite: Sprite;
+  /** O sprite de baixo, onde a animação que está saindo termina de sumir. */
+  fading: Sprite;
+  anim: AnimationController;
   facing: number;
   seen: number;
-  /** Relógio do ciclo de passos, avança com a distância percorrida. */
-  step: number;
-  /** Onde ela estava no quadro anterior, para medir o passo de verdade. */
+  /** Onde ela estava no quadro anterior, para medir a velocidade de verdade. */
   lastX: number;
   lastY: number;
-  /** Defasagem própria do relógio de respiração e de gesto. */
+  /** Defasagem própria do relógio de respiração. */
   phase: number;
   /**
    * O rumo em que ela está virada. Guardado entre quadros porque ele sobrevive
    * à parada: ela para virada para onde estava indo, e só depois se volta.
    */
   heading: Heading;
-  blinkIn: number;
-  blinking: number;
-  yawnIn: number;
-  yawning: number;
 }
 
 interface Dust {
@@ -636,6 +353,7 @@ interface Feedback {
   sprite: Sprite;
   life: number;
   maxLife: number;
+  kind: FeedbackKind;
 }
 
 interface Leaf {
@@ -666,8 +384,14 @@ export function createRenderer(options: RendererOptions): Renderer {
   let destroyed = false;
 
   // Texturas geradas no mount.
-  /** Os vinte quadros do Tintim, recortados da folha desenhada à mão. */
-  let tintimFrames: Texture[] = [];
+  /**
+   * TODAS as animações da criatura, lidas da pasta na abertura do jogo.
+   *
+   * Não existe lista escrita em lugar nenhum: o catálogo é a pasta. Pôr um PNG
+   * novo em `assets/creatures/animations/` basta para o jogo passar a conhecer
+   * a animação — e a máquina de estados a pedir pelo nome.
+   */
+  let clips: ClipCatalog = new Map();
   let resourceTextures: Texture[] = [];
   let waterFrames: Texture[] = [];
   let leafTextures: Texture[] = [];
@@ -768,6 +492,46 @@ export function createRenderer(options: RendererOptions): Renderer {
   let lastTime = 0;
   let elapsed = 0;
 
+  /**
+   * Os sinais de UMA criatura, reaproveitados a cada quadro. Ver o preenchimento
+   * no laço de desenho: eles morrem dentro da chamada que os consome.
+   */
+  const signals: CreatureSignals = {
+    intent: 'wander',
+    pose: 0,
+    mood: 0,
+    moving: false,
+    speed: 0,
+    carrying: false,
+    scar: 0,
+    fear: 0,
+    happiness: 0.5,
+    energy: 1,
+    health: 1,
+    touched: false,
+    hatching: -1,
+    isBaby: false,
+  };
+  /** Onde a criatura que está tocando uma animação está, para as partículas. */
+  const emitAt = { x: 0, y: 0, size: 8 };
+  /** Quem a mão do jogador está acariciando agora, se alguém. */
+  let pettingId: number | null = null;
+
+  /** Toca uma animação AGORA no corpo de uma criatura, se ela estiver na tela. */
+  function gestureOn(
+    creatureId: number,
+    key: string,
+    priority: number = PRIORITY.interaction,
+  ): boolean {
+    return creatureSlots.get(creatureId)?.anim.trigger(key, { priority }) ?? false;
+  }
+
+  /** A mesma coisa, mas para quem só sabe ONDE a coisa aconteceu. */
+  function gestureAt(worldX: number, worldY: number, key: string): void {
+    const id = pickCreature(worldX, worldY);
+    if (id !== null) gestureOn(id, key);
+  }
+
   /** Pequena nuvem de poeira ao pisar. */
   function spawnDust(x: number, y: number, size: number): void {
     if (!particleLayer || !dustTexture || dust.length > 60) return;
@@ -778,6 +542,82 @@ export function createRenderer(options: RendererOptions): Renderer {
     sprite.position.set(isoX(x, y), isoY(x, y));
     particleLayer.addChild(sprite);
     dust.push({ sprite, life: 0.45, vx: (Math.random() - 0.5) * 6, vy: -4 - Math.random() * 4 });
+  }
+
+  /**
+   * Sinal visual efêmero (coração, gota, estrela) subindo sobre uma criatura.
+   *
+   * `once` pede que ele NÃO se empilhe: enquanto um sinal igual estiver no ar
+   * ali perto, o novo não nasce. É o que separa um pedido do jogo — que tem de
+   * aparecer sempre — de um sinal de animação, que sai a cada volta do laço:
+   * uma criatura assustada por dez segundos renderia dezesseis interrogações
+   * empilhadas na cabeça dela, e uma coluna de símbolos não é susto, é defeito.
+   */
+  function signal(kind: FeedbackKind, worldX: number, worldY: number, once = false): void {
+    if (!particleLayer || !feedbackTextures || feedback.length > 40) return;
+    const spotX = isoX(worldX, worldY);
+    const spotY = isoY(worldX, worldY);
+    if (once) {
+      for (const alive of feedback) {
+        if (alive.kind !== kind) continue;
+        if (
+          Math.abs(alive.sprite.position.x - spotX) < 26 &&
+          Math.abs(alive.sprite.position.y - spotY) < 40
+        ) {
+          return;
+        }
+      }
+    }
+    const sprite = new Sprite(feedbackTextures[kind]);
+    sprite.anchor.set(0.5, 1);
+    sprite.position.set(spotX, spotY);
+    particleLayer.addChild(sprite);
+    feedback.push({ sprite, life: 1.4, maxLife: 1.4, kind });
+  }
+
+  /**
+   * UM QUADRO MARCADO PASSOU.
+   *
+   * É aqui que a animação encosta no resto do jogo: a poeira sai no quadro em
+   * que o pé bate no chão, a espuma no quadro em que a mão esfrega, a fagulha
+   * no quadro em que a criatura entende a palavra. Sem isto, partícula e
+   * desenho correm em relógios diferentes e a poeira sai com a pata no ar —
+   * que é o defeito que faz um jogo parecer montado com peças de outro.
+   *
+   * Quem diz QUAIS quadros são marcados é a tabela `FRAME_EVENTS`, ao lado do
+   * controlador; aqui só se decide o que cada marca vira na tela. Um evento
+   * sem tradução visual — a mordida, o gole — não é esquecimento: é o lugar
+   * onde o som vai entrar quando houver som, e a tabela já o está anunciando.
+   */
+  function playFrameEvent(emit: string, x: number, y: number, size: number): void {
+    const foot = size * GROUND_CONTACT * ISO_SQUASH;
+    switch (emit) {
+      case 'footstep':
+      case 'ballHit':
+        spawnDust(x + foot, y + foot, size);
+        break;
+      case 'bubble':
+        signal('bubble', x, y, true);
+        break;
+      case 'droplets':
+      case 'sip':
+      case 'tear':
+      case 'sneeze':
+        signal('drop', x, y, true);
+        break;
+      case 'heart':
+        signal('heart', x, y, true);
+        break;
+      case 'spark':
+      case 'star':
+        signal('star', x, y, true);
+        break;
+      case 'startle':
+        signal('question', x, y, true);
+        break;
+      default:
+        break;
+    }
   }
 
   let gestures: GestureRecognizer | null = null;
@@ -937,7 +777,7 @@ export function createRenderer(options: RendererOptions): Renderer {
    * mundo. Uma conta só, usada pelo clique e por quem precisar mirar nela.
    */
   function creatureBox(size: number): { halfWidth: number; up: number; down: number } {
-    const height = ART * (size / CREATURE_SCALE);
+    const height = BODY_HEIGHT * (size / CREATURE_SCALE);
     const foot = size * GROUND_CONTACT * ISO_SQUASH;
     return {
       halfWidth: Math.max(height / 2.4, 9),
@@ -1311,12 +1151,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         propWind[kind] ? [propWind[kind]![0]!] : variants,
       );
       propTextures[PROP_LOG] = [art.statics.log];
-      tintimFrames = await loadTintimFrames();
-      // Os cinco quadros de brincar com a bola vêm de outra folha e entram na
-      // sequência, a partir de 62 — é o que o índice `PLAY_FRAME` promete.
-      tintimFrames = tintimFrames.concat(await loadPlayFrames());
-      // E os quatro do banho, logo depois — é o índice que `BATH_FIRST` promete.
-      tintimFrames = tintimFrames.concat(await loadBathFrames());
+      // AS ANIMAÇÕES DA CRIATURA — a pasta inteira, de uma vez.
+      clips = await loadClipCatalog();
 
       // A bola e os presentes NÃO são desenhados por código: são os ícones
       // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
@@ -1751,6 +1587,29 @@ export function createRenderer(options: RendererOptions): Renderer {
           draggedScenery = null;
           next.onDropScenery(index, x, y);
         },
+
+        // O QUE O JOGADOR FAZ, NO CORPO DELA — na hora, sem esperar o próximo
+        // passo da simulação.
+        //
+        // Estes três não são estados: são acontecimentos. O estado descreve o
+        // que a criatura ESTÁ fazendo e volta sozinho quando o gesto acaba; o
+        // tapa e o cheiro da fruta na cara são instantes, e instante é o que a
+        // fila de animação sabe tocar por cima de tudo e devolver o comando
+        // depois. É por isso que o motor tem `trigger` e prioridade: sem eles,
+        // bater numa criatura só mudaria um número, e ela continuaria andando
+        // como se nada tivesse acontecido até a simulação reparar.
+        onRough: (creatureId, speed, dirX, dirY) => {
+          gestureOn(creatureId, 'tapa', PRIORITY.urgent);
+          next.onRough(creatureId, speed, dirX, dirY);
+        },
+        onCall: (creatureId) => {
+          gestureOn(creatureId, 'ouvirPalavra');
+          next.onCall(creatureId);
+        },
+        onOffer: (itemId, creatureId) => {
+          gestureOn(creatureId, 'cheirarComida');
+          next.onOffer(itemId, creatureId);
+        },
       };
       gestures = new GestureRecognizer(watched, {
         creatureAt: pickCreature,
@@ -1765,12 +1624,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     },
 
     emit(kind: FeedbackKind, worldX: number, worldY: number): void {
-      if (!particleLayer || !feedbackTextures || feedback.length > 40) return;
-      const sprite = new Sprite(feedbackTextures[kind]);
-      sprite.anchor.set(0.5, 1);
-      sprite.position.set(isoX(worldX, worldY), isoY(worldX, worldY));
-      particleLayer.addChild(sprite);
-      feedback.push({ sprite, life: 1.4, maxLife: 1.4 });
+      signal(kind, worldX, worldY);
     },
 
     lookAt(worldX: number, worldY: number): void {
@@ -1782,6 +1636,9 @@ export function createRenderer(options: RendererOptions): Renderer {
       if (!particleLayer || bubbles.length > 16) return;
       const text = WORD_TEXT[word];
       if (!text) return;
+      // QUEM FALA, FALA COM O CORPO. A bolha por si só é uma legenda flutuando
+      // no ar; com a animação junto, é a criatura dizendo.
+      gestureAt(worldX, worldY, 'falar');
       // A MESMA PALAVRA NÃO SE EMPILHA.
       //
       // Uma bolha sobe devagar e fica dois segundos no ar; dizer a mesma coisa
@@ -1928,6 +1785,13 @@ export function createRenderer(options: RendererOptions): Renderer {
       frameId += 1;
       const creatures = input.creatures;
       shadowG.clear();
+      // QUEM ESTÁ SENDO ACARICIADO — uma pergunta por quadro, não uma por
+      // criatura. É o sinal que faz a criatura tocar `afagar` enquanto a mão
+      // do jogador estiver nela, e parar quando ela sair.
+      pettingId =
+        handWorld.inside && gestures?.handState === 'petting'
+          ? pickCreature(handWorld.x, handWorld.y)
+          : null;
       let selX = 0;
       let selY = 0;
       let selSize = 0;
@@ -1949,41 +1813,40 @@ export function createRenderer(options: RendererOptions): Renderer {
         let slot = creatureSlots.get(id);
         if (!slot) {
           const container = new Container();
+          const fading = new Sprite();
           const sprite = new Sprite();
-          // Âncora no pé do desenho — e num valor REDONDO. Com 0,97 a âncora
-          // caía em 15,52 de 16 pixels, e meio pixel de deslocamento borra
-          // pixel art ampliada.
-          sprite.anchor.set(0.5, 1);
-          container.addChild(sprite);
+          // Âncora no CORPO, não no meio do quadro: o quadro é largo para caber
+          // a mão do jogador e o amigo do lado, e o bicho mora na esquerda dele.
+          fading.anchor.set(ANCHOR_X, ANCHOR_Y);
+          sprite.anchor.set(ANCHOR_X, ANCHOR_Y);
+          container.addChild(fading, sprite);
           creatureLayer.addChild(container);
           slot = {
             container,
             sprite,
+            fading,
+            anim: new AnimationController({
+              has: (key) => clips.has(key),
+              frameCount: (key) => clips.get(key)?.frames.length ?? 1,
+              onEvent: (emit) => playFrameEvent(emit, emitAt.x, emitAt.y, emitAt.size),
+            }),
             facing: 1,
             seen: frameId,
-            step: (id % 4) * 0.7,
             phase: (id % 17) * 0.41,
             lastX: cx,
             lastY: cy,
             heading: { facing: FACING.s, mirror: false },
-            blinkIn: 1 + (id % 7) * 0.5,
-            blinking: 0,
-            yawnIn: 6 + (id % 5) * 3,
-            yawning: 0,
           };
           creatureSlots.set(id, slot);
         }
 
-        // Passo: o ciclo avança com a DISTÂNCIA percorrida, não com o relógio.
-        // É o que faz o bicho lento arrastar os pés e o apressado trotar, sem
-        // nenhuma variável de velocidade na animação.
+        // Quanto ela andou desde o quadro passado, na posição JÁ interpolada.
         //
-        // A distância é medida entre o QUADRO ANTERIOR e este, na posição já
-        // interpolada. A primeira versão usava `x - prevX`, que é o passo de um
-        // TICK da simulação (20 por segundo) enquanto o desenho roda a 60: a
-        // conta saía três vezes maior, toda criatura parecia estar correndo, e
-        // o ciclo trocava de quadro a cada quadro — de longe, isso não lê como
-        // andar, lê como tremer parado. Era o que estava acontecendo.
+        // É daqui que sai a velocidade que a máquina de estados usa para
+        // separar o passo da corrida e para acertar o compasso do ciclo. Medir
+        // com `x - prevX` seria medir o passo de um TICK da simulação (vinte
+        // por segundo) enquanto o desenho roda a sessenta: a conta sai três
+        // vezes maior e toda criatura parece estar correndo.
         const movedNow = Math.hypot(cx - slot.lastX, cy - slot.lastY);
         // Para ONDE ela andou, em coordenadas de tela. O passo é medido no
         // mundo, mas a direção que o jogador vê é a projetada: andar para o
@@ -1993,86 +1856,71 @@ export function createRenderer(options: RendererOptions): Renderer {
         slot.lastX = cx;
         slot.lastY = cy;
         const speed = movedNow / Math.max(dt, 1 / 240);
-        if (moving) slot.step += movedNow * STEPS_PER_PIXEL;
 
-        // Piscar e bocejar continuam existindo como RITMO, mesmo sem quadro
-        // próprio na folha: o piscar vira um instante de olhos fechados
-        // (o quadro de dormir) e o bocejo, a boca aberta do espanto. São dois
-        // sinais de vida que custam um quadro e mudam a leitura da criatura.
-        const eyesOpen = mood !== MOOD.sleepy && mood !== MOOD.loved;
-        slot.blinkIn -= dt;
-        if (slot.blinking > 0) slot.blinking -= dt;
-        else if (slot.blinkIn <= 0 && eyesOpen) {
-          slot.blinking = BLINK_DURATION;
-          slot.blinkIn = (mood === MOOD.sleepy ? 1.2 : 2.5) + Math.random() * 4;
-        }
-        const canYawn = mood === MOOD.sleepy || stage === 2;
-        slot.yawnIn -= dt;
-        if (slot.yawning > 0) slot.yawning -= dt;
-        else if (slot.yawnIn <= 0 && canYawn) {
-          slot.yawning = 0.9;
-          slot.yawnIn = (stage === 2 ? 8 : 14) + Math.random() * 10;
-        }
-
-        // O OVO.
-        //
-        // Quem ainda está na casca não anda, não gesticula e não tem humor:
-        // tudo o que existe dele é o quanto falta para romper. Por isso ele
-        // curto-circuita a escolha de quadro inteira — e só ele, porque uma
-        // criatura nascida nunca tem este canal preenchido.
+        // O OVO viaja pelo mesmo buffer: o canal diz o quanto falta para
+        // romper, e -1 quer dizer "isto aqui já nasceu".
         const hatching = creatures.egg[i]!;
-        const isEggSlot = hatching >= 0;
 
-        // A DIREÇÃO em que ela caminha escolhe o desenho.
-        //
-        // Enquanto anda, manda o rumo: de costas, de perfil, de três quartos.
-        // Parada, manda o resto do sistema — humor, gesto, o que ela carrega —,
-        // porque é de frente que ela tem rosto, e é o rosto que conta o que ela
-        // sente. Uma criatura que para e se vira para quem olha não é um
-        // artifício: é o que um bicho faz.
+        // A DIREÇÃO em que ela caminha decide para que lado o desenho olha.
         if (movedNow > 0.001) {
           slot.heading = headingOf(wentX - wentY, (wentX + wentY) * ISO_SQUASH);
         }
         const heading = slot.heading;
 
-        const pose = creatures.pose[i]!;
-        let frame = frameFor({
-          mood,
-          pose,
-          moving,
-          speed,
-          carrying: creatures.carrying[i] === 1,
-          step: slot.step,
-          // Cada criatura respira no SEU tempo: sem a defasagem, o jardim
-          // inteiro inflaria e desinflaria em uníssono, que é pior do que não
-          // respirar.
-          breath: elapsed + slot.phase,
-        });
-        if (!moving) {
-          if (slot.yawning > 0) frame = FRAME.surprised;
-          else if (slot.blinking > 0 && eyesOpen) frame = FRAME.blink;
-        }
-        // Andando para qualquer lado que não seja o SUL, o desenho da direção
-        // substitui o do humor: aquelas quatro direções só têm os quadros de
-        // caminhada, e é o que basta — de longe, o que se lê é o rumo.
-        if (moving && heading.facing !== FACING.s) frame = walkFrame(heading.facing, slot.step);
-
-        // BRINCAR MANDA EM TUDO.
+        // OS SINAIS DA CRIATURA, do jeito que a máquina de estados os pede.
         //
-        // Perseguir, empurrar, pular e abraçar a bola são o que ela está
-        // fazendo — vêm na frente do rumo e do humor. Um bicho correndo atrás
-        // de uma bola com cara de sonolento seria a criatura mentindo.
-        const playing = creatures.playing[i]!;
-        if (playing > 0) frame = PLAY_FIRST + playing - 1;
-        if (isEggSlot) frame = eggFrame(hatching);
-        const texture = tintimFrames[frame];
+        // Um objeto só, reaproveitado a cada criatura e a cada quadro: ele é
+        // consumido dentro do `update` e não sobrevive à chamada. Com trezentas
+        // criaturas a sessenta quadros, criar um objeto novo aqui seria criar
+        // dezoito mil por segundo para o coletor de lixo recolher.
+        signals.intent = INTENT_NAMES[creatures.intent[i]!] ?? 'wander';
+        signals.pose = creatures.pose[i]!;
+        signals.mood = mood;
+        signals.moving = moving;
+        signals.speed = speed;
+        signals.carrying = creatures.carrying[i] === 1;
+        signals.scar = creatures.scar[i]!;
+        signals.fear = creatures.fear[i]!;
+        signals.happiness = creatures.happiness[i]!;
+        signals.energy = creatures.energy[i]!;
+        signals.health = creatures.health[i]!;
+        signals.touched = pettingId === id;
+        signals.hatching = hatching;
+        signals.isBaby = stage === 0;
+
+        // Onde as partículas de quadro vão sair. Lido pelo `onEvent` do slot,
+        // que dispara lá dentro do `update` — logo abaixo, no mesmo instante.
+        emitAt.x = cx;
+        emitAt.y = cy;
+        emitAt.size = size;
+        slot.anim.update(signals, dt);
+
+        // O QUE DESENHAR: o que o controlador disser, e nada além disso.
+        const view = slot.anim.view();
+        const frames = view ? clips.get(view.key)?.frames : undefined;
+        const texture = frames?.[view!.frame];
         if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
+
+        // A TRAVESSIA, desenhada: a animação que sai continua na tela por um
+        // instante, sumindo por baixo da que entra. É o que tira o "corte
+        // seco" da troca de estado — sem isto, parar de correr é um estalo.
+        const leaving = view?.fadingKey ? clips.get(view.fadingKey)?.frames : undefined;
+        if (leaving && view) {
+          const old = leaving[Math.min(view.fadingFrame, leaving.length - 1)];
+          if (old && slot.fading.texture !== old) slot.fading.texture = old;
+          slot.fading.visible = true;
+          slot.fading.alpha = 1 - view.blend;
+          slot.sprite.alpha = view.blend;
+        } else if (slot.fading.visible) {
+          slot.fading.visible = false;
+          slot.sprite.alpha = 1;
+        }
 
         // De que lado ela está virada.
         //
-        // Andando, quem decide é o rumo: as quatro direções da esquerda são o
-        // espelho das da direita, e é esse espelho. Parada, vale o de sempre —
-        // o último movimento, ou a mão do jogador se ela estiver curiosa.
+        // Andando, quem decide é o rumo: a folha tem um perfil só, e o outro é
+        // o espelho dele. Parada, vale o último movimento — ou a mão do
+        // jogador, se ela estiver curiosa, porque um bicho curioso encara.
         if (moving) slot.facing = heading.mirror ? -1 : 1;
         else if (dx > 0.05) slot.facing = 1;
         else if (dx < -0.05) slot.facing = -1;
@@ -2080,62 +1928,25 @@ export function createRenderer(options: RendererOptions): Renderer {
           slot.facing = handWorld.x >= cx ? 1 : -1;
         }
 
-        // O desenho tem 16 pixels de altura onde o antigo tinha 32: a escala
-        // dobra para a criatura ocupar o mesmo espaço no jardim.
+        // A RESPIRAÇÃO — o único movimento que ainda é conta, e de propósito
+        // quase invisível: o resto do corpo se mexe porque foi DESENHADO se
+        // mexendo. Cada criatura no seu tempo, senão o jardim inteiro infla e
+        // desinfla em uníssono.
         const scale = size / CREATURE_SCALE;
-        const anim = animateBody(mood, elapsed, id, size, moving, stage);
-        // A pose entra por cima do humor: o rosto segue contando a emoção,
-        // o corpo passa a contar a ocupação.
-        if (pose !== POSE.none) {
-          animatePose(pose, creatures.poseTime[i]!, elapsed, size, anim);
-        }
-        // Bocejo empurra o corpo um pouco para trás, como um espreguiçar.
-        const yawnTilt = slot.yawning > 0 ? -0.12 : 0;
+        const breath = breathOf(elapsed + slot.phase, slot.phase);
+        slot.container.scale.set(slot.facing * scale, scale * breath);
+        slot.container.rotation = 0;
 
-        // Deformação contida.
-        //
-        // Quando a criatura era desenhada por código, esticar e girar o corpo
-        // era barato e ficava bem. Agora o desenho é pixel art feita à mão, e
-        // achatar ou inclinar demais desmancha a grade de pixels que dá a ela
-        // a cara que tem. O movimento continua — só que quase todo por
-        // POSIÇÃO (o pulinho, o tremor), que não distorce nada, e o resto
-        // entra por um terço.
-        // O gesto pode se mexer mais que a respiração.
-        //
-        // Com vinte quadros para dezenove gestos, é o MOVIMENTO que separa
-        // "se coçar" de "cheirar uma flor". Conter tudo no mesmo terço deixou
-        // os dois iguais — e foi o que tirou a vida das criaturas paradas. A
-        // respiração de fundo continua discreta; o gesto deliberado recupera
-        // quase toda a amplitude.
-        const give = pose !== POSE.none ? POSE_GIVE : SQUASH_DAMPING;
-        if (isEggSlot) {
-          // O ovo não respira nem se inclina — ele BALANÇA, e cada vez mais
-          // perto da hora. Um ovo perfeitamente imóvel parece um enfeite do
-          // cenário; esse tremor é o que diz que há alguém ali dentro.
-          const stir = hatching * hatching;
-          const wobble = Math.sin(elapsed * (3 + hatching * 9) + slot.phase) * 0.06 * stir;
-          slot.container.scale.set(scale, scale);
-          slot.container.rotation = wobble;
-        } else {
-          slot.container.scale.set(
-            slot.facing * scale * (1 + (anim.squashX - 1) * give),
-            scale * (1 + (anim.squashY - 1) * give),
-          );
-          slot.container.rotation = (anim.tilt + yawnTilt) * give * slot.facing;
-        }
         // O PÉ NO CHÃO.
         //
         // A posição da criatura no mundo é o centro do corpo, não a sola do
         // pé — é com o centro que a simulação faz colisão. A sombra sempre foi
-        // desenhada embaixo desse centro, à distância do raio do corpo. Faltava
-        // baixar o desenho a mesma distância: sem isso a criatura ficava com os
-        // pés acima da própria sombra, e era exatamente isso que dava a
-        // impressão de que ela flutuava.
-        const bodyX = cx + anim.jitter;
-        const bodyY = cy;
+        // desenhada embaixo desse centro, à distância do raio do corpo. O
+        // desenho desce a mesma distância: sem isso a criatura fica com os pés
+        // acima da própria sombra, que é exatamente a cara de quem flutua.
         slot.container.position.set(
-          isoX(bodyX, bodyY),
-          isoY(bodyX, bodyY) + size * GROUND_CONTACT * ISO_SQUASH - anim.bob + anim.yOffset,
+          isoX(cx, cy),
+          isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH,
         );
         slot.container.zIndex = isoDepth(cx, cy);
 
@@ -2676,8 +2487,14 @@ export function createRenderer(options: RendererOptions): Renderer {
       treeSprites.length = 0;
       reflections.length = 0;
       ripples.length = 0;
-      for (const frame of tintimFrames) frame.destroy();
-      tintimFrames = [];
+      // Um recorte por quadro, mas uma fonte por tira: destruir o primeiro
+      // quadro de cada animação devolve a textura inteira à placa de vídeo.
+      for (const clip of clips.values()) {
+        const source = clip.frames[0]?.source ?? null;
+        for (const frame of clip.frames) frame.destroy();
+        source?.destroy();
+      }
+      clips = new Map();
       if (app) {
         app.destroy(true, { children: true });
         app = null;
