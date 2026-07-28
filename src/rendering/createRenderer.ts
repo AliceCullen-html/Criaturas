@@ -490,6 +490,21 @@ const SCREEN_CENTER_Y = 32;
 const SCREEN_WIDTH = 38;
 
 /**
+ * Lado da casa do PISO, em pixels de mundo.
+ *
+ * São coisas diferentes do tabuleiro: o tabuleiro (`TILE`, 50) é regra de jogo —
+ * uma árvore por casa, uma pedra por casa —, o piso é textura. Desenhados na
+ * mesma medida, os losangos ficavam do tamanho da criatura e o jardim parecia um
+ * tabuleiro de xadrez com um bicho em cima. A dezesseis, o chão recua para o
+ * fundo, que é onde chão deve ficar, e a leitura de 8 bits aparece.
+ *
+ * INTEIRO, e não uma fração de `TILE`. A tentativa de usar `TILE / 3` derrubou
+ * o jogo inteiro: o buffer de pixels não desenha em meia casa, e o erro sai
+ * longe daqui, num "offset is out of bounds" que não fala de piso nenhum.
+ */
+const FLOOR = 16;
+
+/**
  * As variantes de objeto que vêm do atlas de ícones, e qual ícone é cada uma.
  *
  * Cópia local dos números de `VARIANT` (@world) e `ICON` (@core): o renderer
@@ -1187,21 +1202,38 @@ export function createRenderer(options: RendererOptions): Renderer {
       const root = new Container();
       root.sortableChildren = false;
 
-      // O TABULEIRO.
+      // O PISO.
       //
-      // Um sprite quadrado por casa, desenhado no container do chão — que
-      // carrega a matriz isométrica. Ou seja: aqui só existem quadrados, e é o
-      // Pixi que os entrega em losango. As variantes são sorteadas com semente
+      // Um sprite quadrado por casa do piso, desenhado no container do chão —
+      // que carrega a matriz isométrica. Ou seja: aqui só existem quadrados, e é
+      // o Pixi que os entrega em losango. As variantes são sorteadas com semente
       // fixa, então o mesmo mundo tem sempre o mesmo gramado.
-      const tileTextures = makeTileTextures(TILE);
+      //
+      // E a casa do piso NÃO é a casa do tabuleiro. O tabuleiro (`TILE`) é regra
+      // de jogo: uma árvore por casa, uma pedra por casa, é ele que a peça
+      // arrastada procura. O piso é desenho, e desenhado na mesma medida ele
+      // fica com cara de tabuleiro de xadrez gigante — losangos enormes, a
+      // criatura minúscula em cima de um deles. Miúdo, o chão vira textura: a
+      // grade some para o fundo e o bicho volta a ser o assunto da tela.
+      const tileTextures = makeTileTextures(FLOOR);
       const tiles = new Container();
       const tileRng = createRng(0x7a11e);
-      const gridCols = tileCols(options.worldWidth);
-      const gridRows = tileRows(options.worldHeight);
+      const gridCols = Math.ceil(options.worldWidth / FLOOR);
+      const gridRows = Math.ceil(options.worldHeight / FLOOR);
+      // XADREZ, e não mosaico ao acaso.
+      //
+      // As variantes claras e as escuras se alternam pela paridade da casa, e o
+      // sorteio só escolhe QUAL clara ou QUAL escura. É o que dá a leitura de 8
+      // bits: o olho reconhece o padrão de tabuleiro antes de reparar em
+      // qualquer detalhe, e o gramado deixa de ser um borrão mosqueado.
+      const claras = [0, 1, 4];
+      const escuras = [2, 3, 5];
       for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
-          const sprite = new Sprite(tileTextures[tileRng.int(tileTextures.length)]!);
-          sprite.position.set(col * TILE, row * TILE);
+          const paridade = (col + row) % 2 === 0 ? claras : escuras;
+          const variante = paridade[tileRng.int(paridade.length)]!;
+          const sprite = new Sprite(tileTextures[variante]!);
+          sprite.position.set(col * FLOOR, row * FLOOR);
           tiles.addChild(sprite);
         }
       }
