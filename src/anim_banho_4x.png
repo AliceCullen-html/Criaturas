@@ -1,0 +1,44 @@
+# Sprites do cinto — Tintim
+
+Paleta:
+K = #241A12
+W = #FFF6E0
+R = #C2402F
+r = #8E2A20
+G = #5A8C3A
+S = #6B4A2E
+b = #3E6FA8
+B = #6FA0D0
+y = #E8C860
+Y = #B89830
+c = #F2E3C0
+C = #7ACBD0
+e = #3E6B3A
+E = #5C8F4A
+o = #E0B040
+O = #F5D878
+p = #D2566A
+P = #F090A0
+t = #E8B888
+T = #C08A5A
+w = #8B6239
+d = #6B4A2E
+D = #3E2A18
+m = #8A9490
+M = #B6C0BA
+n = #4E5C5C
+f = #E07AA0
+g = #9AA0A8
+h = #6E665A
+
+## Arquivos
+- atlas_icones_1x.png / _4x.png — 15 ícones 16x16, grade de 8 colunas, nesta ordem:
+  apple, ball, sponge, gift, book, egg, heart, hand, appleBit, appleCore, bear, flower, pillow, rock, feather
+- atlas_botoes_1x.png / _4x.png — 8 ferramentas (linhas) x 4 estados (colunas: normal, hover, press, disabled), célula 24x24
+- icones/<nome>_4x.png — ícone solto, fundo transparente
+
+## Convenções
+- Ícone 16x16 centralizado no slot 24x24, offset (4,4).
+- Estado press desloca o ícone 1px para baixo.
+- Cursor: ícone 16x16 em 2x, hotspot no centro (16,16).
+- Fundo transparente, sem anti-aliasing (nearest neighbor na engine).
