@@ -40,6 +40,11 @@ export interface FrameEvent {
  * precisa saber nada de renderização.
  */
 export const FRAME_EVENTS: readonly FrameEvent[] = [
+  // Nada de marca emocional em animação de LAÇO. O susto tinha uma aqui, e
+  // como o estado de medo toca em laço, saía uma interrogação nova a cada volta
+  // — uma criatura assustada por dez segundos ficava com uma coluna de
+  // interrogações na cabeça, que é a cara de um jogo travado, não de um susto.
+  // Partícula de emoção sai UMA vez, e quem a dispara é o jogo, não o laço.
   { clip: 'caminhar', frame: 0, emit: 'footstep' },
   { clip: 'caminhar', frame: 3, emit: 'footstep' },
   { clip: 'correr', frame: 0, emit: 'footstep' },
@@ -57,7 +62,6 @@ export const FRAME_EVENTS: readonly FrameEvent[] = [
   { clip: 'aprender', frame: 3, emit: 'spark' },
   { clip: 'afagar', frame: 2, emit: 'heart' },
   { clip: 'chorarT', frame: 2, emit: 'tear' },
-  { clip: 'assustar', frame: 1, emit: 'startle' },
   { clip: 'espirrar', frame: 2, emit: 'sneeze' },
   { clip: 'comemorar', frame: 2, emit: 'star' },
 ];

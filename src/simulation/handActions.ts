@@ -267,7 +267,21 @@ export function roughGesture(
  * o que faz do colo, além de carinho, a única maneira de TIRAR uma criatura de
  * onde ela se meteu.
  */
-const CARRY_TRUST_FOR_CALM = 0.45;
+/**
+ * QUEM SE ASSUSTA AO SER PEGO.
+ *
+ * A primeira versão media CONFIANÇA, e estava errada: uma criatura recém-nascida
+ * tem confiança 0,12 — ela ainda não teve tempo de confiar em ninguém —, então
+ * TODA pegada dava um susto de 0,3. Três colos e ela estava em pânico
+ * permanente, fugindo do cursor, impossível de tocar. O jogador não tinha feito
+ * nada de errado; o jogo é que estava contando a ausência de intimidade como se
+ * fosse desconfiança.
+ *
+ * O que assusta é ter MOTIVO para ter medo: uma lembrança ruim sua, um trauma,
+ * uma cicatriz. Quem não tem nada contra você leva só o susto de sair do chão.
+ */
+const LIFT_STARTLE = 0.05;
+const LIFT_STARTLE_MAX = 0.35;
 /** Segundos de colo até o bicho começar a se incomodar. */
 export const CARRY_PATIENCE = 6;
 /** Acima disto, largar não é largar: é atirar. */
@@ -287,10 +301,13 @@ export function liftCreature(world: World, id: number): boolean {
     velocity.x = 0;
     velocity.y = 0;
   }
-  // Sair do chão é sempre um susto — pequeno em quem confia, grande em quem
-  // não confia. A cicatriz pesa aqui: uma criatura marcada não se deixa pegar.
-  const calm = emotions.trust > CARRY_TRUST_FOR_CALM && emotions.scar < 0.3;
-  emotions.fear = clamp01(emotions.fear + (calm ? 0.05 : 0.3));
+  // Sair do chão é sempre um susto — pequeno em quem não tem nada contra você,
+  // grande em quem tem. A cicatriz pesa aqui: uma criatura marcada não se
+  // deixa pegar.
+  const memory = world.store(Memory).get(id);
+  const grudge = Math.max(0, -(memory?.valenceOf(subjects.player()) ?? 0));
+  const wary = clamp01(grudge + emotions.scar + emotions.trauma);
+  emotions.fear = clamp01(emotions.fear + LIFT_STARTLE + LIFT_STARTLE_MAX * wary);
   mind.surprise = 1.2;
   mind.commitment = 0;
 

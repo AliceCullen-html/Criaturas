@@ -31,8 +31,11 @@ export const carrySystem: System = {
       if (!emotion) return;
 
       if (carried.time <= CARRY_PATIENCE) {
-        // Os primeiros segundos são colo: calma, se ela confia em você.
-        const welcome = emotion.trust > 0.45 && emotion.scar < 0.3;
+        // Os primeiros segundos são colo: calma, se ela não tem nada contra
+        // você. É a mesma correção do susto ao ser pega — medir confiança
+        // castigava o bicho recém-nascido, que ainda não teve tempo de confiar
+        // em ninguém e por isso passava o jogo inteiro apavorado.
+        const welcome = emotion.scar < 0.3 && emotion.trauma < 0.3;
         emotion.fear = clamp01(emotion.fear - (welcome ? 0.05 : -0.02) * dt);
         emotion.happiness = clamp01(emotion.happiness + (welcome ? 0.03 : -0.02) * dt);
         return;

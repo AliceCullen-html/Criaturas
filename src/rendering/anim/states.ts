@@ -21,6 +21,27 @@ import { MOOD, POSE, type Intent } from '@core';
  * As chaves são as do catálogo — os nomes do meio dos arquivos de sprite. Uma
  * chave que não existir na pasta cai no `idle`, e o carregador avisa.
  *
+ * CADA ANIMAÇÃO É UMA CENA, não uma pose.
+ *
+ * Esta é a regra que governa a tabela inteira, e ela custou três defeitos para
+ * ficar clara. O artista não desenhou o corpo da criatura em várias posições:
+ * desenhou CENAS — a criatura E a bola, a criatura E o presente, a criatura E a
+ * flor, a criatura E a mão do jogador. `brincarSozinho` tem uma bola dentro.
+ * `investigar` tem um presente embrulhado. `observar` tem uma flor. `assustar`
+ * tem a mão. `limparCorpo` tem uma esponja.
+ *
+ * Então uma animação só pode ser usada num estado em que aquilo EXISTE. Pôr
+ * `brincarSozinho` no humor brincalhão faz a criatura brincar com uma bola que
+ * o jogador nunca deu — foi exatamente o que aconteceu. Para os estados em que
+ * ela está sozinha, só servem os desenhos em que ela está sozinha, e é o que
+ * `clips.test.ts` cobra: ele MEDE a largura da tinta de cada tira (o corpo dela
+ * ocupa 48 px em todas as 223) e recusa qualquer estado solitário que aponte
+ * para uma cena.
+ *
+ * Marcas não contam como cena: coração, balão de pensamento, gotas de suor,
+ * riscos de velocidade e o "Z" do sono são linguagem de quadrinho, não objetos
+ * do jardim — ninguém tenta pegar um coração.
+ *
  * O OVO NÃO ESTÁ AQUI, e é uma decisão. A folha traz `chocarOvo`,
  * `ovoRachando`, `nascimento` — mas nenhuma delas é um ovo: todas mostram o
  * PAI ao lado do ovo, chocando, esperando, recebendo. Usar qualquer uma para
@@ -108,6 +129,15 @@ export interface StateRule {
   priority: number;
   /** Multiplicador de velocidade do laço — o corpo conta o humor. */
   rate?: (signals: CreatureSignals) => number;
+  /**
+   * ESTA REGRA GARANTE O OBJETO.
+   *
+   * Marcada, ela só vale quando aquilo que o desenho mostra existe de verdade
+   * no jardim: a fruta na boca, a bola no chão, o amigo ao lado, a mão do
+   * jogador. As regras SEM esta marca são as da criatura sozinha — e para elas
+   * o teste cobra que a arte também esteja sozinha.
+   */
+  withProp?: boolean;
 }
 
 /** Acima disto o passo vira corrida. */
@@ -132,15 +162,15 @@ export const POSE_CLIP: Readonly<Record<number, string>> = {
   [POSE.stretch]: 'espreguicar',
   [POSE.lookUp]: 'olharCima',
   [POSE.sniff]: 'farejar',
-  [POSE.listen]: 'observar',
+  [POSE.listen]: 'curioso',
   [POSE.lookDown]: 'olharBaixo',
   [POSE.shake]: 'sacudirAgua',
   [POSE.roll]: 'rolar',
-  [POSE.groom]: 'limparCorpo',
-  [POSE.dig]: 'investigar',
+  [POSE.groom]: 'cocar',
+  [POSE.dig]: 'farejar',
   [POSE.slip]: 'escorregar',
   [POSE.ponder]: 'pensar',
-  [POSE.play]: 'brincarSozinho',
+  [POSE.play]: 'muitoFeliz',
   [POSE.perk]: 'surpreso',
   [POSE.sigh]: 'entediado',
   [POSE.hurt]: 'tremer',
@@ -177,7 +207,7 @@ export const STATES: readonly StateRule[] = [
     state: 'Fear',
     when: (s) => s.fear > 0.55 || s.mood === MOOD.afraid,
     clip: (s) =>
-      s.isBaby ? (s.moving ? 'filhoteFoge' : 'filhoteChora') : s.moving ? 'fugir' : 'assustar',
+      s.isBaby ? (s.moving ? 'filhoteFoge' : 'filhoteChora') : s.moving ? 'fugir' : 'medo',
     priority: PRIORITY.urgent,
     rate: () => 1.2,
   },
@@ -194,6 +224,7 @@ export const STATES: readonly StateRule[] = [
     enter: () => 'erguer',
     priority: PRIORITY.interaction,
     rate: (s) => (s.fear > 0.5 ? 1.4 : 0.9),
+    withProp: true,
   },
   {
     state: 'Bath',
@@ -201,12 +232,14 @@ export const STATES: readonly StateRule[] = [
     clip: () => 'esfregar',
     enter: () => 'espuma',
     priority: PRIORITY.interaction,
+    withProp: true,
   },
   {
     state: 'Pet',
     when: (s) => s.touched,
     clip: () => 'afagar',
     priority: PRIORITY.interaction,
+    withProp: true,
   },
   {
     // COMER é uma pequena história: pegar, mastigar, engolir. A entrada faz a
@@ -217,12 +250,14 @@ export const STATES: readonly StateRule[] = [
     clip: (s) => (s.pose === POSE.eat ? 'mastigar' : s.isBaby ? 'pedirComida' : 'procurarComida'),
     enter: (s) => (s.pose === POSE.eat ? 'pegarComida' : null),
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Drink',
     when: (s) => s.intent === 'seekWater',
     clip: () => 'beber',
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Sleep',
@@ -237,12 +272,14 @@ export const STATES: readonly StateRule[] = [
     when: (s) => s.intent === 'play',
     clip: (s) => (s.moving ? 'buscarBola' : 'chutarBola'),
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Learn',
     when: (s) => s.intent === 'study',
     clip: () => 'aprender',
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Social',
@@ -250,29 +287,32 @@ export const STATES: readonly StateRule[] = [
     clip: (s) =>
       s.moving ? (s.isBaby ? 'seguirMae' : 'seguirAmigo') : s.isBaby ? 'pedirColo' : 'conversar',
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Courtship',
     when: (s) => s.intent === 'mate',
     clip: () => 'cortejar',
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Carry',
     when: (s) => s.carrying,
     clip: () => 'segurarComida',
     priority: PRIORITY.gesture,
+    withProp: true,
   },
   {
     state: 'Search',
     when: (s) => s.intent === 'search',
-    clip: () => 'investigar',
+    clip: () => 'farejar',
     priority: PRIORITY.gesture,
   },
   {
     state: 'Curious',
     when: (s) => s.intent === 'watch' || s.mood === MOOD.curious,
-    clip: () => 'observar',
+    clip: () => 'curioso',
     priority: PRIORITY.gesture,
   },
   {
@@ -353,7 +393,7 @@ export const STATES: readonly StateRule[] = [
                       : s.mood === MOOD.thirsty
                         ? 'pedirAgua'
                         : s.mood === MOOD.playful
-                          ? 'brincarSozinho'
+                          ? 'muitoFeliz'
                           : s.isBaby
                             ? 'filhoteExplora'
                             : 'idle',
@@ -386,7 +426,7 @@ export const IDLE_FILLERS: readonly string[] = [
   'bocejar',
   'espreguicar',
   'farejar',
-  'cheirarFlor',
+  'curioso',
   'pensar',
 ];
 

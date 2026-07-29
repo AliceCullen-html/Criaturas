@@ -253,3 +253,35 @@ describe('com a criatura no colo, a mão está ocupada', () => {
     expect(arrancou.arvore, 'levou o bicho e a árvore no mesmo gesto').toBe(0);
   });
 });
+
+describe('arrastar não é bater', () => {
+  it('a mão que pousou nela antes de puxar nunca machuca', () => {
+    const { gestos, chamadas } = montar({ canHurt: true, canGrab: true });
+    gestos.pointerDown(0, 0, 1000, 0);
+    // Meio segundo de mão apoiada — a mão fecha.
+    for (let i = 0; i < 12; i++) gestos.tick(0.05);
+    // E agora um puxão bem rápido, do tipo que antes era registrado como tapa.
+    gestos.pointerMove(200, 0, 1620);
+    gestos.pointerMove(400, 0, 1640);
+    expect(chamadas.rough, 'levar a criatura depressa virou pancada').toBe(0);
+    expect(chamadas.colo).toBe(1);
+  });
+
+  it('mas o reflexo — apertar e sacudir na hora — continua sendo pancada', () => {
+    const { gestos, chamadas } = montar({ canHurt: true, canGrab: true });
+    gestos.pointerDown(0, 0, 1000, 0);
+    gestos.pointerMove(200, 0, 1020);
+    gestos.pointerMove(400, 0, 1040);
+    expect(chamadas.rough).toBe(1);
+  });
+
+  it('e um arrasto ligeiro depois de pensar um instante também não machuca', () => {
+    const { gestos, chamadas } = montar({ canHurt: true, canGrab: false });
+    gestos.pointerDown(0, 0, 1000, 0);
+    // Sem mão livre não há colo — e passada a janela do reflexo, não há tapa.
+    gestos.pointerMove(10, 0, 1400);
+    gestos.pointerMove(300, 0, 1420);
+    gestos.pointerMove(600, 0, 1440);
+    expect(chamadas.rough).toBe(0);
+  });
+});

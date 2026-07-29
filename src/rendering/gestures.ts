@@ -133,7 +133,22 @@ const HOLD_LIFT = 0.45;
 const HOLD_CREATURE = 0.5;
 const OBSERVE_MS = 700;
 const PET_SPEED_MAX = 260; // px/s no mundo: acima disso não é carinho
-const ROUGH_SPEED = 620;
+/**
+ * O QUE SEPARA UM TAPA DE UM ARRASTO.
+ *
+ * Aqui bastava ser rápido, e isso ficou insustentável no dia em que arrastar
+ * uma criatura passou a significar pegá-la no colo: quem tentava mover o bicho
+ * dava, sem querer, uma pancada nele. Duas ou três dessas e a criatura estava
+ * traumatizada, com medo permanente, fugindo do cursor — e o jogador não tinha
+ * feito nada além de tentar arrastá-la.
+ *
+ * Um tapa é um REFLEXO: sai no primeiro instante, sem pensar. Um arrasto é
+ * deliberado — a mão pousa na criatura antes. Então além de rápido, o gesto
+ * precisa começar depressa: passada esta janela, movimento é transporte, não
+ * violência.
+ */
+const ROUGH_SPEED = 900;
+const ROUGH_WINDOW_MS = 300;
 const PET_TIME_FOR_MEMORY = 2.2;
 /** Segundos de mão fora da criatura antes de o contato acabar de verdade. */
 const PET_GRACE = 0.35;
@@ -475,7 +490,10 @@ export class GestureRecognizer {
         this.probe.canHurt() &&
         this.speed > ROUGH_SPEED &&
         travel > ROUGH_MIN_TRAVEL &&
-        !this.roughSent
+        !this.roughSent &&
+        // Reflexo, não transporte: a mão nem chegou a pousar nela.
+        time - this.downTime < ROUGH_WINDOW_MS &&
+        !this.liftArmed
       ) {
         this.roughSent = true;
         this.state = 'rough';
