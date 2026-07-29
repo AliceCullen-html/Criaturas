@@ -24,7 +24,7 @@ const calmo: CreatureSignals = {
   energy: 1,
   health: 1,
   touched: false,
-  hatching: -1,
+  carried: false,
   isBaby: false,
 };
 

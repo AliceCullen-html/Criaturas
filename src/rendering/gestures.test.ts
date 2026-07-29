@@ -12,8 +12,8 @@ import { GestureRecognizer, type GestureHandlers, type WorldProbe } from './gest
 
 const BICHO = 7;
 
-function montar(options: { canHurt?: boolean; toca?: () => boolean } = {}) {
-  const chamadas = { pet: 0, rough: 0 };
+function montar(options: { canHurt?: boolean; canGrab?: boolean; toca?: () => boolean } = {}) {
+  const chamadas = { pet: 0, rough: 0, colo: 0, carrega: 0, solta: 0, atirada: 0 };
   const handlers = {
     onSelect: () => {},
     onGrab: () => {},
@@ -25,6 +25,16 @@ function montar(options: { canHurt?: boolean; toca?: () => boolean } = {}) {
     onPetRemembered: () => {},
     onRough: () => {
       chamadas.rough += 1;
+    },
+    onLiftCreature: () => {
+      chamadas.colo += 1;
+    },
+    onCarryCreature: () => {
+      chamadas.carrega += 1;
+    },
+    onDropCreature: (_id: number, _x: number, _y: number, vx: number, vy: number) => {
+      chamadas.solta += 1;
+      if (Math.hypot(vx, vy) > 320) chamadas.atirada += 1;
     },
     onCall: () => {},
     onObserve: () => {},
@@ -45,7 +55,7 @@ function montar(options: { canHurt?: boolean; toca?: () => boolean } = {}) {
   let emCima = true;
   const probe: WorldProbe = {
     creatureAt: () => (emCima ? BICHO : null),
-    canGrab: () => false,
+    canGrab: () => options.canGrab ?? false,
     canHurt: () => options.canHurt ?? false,
     stillTouching: options.toca ?? (() => true),
     hasSelection: () => false,
@@ -122,5 +132,124 @@ describe('o contato do banho', () => {
     gestos.tick(0.05);
     gestos.tick(0.05);
     expect(chamadas.pet).toBe(parado + 2);
+  });
+});
+
+describe('pegar a criatura no colo', () => {
+  it('a mão apoiada FECHA, e só então o arrasto a levanta', () => {
+    const { gestos, chamadas } = montar({ canGrab: true });
+    gestos.pointerDown(0, 0, 1000, 0);
+
+    // Meio segundo de mão apoiada: ela ainda está no chão, mas a mão já fechou.
+    for (let i = 0; i < 12; i++) gestos.tick(0.05);
+    expect(chamadas.colo, 'levantou sozinha, sem ninguém puxar').toBe(0);
+    expect(gestos.liftProgress).toBe(1);
+
+    // Agora sim: puxou.
+    gestos.pointerMove(30, 10, 1600);
+    expect(chamadas.colo).toBe(1);
+    expect(gestos.carriedCreature).toBe(7);
+
+    // E ela acompanha a mão.
+    gestos.pointerMove(60, 20, 1650);
+    expect(chamadas.carrega).toBeGreaterThanOrEqual(2);
+  });
+
+  it('carinho não levanta ninguém: quem passa a mão nela está fazendo carinho', () => {
+    const { gestos, chamadas } = montar({ canGrab: true });
+    gestos.pointerDown(0, 0, 1000, 0);
+    // Um afago é MOVIMENTO desde o começo — o relógio do colo nem chega ao fim.
+    for (let i = 1; i <= 12; i++) {
+      gestos.pointerMove(i % 2 === 0 ? 10 : -10, 0, 1000 + i * 50);
+      gestos.tick(0.05);
+    }
+    expect(chamadas.colo).toBe(0);
+    expect(chamadas.pet).toBeGreaterThan(0);
+  });
+
+  it('pousar devagar é pousar; soltar no meio de um arremesso é atirar', () => {
+    const devagar = montar({ canGrab: true });
+    devagar.gestos.pointerDown(0, 0, 1000, 0);
+    for (let i = 0; i < 12; i++) devagar.gestos.tick(0.05);
+    devagar.gestos.pointerMove(30, 0, 1600);
+    devagar.gestos.pointerMove(34, 0, 1900);
+    devagar.gestos.pointerUp(34, 0, 1950, 0);
+    expect(devagar.chamadas.solta).toBe(1);
+    expect(devagar.chamadas.atirada, 'pousada com cuidado virou arremesso').toBe(0);
+    expect(devagar.gestos.carriedCreature).toBe(null);
+
+    const atirada = montar({ canGrab: true });
+    atirada.gestos.pointerDown(0, 0, 1000, 0);
+    for (let i = 0; i < 12; i++) atirada.gestos.tick(0.05);
+    atirada.gestos.pointerMove(30, 0, 1600);
+    atirada.gestos.pointerMove(300, 0, 1620);
+    atirada.gestos.pointerMove(600, 0, 1640);
+    atirada.gestos.pointerUp(600, 0, 1645, 0);
+    expect(atirada.chamadas.atirada, 'um arremesso passou por pouso').toBe(1);
+  });
+
+  it('sem mão livre (esponja, livro), ninguém sai do chão', () => {
+    const { gestos, chamadas } = montar({ canGrab: false });
+    gestos.pointerDown(0, 0, 1000, 0);
+    for (let i = 0; i < 20; i++) gestos.tick(0.05);
+    gestos.pointerMove(40, 10, 2000);
+    expect(chamadas.colo).toBe(0);
+  });
+});
+
+describe('com a criatura no colo, a mão está ocupada', () => {
+  it('não sai arrancando a árvore que estava embaixo dela', () => {
+    const arrancou = { arvore: 0 };
+    const chamadas = { colo: 0 };
+    const handlers = {
+      onSelect: () => {},
+      onGrab: () => {},
+      onDragHeld: () => {},
+      onRelease: () => {},
+      onPet: () => {},
+      onPetRemembered: () => {},
+      onRough: () => {},
+      onLiftCreature: () => {
+        chamadas.colo += 1;
+      },
+      onCarryCreature: () => {},
+      onDropCreature: () => {},
+      onCall: () => {},
+      onObserve: () => {},
+      onOffer: () => {},
+      onHandMove: () => {},
+      onPokeScenery: () => {},
+      onGrabScenery: () => {
+        arrancou.arvore += 1;
+      },
+      onDragScenery: () => {},
+      onDropScenery: () => {},
+      onPokeGround: () => {},
+      onPokeWater: () => {},
+      onMarquee: () => {},
+      onMarqueeEnd: () => {},
+      onOrder: () => {},
+    } satisfies GestureHandlers;
+    const probe: WorldProbe = {
+      creatureAt: () => BICHO,
+      canGrab: () => true,
+      canHurt: () => false,
+      stillTouching: () => true,
+      hasSelection: () => false,
+      itemAt: () => null,
+      // Debaixo da criatura há uma árvore — que é o caso normal do jardim.
+      sceneryAt: () => ({ kind: 'tree', index: 3 }),
+      isWater: () => false,
+    };
+    const gestos = new GestureRecognizer(handlers, probe);
+
+    gestos.pointerDown(0, 0, 1000, 0);
+    for (let i = 0; i < 12; i++) gestos.tick(0.05);
+    gestos.pointerMove(30, 10, 1600);
+    expect(chamadas.colo).toBe(1);
+
+    // Mais um segundo com a criatura na mão: a árvore continua plantada.
+    for (let i = 0; i < 20; i++) gestos.tick(0.05);
+    expect(arrancou.arvore, 'levou o bicho e a árvore no mesmo gesto').toBe(0);
   });
 });

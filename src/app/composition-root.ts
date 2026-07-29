@@ -48,6 +48,10 @@ import {
   fearLearningSystem,
   metabolismSystem,
   moveHeldItem,
+  moveCarried,
+  liftCreature,
+  dropCreature,
+  carrySystem,
   movementSystem,
   observeCreature,
   offerItem,
@@ -162,6 +166,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(eggSystem)
     .add(emotionSystem)
     .add(handReactionSystem)
+    .add(carrySystem)
     .add(fearLearningSystem)
     .add(socialSystem)
     .add(teachingSystem)
@@ -598,6 +603,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         // em que "você" é uma palavra que ela pode aprender por associação:
         // a coisa nomeada está bem ali, encostada nela.
         showAndTell(world, creatureId, WORD.player);
+        pushSelected();
+      },
+      // O COLO. A criatura sai do chão e atravessa o jardim na mão do jogador
+      // — a única maneira de TIRAR um bicho de onde ele se meteu, e a mais
+      // íntima de todas as interações: quem confia se aninha, quem não confia
+      // se debate, e largar depressa é atirar.
+      onLiftCreature: (creatureId) => {
+        if (isEgg(world, creatureId)) return;
+        if (liftCreature(world, creatureId)) signal('question', creatureId);
+      },
+      onCarryCreature: (creatureId, x, y) => moveCarried(world, creatureId, x, y),
+      onDropCreature: (creatureId, _x, _y, vx, vy) => {
+        dropCreature(world, creatureId, vx, vy);
+        signal(Math.hypot(vx, vy) >= 320 ? 'anger' : 'heart', creatureId);
         pushSelected();
       },
       onRough: (creatureId, speed, dirX, dirY) => {

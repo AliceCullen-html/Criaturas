@@ -1,0 +1,161 @@
+import { describe, it, expect } from 'vitest';
+import { SystemScheduler, Transform, Velocity, type World } from '@engine';
+import { createUtilityBrain } from '@ai';
+import { Carried, Creature, Emotions, Memory, Mind, Needs } from '@creatures';
+import { createWorld } from '@world';
+import { spawnCreatures } from './spawnCreatures';
+import { creatureIndexSystem } from './creatureIndex';
+import { foodIndexSystem } from './foodIndex';
+import { decisionSystem } from './systems/decisionSystem';
+import { movementSystem } from './systems/movementSystem';
+import { carrySystem } from './systems/carrySystem';
+import { CARRY_PATIENCE, dropCreature, liftCreature, moveCarried } from './handActions';
+import { BrainResource } from './brainResource';
+import { PlayerResource } from './player';
+
+/**
+ * O COLO.
+ *
+ * A mão do jogador podia afagar, empurrar e bater — mas não podia PEGAR. Uma
+ * criatura era um bicho atrás de um vidro: dava para tocar e não dava para
+ * tirar do lugar. O colo é a interação que faltava, e o que se cobra dela aqui
+ * é que ela tenha as duas faces: quem é carregado com cuidado gosta, quem é
+ * carregado demais se aflige, e quem é atirado se machuca.
+ */
+
+const CONFIG = { width: 600, height: 600 };
+
+function makeWorld(seed = 11): World {
+  const world = createWorld(CONFIG, seed);
+  world.setResource(BrainResource, createUtilityBrain());
+  world.setResource(PlayerResource, { x: 0, y: 0, present: false });
+  return world;
+}
+
+function someone(world: World): number {
+  let id = -1;
+  world.store(Creature).forEach((_tag, entity) => {
+    if (id < 0) id = entity;
+  });
+  return id;
+}
+
+describe('a criatura no colo', () => {
+  it('sai do chão e vai para onde a mão for', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+
+    expect(liftCreature(world, id)).toBe(true);
+    moveCarried(world, id, 300, 220);
+
+    const spot = world.store(Transform).get(id)!;
+    expect(Math.round(spot.x)).toBe(300);
+    expect(Math.round(spot.y)).toBe(220);
+  });
+
+  it('e enquanto está no ar ela NÃO anda sozinha', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const scheduler = new SystemScheduler()
+      .add(foodIndexSystem)
+      .add(creatureIndexSystem)
+      .add(decisionSystem)
+      .add(carrySystem)
+      .add(movementSystem);
+
+    liftCreature(world, id);
+    moveCarried(world, id, 300, 300);
+    // A decisão continua rodando lá dentro: ela quer ir a algum lugar. O que
+    // não pode é o corpo obedecer — os pés não estão no chão.
+    for (let i = 0; i < 40; i++) scheduler.update(world, 1 / 20);
+
+    const spot = world.store(Transform).get(id)!;
+    expect(Math.round(spot.x), 'ela saiu andando pendurada na mão').toBe(300);
+    expect(Math.round(spot.y)).toBe(300);
+    const velocity = world.store(Velocity).get(id)!;
+    expect(velocity.x).toBe(0);
+    expect(velocity.y).toBe(0);
+  });
+
+  it('um colo curto, em quem confia, é carinho', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.trust = 0.9;
+    emotions.fear = 0.3;
+    emotions.scar = 0;
+    const antes = emotions.happiness;
+
+    liftCreature(world, id);
+    const scheduler = new SystemScheduler().add(carrySystem);
+    for (let i = 0; i < 40; i++) scheduler.update(world, 1 / 20);
+    dropCreature(world, id, 0, 0);
+
+    expect(emotions.happiness).toBeGreaterThan(antes);
+    expect(world.store(Carried).get(id)).toBeUndefined();
+    expect(world.store(Memory).get(id)!.valenceOf('player')).toBeGreaterThan(0);
+  });
+
+  it('mas ficar pendurada tempo demais aflige qualquer um', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.trust = 0.9;
+    emotions.stress = 0;
+
+    liftCreature(world, id);
+    const scheduler = new SystemScheduler().add(carrySystem);
+    const passos = Math.ceil((CARRY_PATIENCE + 20) * 20);
+    for (let i = 0; i < passos; i++) scheduler.update(world, 1 / 20);
+
+    expect(world.store(Carried).get(id)!.time).toBeGreaterThan(CARRY_PATIENCE);
+    expect(emotions.stress, 'meio minuto pendurada e ela nem se incomodou').toBeGreaterThan(0.1);
+  });
+
+  it('e atirar não é largar: dói, assusta e fica na memória', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    const needs = world.store(Needs).get(id)!;
+    emotions.trust = 0.9;
+    emotions.fear = 0;
+    const saude = needs.health;
+
+    liftCreature(world, id);
+    dropCreature(world, id, 700, 0);
+
+    expect(emotions.pain).toBeGreaterThan(0.3);
+    expect(emotions.fear).toBeGreaterThan(0.3);
+    expect(emotions.trauma).toBeGreaterThan(0);
+    expect(needs.health).toBeLessThan(saude);
+    expect(world.store(Memory).get(id)!.valenceOf('player')).toBeLessThan(0);
+  });
+
+  it('largada, ela volta a viver: anda de novo e continua o que fazia', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const scheduler = new SystemScheduler()
+      .add(foodIndexSystem)
+      .add(creatureIndexSystem)
+      .add(decisionSystem)
+      .add(carrySystem)
+      .add(movementSystem);
+
+    liftCreature(world, id);
+    moveCarried(world, id, 200, 200);
+    for (let i = 0; i < 10; i++) scheduler.update(world, 1 / 20);
+    dropCreature(world, id, 0, 0);
+
+    const antes = { ...world.store(Transform).get(id)! };
+    for (let i = 0; i < 120; i++) scheduler.update(world, 1 / 20);
+    const agora = world.store(Transform).get(id)!;
+    expect(Math.hypot(agora.x - antes.x, agora.y - antes.y)).toBeGreaterThan(1);
+    expect(world.store(Mind).get(id)!.intent.length).toBeGreaterThan(0);
+  });
+});

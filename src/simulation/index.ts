@@ -16,6 +16,7 @@ export { writeCreatureBuffer } from './creatureRender';
 export { readCreatureSnapshot } from './creatureSnapshot';
 export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
+export { carrySystem } from './systems/carrySystem';
 export { fearLearningSystem } from './systems/fearLearningSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { idleSystem } from './systems/idleSystem';
@@ -65,6 +66,10 @@ export {
   petCreature,
   rememberPetting,
   roughGesture,
+  liftCreature,
+  moveCarried,
+  dropCreature,
+  CARRY_PATIENCE,
   callAttention,
   observeCreature,
   offerItem,

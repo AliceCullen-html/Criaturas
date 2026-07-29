@@ -4,6 +4,7 @@ import { express, randomGenome, type Genome } from '@genetics';
 import {
   Behavior,
   Bond,
+  Carried,
   Nest,
   Appearance,
   Attributes,
@@ -70,6 +71,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Identity);
   world.register(Mind);
   world.register(Behavior);
+  world.register(Carried);
   world.register(Bond);
   world.register(Nest);
   world.register(Words);

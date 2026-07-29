@@ -1,5 +1,5 @@
 import { Transform, Velocity, type System } from '@engine';
-import { Mind } from '@creatures';
+import { Carried, Mind } from '@creatures';
 import { TerrainResource, isWaterAt } from '@world';
 import { solids } from '../solids';
 
@@ -18,6 +18,10 @@ export const movementSystem: System = {
     const transforms = world.store(Transform);
     const velocities = world.store(Velocity);
     const minds = world.store(Mind);
+    // Quem está no colo não anda: quem a move é a mão. Uma linha aqui, e não
+    // uma exceção em cada sistema — é o mesmo princípio do ovo, que não é
+    // criatura e por isso passa direto por todos eles.
+    const carried = world.hasComponent(Carried) ? world.store(Carried) : null;
     const terrain = world.getResource(TerrainResource);
     const { width, height } = world.config;
 
@@ -26,6 +30,11 @@ export const movementSystem: System = {
     transforms.forEach((transform, entity) => {
       const velocity = velocities.get(entity);
       if (!velocity) return;
+      if (carried?.has(entity)) {
+        velocity.x = 0;
+        velocity.y = 0;
+        return;
+      }
       if (velocity.x === 0 && velocity.y === 0) {
         transform.prevX = transform.x;
         transform.prevY = transform.y;
@@ -52,7 +61,6 @@ export const movementSystem: System = {
         }
         return;
       }
-
 
       const mind = minds.get(entity);
 

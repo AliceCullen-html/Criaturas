@@ -32,6 +32,7 @@ export interface CreatureRenderRow {
   egg: number;
   playing: number;
   intent: number;
+  carried: number;
   scar: number;
   fear: number;
   happiness: number;
@@ -77,6 +78,8 @@ export class CreatureRenderBuffer {
   readonly playing: Uint8Array;
   /** O que ela está tentando fazer (índice em INTENT, de @core). */
   readonly intent: Uint8Array;
+  /** 1 enquanto ela está no colo do jogador — no ar, e não no chão. */
+  readonly carried: Uint8Array;
   /** A marca que não passa, 0..1 — o corpo de uma criatura marcada é outro. */
   readonly scar: Float32Array;
   readonly fear: Float32Array;
@@ -106,6 +109,7 @@ export class CreatureRenderBuffer {
     this.egg = new Float32Array(capacity);
     this.playing = new Uint8Array(capacity);
     this.intent = new Uint8Array(capacity);
+    this.carried = new Uint8Array(capacity);
     this.scar = new Float32Array(capacity);
     this.fear = new Float32Array(capacity);
     this.happiness = new Float32Array(capacity);
@@ -149,6 +153,7 @@ export class CreatureRenderBuffer {
     this.egg[i] = row.egg;
     this.playing[i] = row.playing;
     this.intent[i] = row.intent;
+    this.carried[i] = row.carried;
     this.scar[i] = row.scar;
     this.fear[i] = row.fear;
     this.happiness[i] = row.happiness;

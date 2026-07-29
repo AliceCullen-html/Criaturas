@@ -23,6 +23,12 @@ export interface GestureHandlers {
   onPetRemembered: (creatureId: number) => void;
   /** Gesto rápido sobre a criatura: empurrão/agressão. */
   onRough: (creatureId: number, speed: number, dirX: number, dirY: number) => void;
+  /** A criatura saiu do chão: está no colo. */
+  onLiftCreature: (creatureId: number) => void;
+  /** No colo, ela acompanha a mão. */
+  onCarryCreature: (creatureId: number, x: number, y: number) => void;
+  /** Solta: pousada com cuidado, ou atirada (a velocidade do gesto diz qual). */
+  onDropCreature: (creatureId: number, x: number, y: number, vx: number, vy: number) => void;
   /** Duplo clique perto da criatura: chama a atenção. */
   onCall: (creatureId: number) => void;
   /** Clique longo parado sobre a criatura: modo observação. */
@@ -114,6 +120,17 @@ const HOLD_ITEM = 0.18;
  * de uma maçã, ninguém conseguiria mais sacudir uma árvore sem levá-la junto.
  */
 const HOLD_LIFT = 0.45;
+/**
+ * Segundos de mão apoiada numa criatura até ela ceder ao colo.
+ *
+ * Mais que a fruta e mais que a árvore, e é de propósito: apoiar a mão num
+ * bicho é fazer carinho, e a pegada não pode roubar o carinho. Passado esse
+ * tempo a mão FECHA — mas ela só sai do chão quando o gesto continuar e
+ * ARRASTAR. Quem apoiou a mão e soltou fez carinho e depois observou; quem
+ * apoiou e puxou pegou a criatura no colo. Dois gestos diferentes, e o
+ * jogador aprende a diferença sem ninguém explicar.
+ */
+const HOLD_CREATURE = 0.5;
 const OBSERVE_MS = 700;
 const PET_SPEED_MAX = 260; // px/s no mundo: acima disso não é carinho
 const ROUGH_SPEED = 620;
@@ -147,6 +164,11 @@ export class GestureRecognizer {
    * mobília, e a única coisa que se faz com ela é pousá-la noutra casa.
    */
   private heldScenery: number | null = null;
+  /** A criatura no colo, e o relógio que a levou até lá. */
+  private heldCreature: number | null = null;
+  private creatureHold = 0;
+  /** A mão já fechou sobre ela: o próximo arrasto a levanta. */
+  private liftArmed = false;
   /** Segundos de dedo apoiado, e o que está embaixo dele. */
   private holdTime = 0;
   private holdTarget: { kind: 'item' | 'scenery'; index: number } | null = null;
@@ -194,6 +216,11 @@ export class GestureRecognizer {
     return this.heldItem;
   }
 
+  /** Quem está no colo agora, se alguém. */
+  get carriedCreature(): number | null {
+    return this.heldCreature;
+  }
+
   /**
    * O quanto falta para o que está sob o dedo ceder, de 0 a 1.
    *
@@ -203,7 +230,9 @@ export class GestureRecognizer {
    */
   get liftProgress(): number {
     if (!this.down || this.heldScenery !== null || this.heldItem !== null) return 0;
-    if (this.pettingId !== null || this.holdTarget === null) return 0;
+    if (this.heldCreature !== null) return 1;
+    if (this.pettingId !== null) return Math.min(1, this.creatureHold / HOLD_CREATURE);
+    if (this.holdTarget === null) return 0;
     return Math.min(1, this.holdTime / (this.holdTarget.kind === 'item' ? HOLD_ITEM : HOLD_LIFT));
   }
 
@@ -227,7 +256,15 @@ export class GestureRecognizer {
     // no mesmo gesto, e quem apertava e esperava — que é o que todo mundo faz
     // num celular — não conseguia levantar nada. Agora o tempo conta sozinho,
     // e o dedo pode ficar quieto.
-    if (this.down && this.heldItem === null && this.heldScenery === null) {
+    // Com a criatura no colo, o relógio da pegada PARA. Sem esta linha, quem
+    // levantasse um bicho continuava apertando o chão embaixo dele — e meio
+    // segundo depois estava com a criatura numa mão e a árvore na outra.
+    if (
+      this.down &&
+      this.heldItem === null &&
+      this.heldScenery === null &&
+      this.heldCreature === null
+    ) {
       this.holdTime += dt;
       if (this.holdTarget === null && this.pettingId === null) {
         const item = this.probe.itemAt(this.downX, this.downY);
@@ -250,6 +287,19 @@ export class GestureRecognizer {
           }
           this.state = 'holding';
         }
+      }
+    }
+
+    // O RELÓGIO DO COLO. A mão apoiada nela, sem sair do lugar, vai fechando —
+    // e quando fecha, basta puxar. Andar com a mão em cima é carinho, e o
+    // relógio zera: são gestos diferentes e não podem virar o mesmo.
+    if (this.down && this.pettingId !== null && this.heldCreature === null) {
+      const still = Math.hypot(this.lastX - this.downX, this.lastY - this.downY) <= DRAG_THRESHOLD;
+      if (still && this.probe.canGrab()) {
+        this.creatureHold += dt;
+        if (this.creatureHold >= HOLD_CREATURE) this.liftArmed = true;
+      } else if (!this.liftArmed) {
+        this.creatureHold = 0;
       }
     }
 
@@ -304,6 +354,8 @@ export class GestureRecognizer {
     this.petRemembered = false;
     this.holdTime = 0;
     this.holdTarget = null;
+    this.creatureHold = 0;
+    this.liftArmed = false;
 
     // Duplo clique perto de uma criatura chama sua atenção.
     const creature = this.probe.creatureAt(x, y);
@@ -388,6 +440,24 @@ export class GestureRecognizer {
       return;
     }
 
+    // Já com a criatura no colo: ela acompanha a mão.
+    if (this.heldCreature !== null) {
+      this.state = 'holding';
+      this.handlers.onCarryCreature(this.heldCreature, x, y);
+      return;
+    }
+
+    // A MÃO FECHOU E AGORA PUXA: a criatura sai do chão.
+    if (this.liftArmed && this.pettingId !== null && this.moved) {
+      this.heldCreature = this.pettingId;
+      this.pettingId = null;
+      this.liftArmed = false;
+      this.state = 'holding';
+      this.handlers.onLiftCreature(this.heldCreature);
+      this.handlers.onCarryCreature(this.heldCreature, x, y);
+      return;
+    }
+
     // Já carregando: o objeto acompanha a mão.
     if (this.heldItem !== null) {
       this.state = 'holding';
@@ -458,6 +528,11 @@ export class GestureRecognizer {
       this.heldScenery = null;
       this.state = 'dropping';
       this.dropAnim = 0.25;
+    } else if (this.heldCreature !== null) {
+      this.handlers.onDropCreature(this.heldCreature, x, y, this.velX, this.velY);
+      this.heldCreature = null;
+      this.state = 'dropping';
+      this.dropAnim = 0.25;
     } else if (this.heldItem !== null) {
       this.handlers.onRelease(this.heldItem, x, y, this.velX, this.velY);
       this.heldItem = null;
@@ -516,6 +591,14 @@ export class GestureRecognizer {
       this.handlers.onDropScenery(this.heldScenery, this.lastX, this.lastY);
       this.heldScenery = null;
     }
+    // E a criatura desce, com cuidado: cancelar um gesto não pode deixar um
+    // bicho pendurado no ar para sempre.
+    if (this.heldCreature !== null) {
+      this.handlers.onDropCreature(this.heldCreature, this.lastX, this.lastY, 0, 0);
+      this.heldCreature = null;
+    }
+    this.creatureHold = 0;
+    this.liftArmed = false;
     this.down = false;
     this.pettingId = null;
     this.state = 'open';

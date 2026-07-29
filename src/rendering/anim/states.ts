@@ -1,4 +1,4 @@
-import { EGG_CRACK_AT, MOOD, POSE, type Intent } from '@core';
+import { MOOD, POSE, type Intent } from '@core';
 
 /**
  * A MÁQUINA DE ESTADOS DA CRIATURA.
@@ -20,6 +20,14 @@ import { EGG_CRACK_AT, MOOD, POSE, type Intent } from '@core';
  *
  * As chaves são as do catálogo — os nomes do meio dos arquivos de sprite. Uma
  * chave que não existir na pasta cai no `idle`, e o carregador avisa.
+ *
+ * O OVO NÃO ESTÁ AQUI, e é uma decisão. A folha traz `chocarOvo`,
+ * `ovoRachando`, `nascimento` — mas nenhuma delas é um ovo: todas mostram o
+ * PAI ao lado do ovo, chocando, esperando, recebendo. Usar qualquer uma para
+ * desenhar um ovo do jardim põe na tela uma criatura que não existe, ao lado
+ * do ovo de verdade — foi o que aconteceu, e o jogador passou a tentar fazer
+ * carinho num desenho. O ovo continua com o desenho dele, no renderer; estas
+ * animações ficam guardadas para quando houver criatura chocando de verdade.
  */
 
 /** O que a máquina precisa saber da criatura. Vem do buffer de render. */
@@ -43,18 +51,15 @@ export interface CreatureSignals {
   health: number;
   /** A mão do jogador está encostada nela? */
   touched: boolean;
-  /**
-   * -1 para quem já nasceu; 0..1 para quem ainda está na casca, medindo o
-   * quanto falta para romper.
-   */
-  hatching: number;
+  /** No colo: os pés dela não estão no chão. */
+  carried: boolean;
   isBaby: boolean;
 }
 
 /** Nome do estado — o vocabulário do briefing. */
 export type StateName =
-  | 'Egg'
   | 'Dead'
+  | 'Held'
   | 'Sick'
   | 'Fear'
   | 'Trauma'
@@ -146,15 +151,6 @@ export const POSE_CLIP: Readonly<Record<number, string>> = {
  */
 export const STATES: readonly StateRule[] = [
   {
-    // A CASCA. Quase toda a espera é o ovo respirando; no fim, ele racha — e é
-    // a própria animação que conta que está chegando a hora.
-    state: 'Egg',
-    when: (s) => s.hatching >= 0,
-    clip: (s) => (s.hatching > EGG_CRACK_AT ? 'ovoRachando' : 'chocarOvo'),
-    priority: PRIORITY.fatal,
-    rate: (s) => 0.7 + s.hatching * 0.8,
-  },
-  {
     state: 'Dead',
     when: (s) => s.health <= 0,
     clip: () => 'morte',
@@ -184,6 +180,20 @@ export const STATES: readonly StateRule[] = [
       s.isBaby ? (s.moving ? 'filhoteFoge' : 'filhoteChora') : s.moving ? 'fugir' : 'assustar',
     priority: PRIORITY.urgent,
     rate: () => 1.2,
+  },
+  {
+    // NO COLO. Vem antes de tudo que é rotina e depois do que é grave: uma
+    // criatura morrendo na sua mão está morrendo, não sendo carregada.
+    //
+    // Os dois desenhos são a história inteira do gesto: quem confia se
+    // aninha, quem não confia se debate — e é a MESMA mão fazendo a mesma
+    // coisa. O que muda é de quem é o colo.
+    state: 'Held',
+    when: (s) => s.carried,
+    clip: (s) => (s.fear > 0.5 || s.scar > 0.3 ? 'balancar' : 'colo'),
+    enter: () => 'erguer',
+    priority: PRIORITY.interaction,
+    rate: (s) => (s.fear > 0.5 ? 1.4 : 0.9),
   },
   {
     state: 'Bath',

@@ -284,3 +284,25 @@ export interface Behavior {
   cooldown: number;
 }
 export const Behavior = defineComponent<Behavior>('Behavior');
+
+/**
+ * NO COLO — a criatura está na mão do jogador.
+ *
+ * É um componente e não uma flag dentro de `Mind` porque enquanto ela está no
+ * ar ela sai do mundo pelo mesmo mecanismo que o ovo usa para não ser criatura:
+ * quem a carrega é a mão, e os sistemas que a moveriam simplesmente passam por
+ * ela. A intenção continua lá dentro, intacta — quando os pés voltam ao chão,
+ * ela continua o que estava fazendo.
+ *
+ * O tempo no ar importa: bicho nenhum gosta de ficar pendurado para sempre. Os
+ * primeiros segundos no colo de quem ela confia são carinho; passados eles,
+ * ela começa a se debater.
+ */
+export interface Carried {
+  /** Segundos no ar. */
+  time: number;
+  /** De onde ela foi levantada, para saber a queda quando for solta. */
+  fromX: number;
+  fromY: number;
+}
+export const Carried = defineComponent<Carried>('Carried');

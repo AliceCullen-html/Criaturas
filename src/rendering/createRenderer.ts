@@ -15,7 +15,13 @@ import {
   tileRows,
 } from '@core';
 import type { CreatureRenderBuffer, RenderBuffer, TileGrid } from '@engine';
-import { FACING, headingOf, type Heading } from './textures/tintimSheet';
+import {
+  FACING,
+  eggFrame,
+  headingOf,
+  loadTintimFrames,
+  type Heading,
+} from './textures/tintimSheet';
 import { AnimationController } from './anim/AnimationController';
 import {
   ANCHOR_X,
@@ -300,6 +306,10 @@ const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
  * jardim não.
  */
 const CREATURE_SCALE = 29;
+/** O mesmo divisor, para o ovo — que continua desenhado na folha de 16 px. */
+const EGG_SCALE = 6.5;
+/** Quanto a criatura sobe na tela quando está no colo do jogador. */
+const CARRY_LIFT = 18;
 /**
  * A que distância do centro do corpo fica a sola do pé, em fração do tamanho.
  * É o mesmo número que posiciona a sombra: os dois têm de bater, senão a
@@ -327,6 +337,8 @@ interface CreatureSlot {
   /** O sprite de baixo, onde a animação que está saindo termina de sumir. */
   fading: Sprite;
   anim: AnimationController;
+  /** Ainda na casca? O ovo tem folha, âncora e escala próprias. */
+  isEgg: boolean;
   facing: number;
   seen: number;
   /** Onde ela estava no quadro anterior, para medir a velocidade de verdade. */
@@ -392,6 +404,18 @@ export function createRenderer(options: RendererOptions): Renderer {
    * a animação — e a máquina de estados a pedir pelo nome.
    */
   let clips: ClipCatalog = new Map();
+  /**
+   * O OVO — que continua sendo da folha antiga, e não da pasta de animações.
+   *
+   * A pasta tem `chocarOvo`, `ovoRachando`, `nascimento`; nenhuma delas é um
+   * ovo. Todas mostram o PAI ao lado do ovo — é o que o artista desenhou, e faz
+   * sentido para uma criatura chocando. Para o ovo do jardim, que está sozinho
+   * na grama, elas põem na tela uma criatura que não existe: o jogador vê um
+   * bicho, tenta fazer carinho nele e nada acontece, porque ali só há um ovo.
+   * Enquanto a folha não trouxer uma casca sozinha, o ovo mantém o desenho que
+   * sempre teve.
+   */
+  let eggFrames: Texture[] = [];
   let resourceTextures: Texture[] = [];
   let waterFrames: Texture[] = [];
   let leafTextures: Texture[] = [];
@@ -509,7 +533,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     energy: 1,
     health: 1,
     touched: false,
-    hatching: -1,
+    carried: false,
     isBaby: false,
   };
   /** Onde a criatura que está tocando uma animação está, para as partículas. */
@@ -1153,6 +1177,8 @@ export function createRenderer(options: RendererOptions): Renderer {
       propTextures[PROP_LOG] = [art.statics.log];
       // AS ANIMAÇÕES DA CRIATURA — a pasta inteira, de uma vez.
       clips = await loadClipCatalog();
+      // E os quadros do ovo, que vêm da folha antiga (ver `eggFrames`).
+      eggFrames = await loadTintimFrames();
 
       // A bola e os presentes NÃO são desenhados por código: são os ícones
       // desenhados à mão, os mesmos do cinto e do cursor. O que o jogador
@@ -1830,6 +1856,7 @@ export function createRenderer(options: RendererOptions): Renderer {
               frameCount: (key) => clips.get(key)?.frames.length ?? 1,
               onEvent: (emit) => playFrameEvent(emit, emitAt.x, emitAt.y, emitAt.size),
             }),
+            isEgg: false,
             facing: 1,
             seen: frameId,
             phase: (id % 17) * 0.41,
@@ -1861,6 +1888,58 @@ export function createRenderer(options: RendererOptions): Renderer {
         // romper, e -1 quer dizer "isto aqui já nasceu".
         const hatching = creatures.egg[i]!;
 
+        // O OVO — e ele sai por aqui, antes de tudo.
+        //
+        // Quem está na casca não anda, não tem humor, não gesticula e não tem
+        // máquina de estados: só existe o quanto falta para romper. E o desenho
+        // dele não vem da pasta de animações (ver `eggFrames`), então nem a
+        // âncora nem a escala do corpo servem — são as da folha antiga.
+        if (hatching >= 0) {
+          if (!slot.isEgg) {
+            slot.isEgg = true;
+            slot.sprite.anchor.set(0.5, 1);
+            slot.fading.visible = false;
+            slot.sprite.alpha = 1;
+          }
+          const shell = eggFrames[eggFrame(hatching)];
+          if (shell && slot.sprite.texture !== shell) slot.sprite.texture = shell;
+          const eggScale = size / EGG_SCALE;
+          // O ovo não respira nem se inclina — ele BALANÇA, e cada vez mais
+          // perto da hora. Um ovo perfeitamente imóvel parece um enfeite do
+          // cenário; esse tremor é o que diz que há alguém ali dentro.
+          const stir = hatching * hatching;
+          slot.container.scale.set(eggScale, eggScale);
+          slot.container.rotation =
+            Math.sin(elapsed * (3 + hatching * 9) + slot.phase) * 0.06 * stir;
+          slot.container.position.set(
+            isoX(cx, cy),
+            isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH,
+          );
+          slot.container.zIndex = isoDepth(cx, cy);
+          slot.seen = frameId;
+          const eggFoot = size * GROUND_CONTACT * ISO_SQUASH;
+          shadowG
+            .ellipse(cx + eggFoot, cy + eggFoot, size * SHADOW_RADIUS, size * SHADOW_RADIUS)
+            .fill({
+              color: SHADOW_COLOR,
+              alpha: 0.24,
+            });
+          if (id === input.selectedId) {
+            selX = cx + eggFoot;
+            selY = cy + eggFoot;
+            selSize = size;
+            selFound = true;
+          }
+          continue;
+        }
+        if (slot.isEgg) {
+          // NASCEU. A entidade é a mesma — o nome que estava no ovo é o nome de
+          // quem saiu dele —, então o slot também é, e ele troca de vida aqui.
+          slot.isEgg = false;
+          slot.sprite.anchor.set(ANCHOR_X, ANCHOR_Y);
+          slot.container.rotation = 0;
+        }
+
         // A DIREÇÃO em que ela caminha decide para que lado o desenho olha.
         if (movedNow > 0.001) {
           slot.heading = headingOf(wentX - wentY, (wentX + wentY) * ISO_SQUASH);
@@ -1885,7 +1964,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         signals.energy = creatures.energy[i]!;
         signals.health = creatures.health[i]!;
         signals.touched = pettingId === id;
-        signals.hatching = hatching;
+        signals.carried = creatures.carried[i] === 1;
         signals.isBaby = stage === 0;
 
         // Onde as partículas de quadro vão sair. Lido pelo `onEvent` do slot,
@@ -1937,18 +2016,25 @@ export function createRenderer(options: RendererOptions): Renderer {
         slot.container.scale.set(slot.facing * scale, scale * breath);
         slot.container.rotation = 0;
 
-        // O PÉ NO CHÃO.
+        // O PÉ NO CHÃO — ou no ar, se ela estiver no colo.
         //
         // A posição da criatura no mundo é o centro do corpo, não a sola do
         // pé — é com o centro que a simulação faz colisão. A sombra sempre foi
         // desenhada embaixo desse centro, à distância do raio do corpo. O
         // desenho desce a mesma distância: sem isso a criatura fica com os pés
         // acima da própria sombra, que é exatamente a cara de quem flutua.
+        //
+        // Erguida, ela sobe NA TELA — não no mundo: subir no mundo a mandaria
+        // na diagonal — e passa na frente de tudo, porque está mais perto de
+        // quem olha. É a mesma conta da árvore levantada do chão. A sombra
+        // fica onde estava, no chão, e é ela que conta que a criatura está no
+        // ar: sem sombra parada embaixo, erguer não se lê.
+        const inHand = creatures.carried[i] === 1;
         slot.container.position.set(
           isoX(cx, cy),
-          isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH,
+          isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH - (inHand ? CARRY_LIFT : 0),
         );
-        slot.container.zIndex = isoDepth(cx, cy);
+        slot.container.zIndex = isoDepth(cx, cy) + (inHand ? LIFT_DEPTH_BONUS : 0);
 
         slot.seen = frameId;
 
@@ -2495,6 +2581,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         source?.destroy();
       }
       clips = new Map();
+      for (const frame of eggFrames) frame.destroy();
+      eggFrames = [];
       if (app) {
         app.destroy(true, { children: true });
         app = null;

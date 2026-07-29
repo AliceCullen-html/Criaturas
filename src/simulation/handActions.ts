@@ -1,8 +1,9 @@
 import { POSE, clamp, clamp01, subjects } from '@core';
-import { Transform, type World } from '@engine';
+import { Transform, Velocity, type World } from '@engine';
 import {
   Attributes,
   Behavior,
+  Carried,
   Creature,
   Emotions,
   Identity,
@@ -254,6 +255,132 @@ export function roughGesture(
   }
 
   witnessTheBlow(world, id, transform.x, transform.y);
+}
+
+/**
+ * O COLO — pegar uma criatura no colo.
+ *
+ * A coisa mais íntima que a mão faz. Um objeto do jardim é levantado sem
+ * cerimônia; um bicho vivo, não: quem confia em você se deixa levar, quem não
+ * confia se debate. E é reversível de um jeito que nada mais é — a criatura
+ * larga o que estava fazendo, atravessa o jardim no ar e é posta noutro lugar,
+ * o que faz do colo, além de carinho, a única maneira de TIRAR uma criatura de
+ * onde ela se meteu.
+ */
+const CARRY_TRUST_FOR_CALM = 0.45;
+/** Segundos de colo até o bicho começar a se incomodar. */
+export const CARRY_PATIENCE = 6;
+/** Acima disto, largar não é largar: é atirar. */
+const TOSS_SPEED = 320;
+
+/** Levanta a criatura. Devolve `false` se não havia ninguém ali. */
+export function liftCreature(world: World, id: number): boolean {
+  const transform = world.store(Transform).get(id);
+  const emotions = world.store(Emotions).get(id);
+  const mind = world.store(Mind).get(id);
+  if (!transform || !emotions || !mind) return false;
+  if (world.store(Carried).get(id)) return true;
+
+  world.store(Carried).set(id, { time: 0, fromX: transform.x, fromY: transform.y });
+  const velocity = world.store(Velocity).get(id);
+  if (velocity) {
+    velocity.x = 0;
+    velocity.y = 0;
+  }
+  // Sair do chão é sempre um susto — pequeno em quem confia, grande em quem
+  // não confia. A cicatriz pesa aqui: uma criatura marcada não se deixa pegar.
+  const calm = emotions.trust > CARRY_TRUST_FOR_CALM && emotions.scar < 0.3;
+  emotions.fear = clamp01(emotions.fear + (calm ? 0.05 : 0.3));
+  mind.surprise = 1.2;
+  mind.commitment = 0;
+
+  const behavior = world.store(Behavior).get(id);
+  if (behavior) {
+    behavior.pose = POSE.none;
+    behavior.elapsed = 0;
+    behavior.cooldown = 0.5;
+  }
+  return true;
+}
+
+/** A criatura no colo acompanha a mão. */
+export function moveCarried(world: World, id: number, x: number, y: number): void {
+  const transform = world.store(Transform).get(id);
+  if (!transform || !world.store(Carried).get(id)) return;
+  transform.prevX = transform.x;
+  transform.prevY = transform.y;
+  transform.x = clamp(x, 3, world.config.width - 3);
+  transform.y = clamp(y, 3, world.config.height - 3);
+}
+
+/**
+ * Põe a criatura no chão — ou a arremessa, que é outra coisa inteiramente.
+ *
+ * O gesto decide: pousada devagar, ela desce, se sacode e segue a vida um
+ * pouco mais próxima de quem a pôs ali. Atirada, é queda: dói, assusta e fica
+ * na memória com o nome de quem fez.
+ */
+export function dropCreature(world: World, id: number, vx: number, vy: number): void {
+  const carried = world.store(Carried).get(id);
+  if (!carried) return;
+  world.store(Carried).remove(id);
+
+  const emotions = world.store(Emotions).get(id);
+  const memory = world.store(Memory).get(id);
+  const transform = world.store(Transform).get(id);
+  if (!emotions || !memory || !transform) return;
+
+  const speed = Math.hypot(vx, vy);
+  if (speed >= TOSS_SPEED) {
+    // ATIRADA. Isto não é largar: é o mesmo gesto de bater, com o bicho na mão.
+    const needs = world.store(Needs).get(id);
+    emotions.fear = clamp01(emotions.fear + 0.45);
+    emotions.trust = clamp01(emotions.trust - 0.25);
+    emotions.trauma = clamp01(emotions.trauma + ROUGH_TRAUMA);
+    emotions.pain = clamp01(emotions.pain + 0.5);
+    if (needs) needs.health = clamp01(needs.health - 0.06);
+    memory.record(subjects.player(), -0.9, 0.8);
+    memory.addEpisode({
+      text: 'Você me jogou longe',
+      valence: -0.9,
+      intensity: 0.9,
+      emotion: 'pânico',
+      ...episodeBase(world, id),
+    });
+    const behavior = world.store(Behavior).get(id);
+    if (behavior) {
+      behavior.pose = POSE.hurt;
+      behavior.elapsed = 0;
+      behavior.duration = 2.5;
+      behavior.cooldown = 0;
+    }
+    return;
+  }
+
+  // POUSADA COM CUIDADO. O tempo no ar decide se foi carinho ou aflição: um
+  // colo curto aproxima, um colo comprido cansa — e é a própria criatura quem
+  // diz qual dos dois foi, pelo tanto que ficou pendurada.
+  const gentle = carried.time <= CARRY_PATIENCE;
+  emotions.fear = clamp01(emotions.fear - (gentle ? 0.1 : 0));
+  emotions.trust = clamp01(emotions.trust + (gentle ? 0.05 : -0.05));
+  emotions.happiness = clamp01(emotions.happiness + (gentle ? 0.06 : -0.04));
+  memory.record(subjects.player(), gentle ? 0.5 : -0.3, 0.4);
+  memory.record(subjects.place(transform.x, transform.y), gentle ? 0.2 : -0.1, 0.2);
+  memory.addEpisode({
+    text: gentle ? 'Você me pegou no colo' : 'Você me segurou tempo demais',
+    valence: gentle ? 0.6 : -0.4,
+    intensity: 0.5,
+    emotion: gentle ? 'carinho' : 'aflição',
+    ...episodeBase(world, id),
+  });
+  // Ela se sacode ao pousar — o gesto de quem acabou de pôr o pé no chão.
+  const behavior = world.store(Behavior).get(id);
+  if (behavior) {
+    behavior.pose = POSE.shake;
+    behavior.elapsed = 0;
+    behavior.duration = 1.2;
+    behavior.cooldown = 0;
+  }
 }
 
 /**

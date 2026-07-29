@@ -29,7 +29,7 @@ const base: CreatureSignals = {
   energy: 1,
   health: 1,
   touched: false,
-  hatching: -1,
+  carried: false,
   isBaby: false,
 };
 
@@ -78,7 +78,11 @@ function everySignal(): CreatureSignals[] {
   out.push({ ...base, scar: 0.6, fear: 0.7 }, { ...base, scar: 0.6, fear: 0.7, moving: true });
   out.push({ ...base, fear: 0.9 }, { ...base, fear: 0.9, moving: true, isBaby: true });
   out.push({ ...base, touched: true }, { ...base, carrying: true });
-  out.push({ ...base, hatching: 0 }, { ...base, hatching: 0.99 });
+  out.push(
+    { ...base, carried: true },
+    { ...base, carried: true, fear: 0.9 },
+    { ...base, carried: true, scar: 0.5 },
+  );
   out.push({ ...base, moving: true, speed: 80 });
   return out;
 }

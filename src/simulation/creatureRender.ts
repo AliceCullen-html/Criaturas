@@ -7,6 +7,7 @@ import {
   Behavior,
   Bio,
   Creature,
+  Carried,
   Egg,
   Emotions,
   Mind,
@@ -15,6 +16,8 @@ import {
 import { growthScale, lifeStage } from './age';
 
 const carrying = new Set<number>();
+/** Quem está no colo do jogador — reaproveitado a cada tique, como o de cima. */
+const inHand = new Set<number>();
 
 /** Marca de "esta linha é uma criatura, não um ovo". */
 const NOT_AN_EGG = -1;
@@ -73,6 +76,12 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const behaviors = world.store(Behavior);
   const emotions = world.store(Emotions);
   const needs = world.store(Needs);
+  // Quem está no colo do jogador. O renderer precisa saber: no ar, a criatura
+  // não anda, não gesticula e é desenhada erguida, presa à mão.
+  inHand.clear();
+  if (world.hasComponent(Carried)) {
+    world.store(Carried).forEach((_held, entity) => inHand.add(entity));
+  }
 
   // Quem está com alguma coisa na boca. Uma passada só pela lista de objetos,
   // em vez de uma busca por criatura — são poucos objetos e muitas criaturas.
@@ -121,6 +130,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       egg: NOT_AN_EGG,
       playing: playFrame(world, mind, transform, moving),
       intent: INTENT[mind.intent],
+      carried: inHand.has(entity) ? 1 : 0,
       scar: emotion?.scar ?? 0,
       fear: emotion?.fear ?? 0,
       happiness: emotion?.happiness ?? 0.5,
@@ -162,6 +172,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       egg: Math.min(1, egg.time / egg.duration),
       playing: 0,
       intent: 0,
+      carried: 0,
       scar: 0,
       fear: 0,
       happiness: 0.5,
