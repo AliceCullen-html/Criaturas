@@ -25,6 +25,7 @@ const calmo: CreatureSignals = {
   health: 1,
   touched: false,
   carried: false,
+  lift: 0,
   isBaby: false,
 };
 
@@ -176,5 +177,33 @@ describe('um gesto pedido de fora', () => {
 
     run(c, { ...calmo, moving: true, speed: 20 }, 1.5);
     expect(c.clip).toBe('caminhar');
+  });
+});
+
+describe('o colo, no corpo dela', () => {
+  it('no ar ela é carregada; caindo, ela cai; no chão, ela se levanta', () => {
+    const c = controlador({ random: () => 0.99 });
+    run(c, calmo, 0.2);
+
+    // Erguida: entra com o gesto de subir e fica no colo.
+    c.update({ ...calmo, carried: true, lift: 4 }, 1 / 60);
+    expect(c.current).toBe('Held');
+    expect(c.clip).toBe('erguer');
+    run(c, { ...calmo, carried: true, lift: 18 }, 1);
+    expect(c.clip).toBe('colo');
+
+    // Chacoalhada: a mão depressa muda o desenho.
+    run(c, { ...calmo, carried: true, lift: 18, speed: 300 }, 0.4);
+    expect(c.clip, 'sacudiram e ela nem se mexeu').toBe('sacudir');
+
+    // Solta: cai.
+    run(c, { ...calmo, lift: 14 }, 0.3);
+    expect(c.current).toBe('Falling');
+    expect(c.clip).toBe('cairMao');
+
+    // E ao encostar no chão, primeiro se levanta.
+    c.update({ ...calmo, lift: 0, pose: 9 }, 1 / 60);
+    expect(c.current).toBe('Pose');
+    expect(c.clip, 'passou do ar para o gesto seguinte sem se levantar').toBe('levantarQueda');
   });
 });

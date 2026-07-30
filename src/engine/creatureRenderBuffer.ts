@@ -33,6 +33,8 @@ export interface CreatureRenderRow {
   playing: number;
   intent: number;
   carried: number;
+  lift: number;
+  prevLift: number;
   scar: number;
   fear: number;
   happiness: number;
@@ -80,6 +82,16 @@ export class CreatureRenderBuffer {
   readonly intent: Uint8Array;
   /** 1 enquanto ela está no colo do jogador — no ar, e não no chão. */
   readonly carried: Uint8Array;
+  /**
+   * A que altura do chão ela está, em pixels de TELA — no colo ou caindo.
+   *
+   * De tela, e não de mundo, porque o jardim é plano: a terceira dimensão aqui
+   * é desenho, a mesma da bola. Vem com o valor do passo anterior porque a
+   * queda dura poucos décimos e a simulação corre a vinte passos por segundo:
+   * sem interpolar, um tombo desce em degraus.
+   */
+  readonly lift: Float32Array;
+  readonly prevLift: Float32Array;
   /** A marca que não passa, 0..1 — o corpo de uma criatura marcada é outro. */
   readonly scar: Float32Array;
   readonly fear: Float32Array;
@@ -110,6 +122,8 @@ export class CreatureRenderBuffer {
     this.playing = new Uint8Array(capacity);
     this.intent = new Uint8Array(capacity);
     this.carried = new Uint8Array(capacity);
+    this.lift = new Float32Array(capacity);
+    this.prevLift = new Float32Array(capacity);
     this.scar = new Float32Array(capacity);
     this.fear = new Float32Array(capacity);
     this.happiness = new Float32Array(capacity);
@@ -154,6 +168,8 @@ export class CreatureRenderBuffer {
     this.playing[i] = row.playing;
     this.intent[i] = row.intent;
     this.carried[i] = row.carried;
+    this.lift[i] = row.lift;
+    this.prevLift[i] = row.prevLift;
     this.scar[i] = row.scar;
     this.fear[i] = row.fear;
     this.happiness[i] = row.happiness;

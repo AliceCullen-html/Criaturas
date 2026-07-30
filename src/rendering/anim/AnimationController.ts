@@ -98,6 +98,8 @@ export class AnimationController {
   private state: StateName | null = null;
   private fillerIn: number;
   private lastKey: string | null = null;
+  /** O que está tocando veio de fora (um gesto), e não da máquina de estados. */
+  private guest = false;
 
   constructor(private readonly options: ControllerOptions) {
     this.animator = new Animator({ frameCount: options.frameCount, fps: options.fps });
@@ -126,11 +128,14 @@ export class AnimationController {
    */
   trigger(key: string, options: PlayOptions = {}): boolean {
     if (!this.options.has(key)) return false;
-    return this.animator.play(key, {
+    const played = this.animator.play(key, {
       priority: PRIORITY.interaction,
       ...options,
       onFrame: (frame, clip) => this.fire(frame, clip),
     });
+    // Quem está tocando agora é de FORA, e o estado espera a vez dele.
+    if (played) this.guest = true;
+    return played;
   }
 
   /** O que desenhar agora. */
@@ -141,21 +146,41 @@ export class AnimationController {
   /** Chamado a cada quadro do jogo. */
   update(signals: CreatureSignals, dt: number): void {
     const rule = stateFor(signals);
-    const changed = rule.state !== this.state;
     const from = this.state;
 
+    // O ESTADO NÃO É REFÉM DO PRÓPRIO DESENHO.
+    //
+    // Quem adia uma troca de estado é um gesto vindo de FORA — o tapa, a
+    // palavra dita, a fruta no focinho — e só enquanto ele estiver tocando. A
+    // animação do estado anterior, não: ela existe porque aquele estado
+    // existia, e no instante em que ele acaba ela perdeu o direito à tela.
+    //
+    // A prioridade sozinha não sabe fazer essa distinção, e isso deu um
+    // defeito real: cair é urgente, o gesto de se levantar ao encostar no chão
+    // é rotina, e a queda — que é um LAÇO, nunca termina — recusava a saída
+    // pela régua de prioridade. A criatura pousava e continuava caindo para
+    // sempre. Por isso a marca `guest`: ela separa "estou tocando o estado" de
+    // "estou tocando um pedido de fora".
+    if (this.guest && this.animator.finished) this.guest = false;
+    const waiting =
+      this.guest && !this.animator.finished && this.animator.priority >= rule.priority;
+    if (waiting) {
+      this.animator.update(dt);
+      return;
+    }
+
+    const changed = rule.state !== this.state;
     if (changed) {
       this.state = rule.state;
       // A TRAVESSIA: primeiro a animação de entrada, uma vez só, e depois o
       // laço do estado. É o que impede o pulo seco entre andar e parar.
       const enter = rule.enter?.(signals, from) ?? null;
       if (enter && this.options.has(enter)) {
-        this.animator.play(enter, {
+        this.animator.interrupt(enter, {
           priority: rule.priority,
           crossfade: CROSSFADE,
           onFrame: (frame, clip) => this.fire(frame, clip),
         });
-        this.animator.clearQueue();
         this.animator.queue(this.loopOf(rule, signals), {
           loop: true,
           priority: rule.priority,
@@ -169,16 +194,20 @@ export class AnimationController {
 
     const wanted = this.loopOf(rule, signals);
     const playing = this.animator.playing;
-    const busy = !this.animator.finished && this.animator.priority > rule.priority;
 
-    // Uma animação de uma vez só (um gesto, uma microanimação) está no ar:
-    // deixa terminar. O estado espera — é o que evita cortar o bocejo no meio
-    // porque a criatura deu um passo.
-    if (!busy && (changed || playing !== wanted)) {
+    if (changed) {
+      this.animator.interrupt(wanted, {
+        loop: true,
+        priority: rule.priority,
+        crossfade: CROSSFADE,
+        onFrame: (frame, clip) => this.fire(frame, clip),
+      });
+    } else if (playing !== wanted) {
+      // O MESMO estado pode querer outro desenho: no colo, a mão que acelera
+      // troca "aninhada" por "sacudida" sem que o estado mude.
       this.animator.play(wanted, {
         loop: true,
         priority: rule.priority,
-        crossfade: changed ? CROSSFADE : 0,
         onFrame: (frame, clip) => this.fire(frame, clip),
       });
     }
@@ -196,14 +225,15 @@ export class AnimationController {
       if (rule.priority <= PRIORITY.idle) {
         const filler = this.pickFiller();
         if (filler) {
-          this.animator.play(filler, {
+          // Ela entra como HÓSPEDE, igual a um gesto: é de uma vez só, e tem
+          // direito de terminar antes de o laço do ocioso voltar. Quando acaba,
+          // o laço volta sozinho, porque o desenho pedido deixou de ser este.
+          const played = this.animator.play(filler, {
             priority: rule.priority,
             crossfade: CROSSFADE,
             onFrame: (frame, clip) => this.fire(frame, clip),
-            onEnd: () => {
-              this.animator.play(wanted, { loop: true, priority: rule.priority });
-            },
           });
+          if (played) this.guest = true;
         }
       }
     }

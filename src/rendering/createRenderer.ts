@@ -308,8 +308,6 @@ const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
 const CREATURE_SCALE = 29;
 /** O mesmo divisor, para o ovo — que continua desenhado na folha de 16 px. */
 const EGG_SCALE = 6.5;
-/** Quanto a criatura sobe na tela quando está no colo do jogador. */
-const CARRY_LIFT = 18;
 /**
  * A que distância do centro do corpo fica a sola do pé, em fração do tamanho.
  * É o mesmo número que posiciona a sombra: os dois têm de bater, senão a
@@ -534,6 +532,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     health: 1,
     touched: false,
     carried: false,
+    lift: 0,
     isBaby: false,
   };
   /** Onde a criatura que está tocando uma animação está, para as partículas. */
@@ -1982,6 +1981,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         signals.health = creatures.health[i]!;
         signals.touched = pettingId === id;
         signals.carried = creatures.carried[i] === 1;
+        signals.lift = creatures.lift[i]!;
         signals.isBaby = stage === 0;
 
         // Onde as partículas de quadro vão sair. Lido pelo `onEvent` do slot,
@@ -2041,17 +2041,21 @@ export function createRenderer(options: RendererOptions): Renderer {
         // desenho desce a mesma distância: sem isso a criatura fica com os pés
         // acima da própria sombra, que é exatamente a cara de quem flutua.
         //
-        // Erguida, ela sobe NA TELA — não no mundo: subir no mundo a mandaria
-        // na diagonal — e passa na frente de tudo, porque está mais perto de
-        // quem olha. É a mesma conta da árvore levantada do chão. A sombra
-        // fica onde estava, no chão, e é ela que conta que a criatura está no
-        // ar: sem sombra parada embaixo, erguer não se lê.
-        const inHand = creatures.carried[i] === 1;
+        // NO AR, ela sobe NA TELA — não no mundo: subir no mundo a mandaria na
+        // diagonal — e passa na frente de tudo, porque está mais perto de quem
+        // olha. É a mesma conta da árvore levantada do chão. A sombra fica onde
+        // estava, no chão, e é ela que conta a altura: sem sombra parada
+        // embaixo, erguer não se lê, e a queda não tem para onde cair.
+        //
+        // A altura é interpolada como a posição. A queda dura três décimos e a
+        // simulação corre a vinte passos por segundo: sem isto ela desceria em
+        // seis degraus visíveis em vez de cair.
+        const lift = lerp(creatures.prevLift[i]!, creatures.lift[i]!, input.alpha);
         slot.container.position.set(
           isoX(cx, cy),
-          isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH - (inHand ? CARRY_LIFT : 0),
+          isoY(cx, cy) + size * GROUND_CONTACT * ISO_SQUASH - lift,
         );
-        slot.container.zIndex = isoDepth(cx, cy) + (inHand ? LIFT_DEPTH_BONUS : 0);
+        slot.container.zIndex = isoDepth(cx, cy) + (lift > 0.5 ? LIFT_DEPTH_BONUS : 0);
 
         slot.seen = frameId;
 

@@ -5,6 +5,7 @@ import {
   Behavior,
   Bond,
   Carried,
+  Falling,
   Nest,
   Appearance,
   Attributes,
@@ -72,6 +73,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Mind);
   world.register(Behavior);
   world.register(Carried);
+  world.register(Falling);
   world.register(Bond);
   world.register(Nest);
   world.register(Words);

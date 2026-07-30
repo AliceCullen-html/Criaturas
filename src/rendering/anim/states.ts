@@ -74,6 +74,8 @@ export interface CreatureSignals {
   touched: boolean;
   /** No colo: os pés dela não estão no chão. */
   carried: boolean;
+  /** A que altura do chão ela está, em pixels de tela. Caindo, isto some. */
+  lift: number;
   isBaby: boolean;
 }
 
@@ -81,6 +83,7 @@ export interface CreatureSignals {
 export type StateName =
   | 'Dead'
   | 'Held'
+  | 'Falling'
   | 'Sick'
   | 'Fear'
   | 'Trauma'
@@ -144,6 +147,8 @@ export interface StateRule {
 const RUN_SPEED = 42;
 /** A velocidade em que o ciclo de passo toca no tempo natural da folha. */
 const WALK_SPEED = 22;
+/** Acima disto, a mão não está levando a criatura: está sacudindo. */
+const SHAKE_SPEED = 90;
 
 /**
  * OS MICROCOMPORTAMENTOS, ligados ao desenho de cada um.
@@ -215,16 +220,27 @@ export const STATES: readonly StateRule[] = [
     // NO COLO. Vem antes de tudo que é rotina e depois do que é grave: uma
     // criatura morrendo na sua mão está morrendo, não sendo carregada.
     //
-    // Os dois desenhos são a história inteira do gesto: quem confia se
-    // aninha, quem não confia se debate — e é a MESMA mão fazendo a mesma
-    // coisa. O que muda é de quem é o colo.
+    // Os três desenhos são a história inteira do gesto: quem confia se aninha,
+    // quem não confia se debate, e quem está sendo CHACOALHADO se sacode. É a
+    // mesma mão fazendo coisas muito diferentes — e é a velocidade dela que
+    // separa levar um bicho de um lado para o outro de chacoalhar o bicho.
     state: 'Held',
     when: (s) => s.carried,
-    clip: (s) => (s.fear > 0.5 || s.scar > 0.3 ? 'balancar' : 'colo'),
+    clip: (s) =>
+      s.speed > SHAKE_SPEED ? 'sacudir' : s.fear > 0.5 || s.scar > 0.3 ? 'balancar' : 'colo',
     enter: () => 'erguer',
     priority: PRIORITY.interaction,
-    rate: (s) => (s.fear > 0.5 ? 1.4 : 0.9),
+    rate: (s) => (s.speed > SHAKE_SPEED ? 1.5 : s.fear > 0.5 ? 1.4 : 0.9),
     withProp: true,
+  },
+  {
+    // CAINDO. Largada da mão, ela desce — e o desenho da queda é o da queda da
+    // mão, que é de onde ela veio. Prioridade de urgência: no ar não existe
+    // fome, nem sono, nem vontade de brincar.
+    state: 'Falling',
+    when: (s) => s.lift > 0.5,
+    clip: () => 'cairMao',
+    priority: PRIORITY.urgent,
   },
   {
     state: 'Bath',
@@ -330,6 +346,10 @@ export const STATES: readonly StateRule[] = [
     state: 'Pose',
     when: (s) => !s.moving && POSE_CLIP[s.pose] !== undefined,
     clip: (s) => POSE_CLIP[s.pose]!,
+    // QUEM ACABOU DE CAIR PRIMEIRO SE LEVANTA. É a mesma ideia da freada ao
+    // sair da corrida: o corpo não pode passar do ar para o gesto seguinte sem
+    // o instante que liga os dois.
+    enter: (_s, from) => (from === 'Falling' ? 'levantarQueda' : null),
     priority: PRIORITY.gesture,
   },
   {

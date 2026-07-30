@@ -84,6 +84,7 @@ const MARKS_ONLY = new Set([
   'flutuar',
   'doente',
   'filhoteExplora', // um pontinho de interrogação sobre a cabeça
+  'cairMao', // riscos da queda
 ]);
 
 /** Caminho do PNG de cada animação, varrendo a pasta como o jogo faz. */
@@ -114,6 +115,7 @@ const base: CreatureSignals = {
   health: 1,
   touched: false,
   carried: false,
+  lift: 0,
   isBaby: false,
 };
 
@@ -147,6 +149,7 @@ function soloClips(): Set<string> {
     { ...base, intent: 'sleep' },
     { ...base, intent: 'sleep', isBaby: true },
     { ...base, moving: true, speed: 80 },
+    { ...base, lift: 12 },
   );
 
   for (const signals of variations) {

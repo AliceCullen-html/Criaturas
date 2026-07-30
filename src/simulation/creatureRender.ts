@@ -9,6 +9,7 @@ import {
   Creature,
   Carried,
   Egg,
+  Falling,
   Emotions,
   Mind,
   Needs,
@@ -78,10 +79,11 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const needs = world.store(Needs);
   // Quem está no colo do jogador. O renderer precisa saber: no ar, a criatura
   // não anda, não gesticula e é desenhada erguida, presa à mão.
+  const hands = world.hasComponent(Carried) ? world.store(Carried) : null;
   inHand.clear();
-  if (world.hasComponent(Carried)) {
-    world.store(Carried).forEach((_held, entity) => inHand.add(entity));
-  }
+  hands?.forEach((_held, entity) => inHand.add(entity));
+  // E quem está caindo — no ar também, mas sem ninguém segurando.
+  const falls = world.hasComponent(Falling) ? world.store(Falling) : null;
 
   // Quem está com alguma coisa na boca. Uma passada só pela lista de objetos,
   // em vez de uma busca por criatura — são poucos objetos e muitas criaturas.
@@ -131,6 +133,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       playing: playFrame(world, mind, transform, moving),
       intent: INTENT[mind.intent],
       carried: inHand.has(entity) ? 1 : 0,
+      lift: hands?.get(entity)?.z ?? falls?.get(entity)?.z ?? 0,
+      prevLift: hands?.get(entity)?.prevZ ?? falls?.get(entity)?.prevZ ?? 0,
       scar: emotion?.scar ?? 0,
       fear: emotion?.fear ?? 0,
       happiness: emotion?.happiness ?? 0.5,
@@ -173,6 +177,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       playing: 0,
       intent: 0,
       carried: 0,
+      lift: 0,
+      prevLift: 0,
       scar: 0,
       fear: 0,
       happiness: 0.5,

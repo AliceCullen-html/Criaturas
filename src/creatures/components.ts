@@ -304,5 +304,40 @@ export interface Carried {
   /** De onde ela foi levantada, para saber a queda quando for solta. */
   fromX: number;
   fromY: number;
+  /**
+   * O QUANTO ELA ESTÁ SENDO SACUDIDA, 0..1.
+   *
+   * Sobe com a distância que a mão percorre por segundo e desce sozinha.
+   * Carregar é uma coisa; carregar chacoalhando é outra, e a diferença entre as
+   * duas é justamente esta conta — sem ela, sacudir um bicho no ar seria de
+   * graça, e nenhum bicho do mundo acha isso de graça.
+   */
+  shaken: number;
+  /**
+   * A que altura ela já está, em pixels de tela — ela SOBE para a mão em vez
+   * de aparecer lá. É a mesma altura que a queda recebe quando você solta, e é
+   * por isso que não há salto em nenhuma das duas pontas do gesto.
+   */
+  z: number;
+  prevZ: number;
 }
 export const Carried = defineComponent<Carried>('Carried');
+
+/**
+ * CAINDO — os pés dela não estão no chão, e ninguém a está segurando.
+ *
+ * Existe porque soltar uma criatura no ar e ela aparecer no chão no mesmo
+ * quadro é o oposto de um jogo com peso. `z` é a altura NA TELA (o mundo aqui
+ * é plano; a terceira dimensão é só desenho, como a da bola), e some sozinha.
+ */
+export interface Falling {
+  /** Altura acima do chão, em pixels de tela. */
+  z: number;
+  /** A altura no passo anterior — o desenho interpola entre as duas. */
+  prevZ: number;
+  /** Velocidade de queda, em pixels de tela por segundo. */
+  vz: number;
+  /** De que altura ela partiu — é o que separa um tombo de um pulinho. */
+  from: number;
+}
+export const Falling = defineComponent<Falling>('Falling');

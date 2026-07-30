@@ -5,6 +5,7 @@ import {
   Behavior,
   Carried,
   Creature,
+  Falling,
   Emotions,
   Identity,
   Memory,
@@ -282,6 +283,12 @@ export function roughGesture(
  */
 const LIFT_STARTLE = 0.05;
 const LIFT_STARTLE_MAX = 0.35;
+/** Pixels de mão sacudida para encher a medida de chacoalho. */
+const SHAKE_DISTANCE = 120;
+/** E o máximo que um único movimento pode contribuir. */
+const SHAKE_STEP_MAX = 30;
+/** De que altura, na tela, uma criatura largada da mão cai. */
+export const CARRY_HEIGHT = 18;
 /** Segundos de colo até o bicho começar a se incomodar. */
 export const CARRY_PATIENCE = 6;
 /** Acima disto, largar não é largar: é atirar. */
@@ -295,7 +302,9 @@ export function liftCreature(world: World, id: number): boolean {
   if (!transform || !emotions || !mind) return false;
   if (world.store(Carried).get(id)) return true;
 
-  world.store(Carried).set(id, { time: 0, fromX: transform.x, fromY: transform.y });
+  world
+    .store(Carried)
+    .set(id, { time: 0, fromX: transform.x, fromY: transform.y, shaken: 0, z: 0, prevZ: 0 });
   const velocity = world.store(Velocity).get(id);
   if (velocity) {
     velocity.x = 0;
@@ -320,14 +329,39 @@ export function liftCreature(world: World, id: number): boolean {
   return true;
 }
 
-/** A criatura no colo acompanha a mão. */
+/**
+ * A criatura no colo acompanha a mão.
+ *
+ * `prev` VAI JUNTO, e é isto que tira o tremor. O renderer desenha entre o
+ * ponto anterior e o atual, com um peso que vai de 0 a 1 ao longo do passo da
+ * simulação — mas quem move a criatura no colo é o mouse, que chega quando
+ * quer, várias vezes por passo. Guardar o ponto anterior fazia o desenho
+ * oscilar entre onde a mão estava e onde ela está, sessenta vezes por segundo:
+ * o bicho chacoalhava no ar. No colo não há o que interpolar. A mão é a
+ * posição, e pronto.
+ */
 export function moveCarried(world: World, id: number, x: number, y: number): void {
   const transform = world.store(Transform).get(id);
-  if (!transform || !world.store(Carried).get(id)) return;
-  transform.prevX = transform.x;
-  transform.prevY = transform.y;
-  transform.x = clamp(x, 3, world.config.width - 3);
-  transform.y = clamp(y, 3, world.config.height - 3);
+  const carried = world.store(Carried).get(id);
+  if (!transform || !carried) return;
+  const nextX = clamp(x, 3, world.config.width - 3);
+  const nextY = clamp(y, 3, world.config.height - 3);
+  // O quanto a mão andou vira sacudida — e sacudir um bicho não é de graça.
+  //
+  // Com dois cuidados, e os dois vieram de erros. O PULO DA PEGADA não conta:
+  // no instante em que ela sai do chão, o corpo salta do lugar dela para a
+  // mão, e essa distância não é chacoalho nenhum — era, e bastava pegar a
+  // criatura para ela já se sentir maltratada. E cada passo entra com TETO:
+  // um salto grande é um salto, não uma sacudida. Sacudir é ir e voltar, e é a
+  // repetição que enche a conta.
+  if (carried.time > 0) {
+    const step = Math.min(SHAKE_STEP_MAX, Math.hypot(nextX - transform.x, nextY - transform.y));
+    carried.shaken = clamp01(carried.shaken + step / SHAKE_DISTANCE);
+  }
+  transform.x = nextX;
+  transform.y = nextY;
+  transform.prevX = nextX;
+  transform.prevY = nextY;
 }
 
 /**
@@ -341,14 +375,25 @@ export function dropCreature(world: World, id: number, vx: number, vy: number): 
   const carried = world.store(Carried).get(id);
   if (!carried) return;
   world.store(Carried).remove(id);
+  // ELA CAI. Não some do ar e reaparece no chão: desce, encosta e se recompõe.
+  // Atirada, sobe antes de cair — o arremesso tem arco.
+  const speed = Math.hypot(vx, vy);
+  const tossed = speed >= TOSS_SPEED;
+  world.store(Falling).set(id, {
+    // Cai DA ALTURA EM QUE ESTAVA, não de uma altura combinada: quem solta a
+    // criatura no meio da subida a vê cair de onde ela estava mesmo.
+    z: carried.z,
+    prevZ: carried.z,
+    vz: tossed ? -Math.min(140, 60 + speed * 0.2) : 0,
+    from: carried.z,
+  });
 
   const emotions = world.store(Emotions).get(id);
   const memory = world.store(Memory).get(id);
   const transform = world.store(Transform).get(id);
   if (!emotions || !memory || !transform) return;
 
-  const speed = Math.hypot(vx, vy);
-  if (speed >= TOSS_SPEED) {
+  if (tossed) {
     // ATIRADA. Isto não é largar: é o mesmo gesto de bater, com o bicho na mão.
     const needs = world.store(Needs).get(id);
     emotions.fear = clamp01(emotions.fear + 0.45);

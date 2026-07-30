@@ -191,10 +191,18 @@ export class Animator {
     this.pending.push({ key, options });
   }
 
-  /** Corta tudo — o que está tocando e o que estava esperando. */
+  /**
+   * Corta tudo — o que está tocando e o que estava esperando.
+   *
+   * O que ela zera é a AUTORIDADE do que está no ar, não o desenho: quem
+   * interrompe não pode ser recusado por prioridade, mas a animação que sai
+   * continua ali para a travessia macia. Apagar o atual antes de tocar o novo
+   * tirava a única coisa que a travessia tem para misturar, e toda troca de
+   * estado voltava a ser um corte seco.
+   */
   interrupt(key: string, options: PlayOptions = {}): void {
     this.pending.length = 0;
-    this.current = null;
+    if (this.current) this.current.priority = -Infinity;
     this.play(key, options);
   }
 

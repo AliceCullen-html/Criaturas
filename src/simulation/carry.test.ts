@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SystemScheduler, Transform, Velocity, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
-import { Carried, Creature, Emotions, Memory, Mind, Needs } from '@creatures';
+import { Carried, Creature, Emotions, Falling, Memory, Mind, Needs } from '@creatures';
 import { createWorld } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { creatureIndexSystem } from './creatureIndex';
@@ -9,7 +9,13 @@ import { foodIndexSystem } from './foodIndex';
 import { decisionSystem } from './systems/decisionSystem';
 import { movementSystem } from './systems/movementSystem';
 import { carrySystem } from './systems/carrySystem';
-import { CARRY_PATIENCE, dropCreature, liftCreature, moveCarried } from './handActions';
+import {
+  CARRY_HEIGHT,
+  CARRY_PATIENCE,
+  dropCreature,
+  liftCreature,
+  moveCarried,
+} from './handActions';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
 
@@ -157,5 +163,80 @@ describe('a criatura no colo', () => {
     const agora = world.store(Transform).get(id)!;
     expect(Math.hypot(agora.x - antes.x, agora.y - antes.y)).toBeGreaterThan(1);
     expect(world.store(Mind).get(id)!.intent.length).toBeGreaterThan(0);
+  });
+
+  it('sobe para a mão em vez de aparecer erguida, e cai de onde estava', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const scheduler = new SystemScheduler().add(carrySystem);
+
+    liftCreature(world, id);
+    moveCarried(world, id, 200, 200);
+    // Um instante de colo para ela terminar de subir até a mão.
+    for (let i = 0; i < 20; i++) scheduler.update(world, 1 / 20);
+    const alturaNoColo = world.store(Carried).get(id)!.z;
+    expect(alturaNoColo, 'ela apareceu erguida em vez de subir').toBeGreaterThan(
+      CARRY_HEIGHT * 0.9,
+    );
+
+    dropCreature(world, id, 0, 0);
+    const queda = world.store(Falling).get(id);
+    expect(queda, 'ela foi teleportada para o chão').toBeTruthy();
+    // Cai de onde estava: sem salto entre o colo e a queda.
+    expect(queda!.z).toBe(alturaNoColo);
+
+    // A descida leva alguns passos, e passa por alturas intermediárias.
+    const alturas: number[] = [];
+    for (let i = 0; i < 30 && world.store(Falling).get(id); i++) {
+      scheduler.update(world, 1 / 20);
+      const agora = world.store(Falling).get(id);
+      if (agora) alturas.push(agora.z);
+    }
+    expect(alturas.length, 'caiu num quadro só').toBeGreaterThan(2);
+    expect(alturas[0]!).toBeLessThan(CARRY_HEIGHT);
+    expect(world.store(Falling).get(id), 'ficou pendurada no ar').toBeUndefined();
+  });
+
+  it('e sacudir no ar não é carregar: ela se estressa e passa a desconfiar', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.stress = 0;
+    emotions.fear = 0;
+    const confiava = emotions.trust;
+    const scheduler = new SystemScheduler().add(carrySystem);
+
+    liftCreature(world, id);
+    // A mão indo e voltando depressa, que é o que é chacoalhar.
+    for (let i = 0; i < 40; i++) {
+      moveCarried(world, id, 200 + (i % 2 === 0 ? 90 : -90), 200);
+      scheduler.update(world, 1 / 20);
+    }
+
+    expect(world.store(Carried).get(id)!.shaken).toBeGreaterThan(0.4);
+    expect(emotions.stress, 'chacoalharam e ela nem percebeu').toBeGreaterThan(0.2);
+    expect(emotions.fear).toBeGreaterThan(0.1);
+    expect(emotions.trust).toBeLessThan(confiava);
+    expect(world.store(Memory).get(id)!.valenceOf('player')).toBeLessThan(0);
+  });
+
+  it('mas levar a criatura de um lugar a outro, com calma, não a chacoalha', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.stress = 0;
+    const scheduler = new SystemScheduler().add(carrySystem);
+
+    liftCreature(world, id);
+    for (let i = 0; i < 40; i++) {
+      moveCarried(world, id, 200 + i * 2, 200 + i);
+      scheduler.update(world, 1 / 20);
+    }
+
+    expect(world.store(Carried).get(id)!.shaken).toBeLessThan(0.45);
+    expect(emotions.stress, 'uma caminhada com ela no colo virou maus-tratos').toBeLessThan(0.1);
   });
 });

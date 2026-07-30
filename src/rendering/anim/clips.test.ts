@@ -30,6 +30,7 @@ const base: CreatureSignals = {
   health: 1,
   touched: false,
   carried: false,
+  lift: 0,
   isBaby: false,
 };
 
