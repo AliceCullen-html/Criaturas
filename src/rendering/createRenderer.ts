@@ -30,7 +30,7 @@ import {
   loadClipCatalog,
   type ClipCatalog,
 } from './anim/clipCatalog';
-import { PRIORITY, type CreatureSignals } from './anim/states';
+import { PRIORITY, PROP_IN_THE_WORLD, type CreatureSignals } from './anim/states';
 import { loadTerrainArt } from './textures/terrainSheet';
 import {
   makeDustTexture,
@@ -1210,7 +1210,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       // o que aconteceu. O jardim não depende delas: quem depende é a criatura,
       // que aparece assim que a pasta chegar (e o desenho dela já sabe lidar
       // com uma animação que ainda não existe, caindo no ocioso).
-      void loadClipCatalog().then((loaded) => {
+      void loadClipCatalog(PROP_IN_THE_WORLD).then((loaded) => {
         if (destroyed) {
           for (const clip of loaded.values()) {
             const source = clip.frames[0]?.source ?? null;
@@ -2042,17 +2042,27 @@ export function createRenderer(options: RendererOptions): Renderer {
 
         // O QUE DESENHAR: o que o controlador disser, e nada além disso.
         const view = slot.anim.view();
-        const frames = view ? clips.get(view.key)?.frames : undefined;
-        const texture = frames?.[view!.frame];
-        if (texture && slot.sprite.texture !== texture) slot.sprite.texture = texture;
+        const clip = view ? clips.get(view.key) : undefined;
+        const texture = clip?.frames[view!.frame];
+        if (texture && slot.sprite.texture !== texture) {
+          slot.sprite.texture = texture;
+          // A ÂNCORA VEM DA TIRA. Quase todas usam a mesma, mas as que foram
+          // recortadas para perder o objeto desenhado têm o quadro mais estreito
+          // — e sem esta linha a criatura pularia de lugar ao entrar nelas.
+          slot.sprite.anchor.set(clip!.anchorX, ANCHOR_Y);
+        }
 
         // A TRAVESSIA, desenhada: a animação que sai continua na tela por um
         // instante, sumindo por baixo da que entra. É o que tira o "corte
         // seco" da troca de estado — sem isto, parar de correr é um estalo.
-        const leaving = view?.fadingKey ? clips.get(view.fadingKey)?.frames : undefined;
+        const leavingClip = view?.fadingKey ? clips.get(view.fadingKey) : undefined;
+        const leaving = leavingClip?.frames;
         if (leaving && view) {
           const old = leaving[Math.min(view.fadingFrame, leaving.length - 1)];
-          if (old && slot.fading.texture !== old) slot.fading.texture = old;
+          if (old && slot.fading.texture !== old) {
+            slot.fading.texture = old;
+            slot.fading.anchor.set(leavingClip!.anchorX, ANCHOR_Y);
+          }
           slot.fading.visible = true;
           slot.fading.alpha = 1 - view.blend;
           slot.sprite.alpha = view.blend;

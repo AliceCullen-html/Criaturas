@@ -2,9 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { MOOD } from '@core';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { BODY_INK_WIDTH, widestInk } from './inkWidth';
-import { FRAME_W } from './clipCatalog';
-import { IDLE_FILLERS, POSE_CLIP, STATES, type CreatureSignals, type StateName } from './states';
+import { BODY_INK_WIDTH, alphaReader, widestInk } from './inkWidth';
+import { FRAME_H, FRAME_W, bodyCut } from './clipCatalog';
+import {
+  IDLE_FILLERS,
+  POSE_CLIP,
+  PROP_IN_THE_WORLD,
+  STATES,
+  type CreatureSignals,
+  type StateName,
+} from './states';
 
 /**
  * A CRIATURA SOZINHA TEM DE ESTAR SOZINHA NO DESENHO.
@@ -235,6 +242,60 @@ describe('o desenho não inventa objetos', () => {
     expect(widestInk(paths.get(rule.clip(comBola))!, FRAME_W, GUTTER)).toBeGreaterThan(
       BODY_INK_WIDTH,
     );
+  });
+
+  /**
+   * O RECORTE QUE TIRA O OBJETO DA TIRA.
+   *
+   * As tiras de brincar trazem uma bola desenhada, e o jardim já desenha a bola
+   * dele — com física, sombra e quique. O jogador largou uma bola e viu duas.
+   * Agora essas tiras são recortadas na abertura, e este teste roda a MESMA
+   * conta de corte que o jogo roda — a função é a mesma, o que muda é de onde
+   * vem o alfa (do arquivo aqui, de um canvas lá). Ele cobra três coisas:
+   *
+   *  - existe corte limpo, isto é, o objeto se separa do corpo em TODO quadro;
+   *  - o que fica antes do corte é só a criatura, e ela inteira;
+   *  - existe mesmo um objeto depois do corte — senão a tira não tinha o que
+   *    perder e não devia estar nesta lista.
+   */
+  it('as tiras de objeto real perdem o objeto sem perder a criatura', () => {
+    // O corpo mede 48 px, e alguns quadros esticam uma pata ou a cauda.
+    const CORPO_MAX = BODY_INK_WIDTH + 8;
+    for (const key of PROP_IN_THE_WORLD) {
+      const path = paths.get(key);
+      expect(path, `a tira ${key} não existe na pasta`).toBeTruthy();
+      const alpha = alphaReader(path!);
+      const quadros = 5;
+      const corte = bodyCut(alpha, quadros);
+      expect(corte, `${key}: o objeto encosta no corpo, não há corte limpo`).not.toBeNull();
+
+      let objetoCortado = 0;
+      for (let f = 0; f < quadros; f++) {
+        const x0 = f * (FRAME_W + GUTTER);
+        for (let x = corte!; x < FRAME_W; x++) {
+          for (let y = 0; y < FRAME_H; y++) if (alpha(x0 + x, y) > 8) objetoCortado += 1;
+        }
+
+        // O que FICA tem de ser a criatura, e ela inteira.
+        let minX = Infinity;
+        let maxX = -1;
+        for (let x = 0; x < corte!; x++) {
+          for (let y = 0; y < FRAME_H; y++) {
+            if (alpha(x0 + x, y) > 8) {
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              break;
+            }
+          }
+        }
+        const largura = maxX - minX + 1;
+        expect(largura, `${key} q${f}: sobrou objeto junto com a criatura`).toBeLessThanOrEqual(
+          CORPO_MAX,
+        );
+        expect(largura, `${key} q${f}: o corte comeu a criatura`).toBeGreaterThan(30);
+      }
+      expect(objetoCortado, `${key}: não havia objeto nenhum para cortar`).toBeGreaterThan(0);
+    }
   });
 
   it('e a lista de exceções não guarda nome que ninguém mais usa', () => {

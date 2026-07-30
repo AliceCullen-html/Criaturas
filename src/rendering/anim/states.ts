@@ -212,6 +212,27 @@ export const IDLE_FILLERS: readonly string[] = [
 ];
 
 /**
+ * TIRAS QUE PERDEM O OBJETO DESENHADO, PORQUE ELE EXISTE DE VERDADE.
+ *
+ * Terceira volta do mesmo defeito, e desta vez do outro lado. Antes o problema
+ * era usar uma cena onde o objeto NÃO existia — a bola que ninguém deu. Aqui é o
+ * contrário: a bola existe, está ali quicando, com física e sombra, desenhada
+ * pelo mundo — e a tira desenha OUTRA por cima. O jogador vê duas e não entende
+ * de onde saiu a segunda.
+ *
+ * A saída não é jogar fora a pose que o artista desenhou: é recortar o objeto
+ * dela. No quadro, o corpo fica à esquerda e o objeto à direita, separados por
+ * uma coluna vazia — o carregador acha essa coluna medindo o alfa e corta ali.
+ * Fica a criatura brincando, e a bola que rola é a bola de verdade, a que o
+ * jogador pode pegar.
+ *
+ * Só entram aqui tiras cujo objeto se separa do corpo em TODOS os quadros. É
+ * medido, não prometido: `clips.test.ts` reprova quem não tiver corte limpo, e o
+ * carregador reclama alto em vez de serrar a criatura ao meio.
+ */
+export const PROP_IN_THE_WORLD: ReadonlySet<string> = new Set(['buscarBola', 'filhoteBrinca']);
+
+/**
  * O REPERTÓRIO DE QUEM ESTÁ COM MEDO.
  *
  * Uma criatura assustada não é uma estátua tremendo: ela estremece, se encolhe,
@@ -455,9 +476,16 @@ export const STATES: readonly StateRule[] = [
     // Sem esta condição um filhote recém-saído do ovo aparecia chutando uma
     // bola que o jogador nunca deu a ele: a marca `withProp` era uma promessa
     // que ninguém cobrava. Agora ela é cobrada aqui, no `when`.
+    // A BOLA DO DESENHO SAIU: a que rola é a de verdade.
+    //
+    // As três tiras de brincar trazem uma bola desenhada, e o jardim já desenha
+    // a bola dele — com física, sombra e quique. Ficavam duas na tela, e a
+    // segunda não obedecia a nada. Agora estas tiras são recortadas na abertura
+    // (ver `PROP_IN_THE_WORLD`) e sobra a criatura brincando; a bola é a que o
+    // jogador largou. Andando, quem manda é a caminhada.
     state: 'PlayBall',
-    when: (s) => s.intent === 'play' && s.ball,
-    clip: (s) => (s.moving ? 'buscarBola' : s.isBaby ? 'filhoteBrinca' : 'chutarBola'),
+    when: (s) => s.intent === 'play' && s.ball && !s.moving,
+    clip: (s) => (s.isBaby ? 'filhoteBrinca' : 'buscarBola'),
     priority: PRIORITY.gesture,
     withProp: true,
   },

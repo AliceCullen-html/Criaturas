@@ -57,6 +57,58 @@ export interface Clip {
   /** O rótulo legível, para o depurador e para o livro do mundo. */
   label: string;
   frames: Texture[];
+  /**
+   * A âncora horizontal DESTA tira.
+   *
+   * É `ANCHOR_X` para quase todas. Muda só nas tiras que foram recortadas para
+   * perder o objeto desenhado: o quadro ficou mais estreito, e o umbigo da
+   * criatura passou a ser uma fração maior dele. Guardar isto por tira é o que
+   * mantém o corpo no mesmo lugar da tela depois do corte.
+   */
+  anchorX: number;
+}
+
+/**
+ * ONDE CORTAR UMA TIRA PARA ELA PERDER O OBJETO.
+ *
+ * O quadro tem o corpo à esquerda e o objeto à direita, separados por uma
+ * coluna vazia. Aqui a coluna vazia é PROCURADA, quadro a quadro: acha-se o
+ * bloco de tinta onde o corpo está (o que contém `BODY_CENTER_X`), e o corte cai
+ * no começo do primeiro bloco depois dele — o mais à esquerda entre os quadros,
+ * para o mesmo recorte servir para a tira toda.
+ *
+ * Um recorte por quadro não serviria: o corpo ANDA dentro do quadro ao longo da
+ * tira, e é esse andar que faz a animação. Recortando cada quadro no corpo dele,
+ * todos ficariam alinhados e o movimento sumiria.
+ *
+ * Devolve `null` quando o corte não é limpo — quando em algum quadro o objeto
+ * encosta no corpo e os dois viram um bloco só. Aí é melhor desenhar a tira
+ * inteira e dizer isso em voz alta do que serrar a criatura ao meio.
+ */
+export function bodyCut(
+  alphaAt: (x: number, y: number) => number,
+  frameCount: number,
+): number | null {
+  let cut = FRAME_W;
+  let bodyEnd = 0;
+  for (let f = 0; f < frameCount; f++) {
+    const x0 = f * (FRAME_W + GUTTER);
+    const inked: boolean[] = [];
+    for (let x = 0; x < FRAME_W; x++) {
+      let ink = false;
+      for (let y = 0; y < FRAME_H && !ink; y++) if (alphaAt(x0 + x, y) > 8) ink = true;
+      inked.push(ink);
+    }
+    // O bloco onde o corpo está, e o começo do bloco seguinte.
+    if (!inked[BODY_CENTER_X]) continue;
+    let end = BODY_CENTER_X;
+    while (end + 1 < FRAME_W && inked[end + 1]) end += 1;
+    bodyEnd = Math.max(bodyEnd, end);
+    let next = end + 1;
+    while (next < FRAME_W && !inked[next]) next += 1;
+    if (next < FRAME_W) cut = Math.min(cut, next);
+  }
+  return cut > bodyEnd ? cut : null;
 }
 
 export type ClipCatalog = ReadonlyMap<string, Clip>;
@@ -92,7 +144,9 @@ function describe(path: string): { key: string; label: string; category: string 
  * tantas tiras, e uma textura por quadro seriam mil e cem uploads de GPU na
  * abertura do jogo.
  */
-export async function loadClipCatalog(): Promise<ClipCatalog> {
+export async function loadClipCatalog(
+  bodyOnly: ReadonlySet<string> = new Set(),
+): Promise<ClipCatalog> {
   const catalog = new Map<string, Clip>();
   const problems: string[] = [];
 
@@ -131,6 +185,18 @@ export async function loadClipCatalog(): Promise<ClipCatalog> {
         return;
       }
 
+      // O CORTE DO OBJETO, quando quem pediu o catálogo diz que esta tira
+      // desenha uma coisa que já existe no jardim.
+      let width = FRAME_W;
+      if (bodyOnly.has(what.key)) {
+        const cut = measureCut(image, count);
+        if (cut === null) {
+          problems.push(`${what.key}: o objeto desenhado encosta no corpo, não dá para recortar`);
+        } else {
+          width = cut;
+        }
+      }
+
       const source = Texture.from(image).source;
       source.scaleMode = 'nearest';
       const frames = Array.from(
@@ -138,10 +204,16 @@ export async function loadClipCatalog(): Promise<ClipCatalog> {
         (_unused, i) =>
           new Texture({
             source,
-            frame: new Rectangle(i * (FRAME_W + GUTTER), 0, FRAME_W, FRAME_H),
+            frame: new Rectangle(i * (FRAME_W + GUTTER), 0, width, FRAME_H),
           }),
       );
-      catalog.set(what.key, { key: what.key, category: what.category, label: what.label, frames });
+      catalog.set(what.key, {
+        key: what.key,
+        category: what.category,
+        label: what.label,
+        frames,
+        anchorX: BODY_CENTER_X / width,
+      });
     }),
   );
 
@@ -151,6 +223,18 @@ export async function loadClipCatalog(): Promise<ClipCatalog> {
     console.warn(`Animações com problema (${problems.length}):\n  ${problems.join('\n  ')}`);
   }
   return catalog;
+}
+
+/** Lê o alfa da tira uma vez e devolve o corte, ou `null` se não houver corte limpo. */
+function measureCut(image: HTMLImageElement, count: number): number | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(image, 0, 0);
+  const { data } = ctx.getImageData(0, 0, image.width, image.height);
+  return bodyCut((x, y) => data[(y * image.width + x) * 4 + 3] ?? 0, count);
 }
 
 /** Só os nomes, para quem precisa saber o que existe sem carregar nada. */

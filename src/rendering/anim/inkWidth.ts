@@ -90,6 +90,22 @@ function decodePng(path: string): Decoded {
   return { width, height, channels, data: out };
 }
 
+/**
+ * O alfa da tira, como uma função — do jeito que `bodyCut` o pede.
+ *
+ * O jogo lê o alfa de um canvas; o teste lê do arquivo. `bodyCut` não precisa
+ * saber de qual dos dois veio, e é por isso que ele recebe uma função: a MESMA
+ * conta de corte roda nos dois lados, e o teste mede o que o jogo vai fazer, e
+ * não uma imitação dele.
+ */
+export function alphaReader(path: string): (x: number, y: number) => number {
+  const { width, channels, data } = decodePng(path);
+  return (x, y) => {
+    const i = (y * width + x) * channels;
+    return channels === 4 ? (data[i + 3] ?? 0) : channels === 2 ? (data[i + 1] ?? 0) : 255;
+  };
+}
+
 /** A maior largura de tinta entre os quadros da tira, em pixels da arte. */
 export function widestInk(path: string, frameWidth: number, gutter: number): number {
   const { width, height, channels, data } = decodePng(path);
