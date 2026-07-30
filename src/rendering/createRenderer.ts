@@ -292,6 +292,17 @@ const LIFT_DEPTH_BONUS = 100000;
 
 const HIDDEN_FLAG = 256;
 
+/**
+ * A mão do jogador, em pixels de TELA — o cursor do jogo.
+ *
+ * O dobro do que era, que é o tamanho em que a arte dela se lê: dá para ver os
+ * dedos abrindo e fechando, e a ferramenta na mão passa a ser reconhecível sem
+ * o jogador precisar olhar o cinto para lembrar o que escolheu.
+ */
+const HAND_SCREEN = 40;
+/** A altura da arte da mão, para o alvo acima virar escala. */
+const HAND_ART = 20;
+
 /** Props altos dividem camada com as criaturas (grama alta, tronco, junco). */
 const TALL_PROP_KINDS = new Set([0, 6, 9]);
 const isTall = (kind: number): boolean => TALL_PROP_KINDS.has(kind);
@@ -2226,9 +2237,19 @@ export function createRenderer(options: RendererOptions): Renderer {
           const icon = state === 'holding' ? -1 : toolIcon();
           const tool = icon >= 0 ? iconTextures?.[icon] : null;
           handSprite.texture = tool ?? handTextures[state];
-          // Tamanho constante na tela, independente do zoom. O ícone é de
-          // 16 px e a mão de 20: o ajuste iguala o peso dos dois na tela.
-          handSprite.scale.set((tool ? 1.25 : 1) / camera.zoom);
+          // O TAMANHO DA MÃO NA TELA, e não a escala da textura.
+          //
+          // Era escala fixa, e o resultado eram vinte pixels: do tamanho da
+          // setinha do sistema, num jogo em que o cursor É a sua mão dentro do
+          // jardim e o desenho dela tem cara. Agora quem manda é o alvo em
+          // pixels de tela, e a escala sai dividindo pela altura da textura —
+          // assim a mão (20 px de arte) e o ícone da ferramenta (16 px) saem do
+          // MESMO tamanho, sem número mágico para acertar a diferença.
+          //
+          // Continua constante na tela: dividir pelo zoom é o que impede o
+          // cursor de encolher quando o jogador se afasta do jardim.
+          const art = handSprite.texture.height || HAND_ART;
+          handSprite.scale.set(HAND_SCREEN / art / camera.zoom);
           // Esfregando, o objeto na mão treme junto — é o gesto do banho.
           const wobble = state === 'petting' ? Math.sin(elapsed * 9) * 1.5 : 0;
           handSprite.position.set(
