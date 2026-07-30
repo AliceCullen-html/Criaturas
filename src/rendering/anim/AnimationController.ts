@@ -1,12 +1,5 @@
 import { Animator, type PlayOptions } from './Animator';
-import {
-  FILLER_GAP,
-  IDLE_FILLERS,
-  PRIORITY,
-  stateFor,
-  type CreatureSignals,
-  type StateName,
-} from './states';
+import { FILLER_GAP, PRIORITY, stateFor, type CreatureSignals, type StateName } from './states';
 
 /**
  * O CONTROLADOR DE ANIMAÇÃO DE UMA CRIATURA.
@@ -98,12 +91,42 @@ export class AnimationController {
   private state: StateName | null = null;
   private fillerIn: number;
   private lastKey: string | null = null;
-  /** O que está tocando veio de fora (um gesto), e não da máquina de estados. */
-  private guest = false;
+  /**
+   * A ANIMAÇÃO DE UMA VEZ QUE TEM DIREITO DE TERMINAR — pela IDENTIDADE dela.
+   *
+   * Três coisas passam na frente do laço do estado por um instante: o gesto do
+   * jogador (`trigger`), a travessia de entrada de um estado (`enter`) e as
+   * microanimações. Enquanto uma delas está no ar, a máquina de estados espera.
+   *
+   * ESTA LINHA JÁ TRAVOU O JOGO DE DUAS MANEIRAS, e as duas viraram medida.
+   *
+   * Primeiro ela era um `boolean`. Aí a pergunta "o hóspede já acabou?" virava
+   * "a animação atual já acabou?", e as duas se separam no instante em que o
+   * animador troca de animação sozinho, promovendo o laço que estava na fila: a
+   * marca ficava ligada com um LAÇO no ar, e laço nunca acaba. A criatura
+   * congelava naquele desenho e a máquina de estados nunca mais era ouvida —
+   * medido, `medo` ficou cento e trinta e um segundos na tela, sem trocar nem
+   * quando ela saiu andando.
+   *
+   * Depois ela era o NOME. Mas a mesma animação pode ser pedida por dois
+   * motivos: `olharCima` é microanimação do ocioso E é o laço do gesto de olhar
+   * para cima. Quando o gesto veio depois da microanimação, o controlador passou
+   * a esperar o fim de um laço que ele mesmo tinha começado — medido, `olharCima`
+   * ficou cento e dezenove segundos.
+   *
+   * O que resolve é a identidade: cada tocada do animador tem um número seu, e
+   * "aquela que eu pedi ainda está no ar?" passa a ter resposta certa.
+   */
+  private guestToken = -1;
 
   constructor(private readonly options: ControllerOptions) {
     this.animator = new Animator({ frameCount: options.frameCount, fps: options.fps });
     this.fillerIn = this.nextGap();
+  }
+
+  /** Alguma animação de uma vez ainda está no ar e tem direito de terminar? */
+  private get guest(): boolean {
+    return this.animator.token === this.guestToken;
   }
 
   get current(): StateName | null {
@@ -134,7 +157,7 @@ export class AnimationController {
       onFrame: (frame, clip) => this.fire(frame, clip),
     });
     // Quem está tocando agora é de FORA, e o estado espera a vez dele.
-    if (played) this.guest = true;
+    if (played) this.guestToken = this.animator.token;
     return played;
   }
 
@@ -159,9 +182,8 @@ export class AnimationController {
     // defeito real: cair é urgente, o gesto de se levantar ao encostar no chão
     // é rotina, e a queda — que é um LAÇO, nunca termina — recusava a saída
     // pela régua de prioridade. A criatura pousava e continuava caindo para
-    // sempre. Por isso a marca `guest`: ela separa "estou tocando o estado" de
-    // "estou tocando um pedido de fora".
-    if (this.guest && this.animator.finished) this.guest = false;
+    // sempre. Por isso a marca `guestToken`: ela separa "estou tocando o estado"
+    // de "estou tocando um pedido de fora".
     const waiting =
       this.guest && !this.animator.finished && this.animator.priority >= rule.priority;
     if (waiting) {
@@ -186,6 +208,15 @@ export class AnimationController {
           priority: rule.priority,
           onFrame: (frame, clip) => this.fire(frame, clip),
         });
+        // A ENTRADA TAMBÉM É HÓSPEDE, e é isto que a deixa ser vista.
+        //
+        // Sem esta linha, a travessia durava UM QUADRO: no tique seguinte o
+        // estado já não era novidade, e a comparação "o que toca não é o laço
+        // que eu quero" trocava a animação de entrada pelo laço. Todas as
+        // travessias da tabela — a freada ao sair da corrida, o bocejo antes de
+        // dormir, o abaixar antes de sentar, o levantar depois do tombo —
+        // existiam no código e nunca chegaram à tela.
+        this.guestToken = this.animator.token;
         this.animator.setRate(rule.rate?.(signals) ?? 1);
         this.animator.update(dt);
         return;
@@ -204,7 +235,9 @@ export class AnimationController {
       });
     } else if (playing !== wanted) {
       // O MESMO estado pode querer outro desenho: no colo, a mão que acelera
-      // troca "aninhada" por "sacudida" sem que o estado mude.
+      // troca "aninhada" por "sacudida" sem que o estado mude. E o que estava
+      // esperando na fila era para o desenho de antes: virou passado.
+      this.animator.clearQueue();
       this.animator.play(wanted, {
         loop: true,
         priority: rule.priority,
@@ -213,17 +246,24 @@ export class AnimationController {
     }
     this.animator.setRate(rule.rate?.(signals) ?? 1);
 
-    // AS MICROANIMAÇÕES. Só quando ela está ociosa de verdade: ninguém pisca
-    // enquanto foge.
+    // AS MICROANIMAÇÕES. Só quando ela está parada sem tarefa nas mãos:
+    // ninguém pisca enquanto foge, nem boceja no meio de uma mordida.
     this.fillerIn -= dt;
     if (this.fillerIn <= 0) {
       this.fillerIn = this.nextGap();
-      // Só em estado de rotina: ninguém pisca no meio de uma fuga. E com a
-      // MESMA autoridade do laço que ela substitui — com autoridade menor o
-      // pedido era recusado e a criatura nunca piscava, que foi exatamente o
-      // que o teste pegou.
-      if (rule.priority <= PRIORITY.idle) {
-        const filler = this.pickFiller();
+      // QUEM DIZ SE CABE UMA MICROANIMAÇÃO É A TABELA, e não a régua de
+      // prioridade. Enquanto a condição era `priority <= idle`, as coisas
+      // pequenas só entravam no estado `Idle` — e `Idle` é oito por cento da
+      // vida da criatura. Observando (vinte e sete por cento) ela ficava meio
+      // minuto no mesmo laço sem piscar uma vez, e meio minuto de um desenho só
+      // é o que faz um bicho parecer um boneco. Andar também é de prioridade
+      // baixa e não pode receber: o ciclo do passo é o corpo inteiro.
+      //
+      // E com a MESMA autoridade do laço que ela substitui — com autoridade
+      // menor o pedido era recusado e a criatura nunca piscava, que foi
+      // exatamente o que o teste pegou.
+      if (rule.fillers && !signals.moving) {
+        const filler = this.pickFiller(rule.fillers);
         if (filler) {
           // Ela entra como HÓSPEDE, igual a um gesto: é de uma vez só, e tem
           // direito de terminar antes de o laço do ocioso voltar. Quando acaba,
@@ -233,7 +273,7 @@ export class AnimationController {
             crossfade: CROSSFADE,
             onFrame: (frame, clip) => this.fire(frame, clip),
           });
-          if (played) this.guest = true;
+          if (played) this.guestToken = this.animator.token;
         }
       }
     }
@@ -246,9 +286,9 @@ export class AnimationController {
     return this.options.has(key) ? key : 'idle';
   }
 
-  private pickFiller(): string | null {
+  private pickFiller(from: readonly string[]): string | null {
     const random = this.options.random ?? Math.random;
-    const usable = IDLE_FILLERS.filter((key) => this.options.has(key) && key !== this.lastKey);
+    const usable = from.filter((key) => this.options.has(key) && key !== this.lastKey);
     if (usable.length === 0) return null;
     const key = usable[Math.floor(random() * usable.length)] ?? usable[0]!;
     this.lastKey = key;

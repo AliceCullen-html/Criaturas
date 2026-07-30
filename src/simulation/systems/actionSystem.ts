@@ -36,6 +36,22 @@ const INTERACT_COOLDOWN = 2.5;
  * bonita de ver. Depois disso ela larga a bola por conta própria.
  */
 const PLAY_SATED = 0.1;
+/**
+ * Quanta curiosidade sai por segundo de olhar uma coisa.
+ *
+ * Um quinto por segundo: cinco segundos de borboleta e a curiosidade de uma
+ * criatura curiosa já caiu à metade — tempo de sobra para a cena ser vista, e
+ * pouco para ela virar um poste. A curiosidade volta a subir a 0,05 por segundo
+ * no `emotionSystem`, então a próxima olhada demora um minuto ou dois.
+ */
+const WATCH_SATED = 0.2;
+/**
+ * A que distância do alvo ela já está OLHANDO.
+ *
+ * O mesmo número que o `decisionSystem` usa para parar de andar quando a
+ * intenção é observar: ninguém persegue uma borboleta até encostar nela.
+ */
+const WATCH_REACH = 36;
 /** Faixa junto à borda do mundo onde o empurrão passa a apontar para dentro. */
 const EDGE = 60;
 
@@ -297,6 +313,50 @@ export const actionSystem: System = {
             actor: nameFor(identities, targetId),
           });
           mind.actionCooldown = INTERACT_COOLDOWN;
+          break;
+        }
+
+        case 'sunbathe': {
+          // TOMAR SOL DESCANSA — e é isso que a faz levantar depois.
+          //
+          // Sem consequência nenhuma, deitar no sol era um poço: a vontade vinha
+          // do cansaço e o cansaço não passava, então ela ficava. Um décimo de
+          // energia por segundo é pouco para substituir o sono e bastante para,
+          // em meia dúzia de segundos de sol, a vontade de deitar perder de
+          // qualquer outra coisa que o jardim ofereça.
+          needs.energy = clamp01(needs.energy + 0.1 * dt);
+          emotions.happiness = clamp01(emotions.happiness + 0.03 * dt);
+          emotions.stress = clamp01(emotions.stress - 0.08 * dt);
+          break;
+        }
+
+        case 'watch': {
+          // OLHAR TAMBÉM SACIA.
+          //
+          // Observar uma borboleta era a única coisa do jardim que não acabava:
+          // a nota de `watch` sai da curiosidade, e a curiosidade voltava sozinha
+          // sem que olhar gastasse nada. Uma criatura curiosa perto de uma
+          // borboleta ficava PARADA olhando, e medido no jardim isso dava vinte
+          // e oito por cento da vida dela — meio minuto seguido sem se mexer,
+          // sempre o mesmo desenho. Era a cara de um jogo travado.
+          //
+          // É a mesma cura da bola: a curiosidade é GASTA no que se olha. Ela
+          // olha, se satisfaz, vai fazer outra coisa — e a curiosidade volta em
+          // um ou dois minutos, que é quando a próxima borboleta ganha uma
+          // olhada de novo. Um jardim onde tudo se sacia é um jardim que se move.
+          //
+          // Olhar sem pressa também acalma: quem para para ver uma borboleta
+          // passar fica um pouco melhor do que estava.
+          //
+          // E só conta depois de CHEGAR: o caminho até a borboleta é caminhada,
+          // não contemplação. Sem isto ela se saciava andando e desistia antes de
+          // ter visto qualquer coisa.
+          if (Math.hypot(mind.targetX - transform.x, mind.targetY - transform.y) > WATCH_REACH) {
+            break;
+          }
+          emotions.curiosity = clamp01(emotions.curiosity - WATCH_SATED * dt);
+          emotions.happiness = clamp01(emotions.happiness + 0.02 * dt);
+          emotions.stress = clamp01(emotions.stress - 0.05 * dt);
           break;
         }
 

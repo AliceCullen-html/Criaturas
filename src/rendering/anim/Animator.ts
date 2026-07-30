@@ -53,6 +53,18 @@ export interface PlayOptions {
 
 interface Playing {
   key: string;
+  /**
+   * A IDENTIDADE desta tocada — e não o nome dela.
+   *
+   * Quem pede uma animação e quer saber depois "aquela que eu pedi ainda está no
+   * ar?" não pode perguntar pelo nome: a MESMA animação pode ser pedida por dois
+   * motivos diferentes. `olharCima` é uma microanimação do ocioso e é também o
+   * laço do gesto de olhar para cima — pelo nome, as duas são indistinguíveis, e
+   * o controlador ficava esperando para sempre o fim de um laço que ele mesmo
+   * havia começado. Cada tocada ganha um número seu, e a pergunta passa a ter
+   * resposta certa.
+   */
+  token: number;
   frames: number;
   fps: number;
   loop: boolean;
@@ -96,6 +108,8 @@ export class Animator {
   private fadeTotal = 0;
   private paused = false;
   private rate = 1;
+  /** Contador das tocadas, para cada uma ter identidade própria. */
+  private seq = 0;
 
   constructor(private readonly options: AnimatorOptions) {}
 
@@ -106,6 +120,11 @@ export class Animator {
 
   get priority(): number {
     return this.current?.priority ?? -Infinity;
+  }
+
+  /** Qual tocada está no ar — a identidade, não o nome. */
+  get token(): number {
+    return this.current?.token ?? -1;
   }
 
   get finished(): boolean {
@@ -167,6 +186,7 @@ export class Animator {
 
     this.current = {
       key,
+      token: ++this.seq,
       frames: Math.max(1, this.options.frameCount(key)),
       fps: this.options.fps?.(key) ?? DEFAULT_FPS,
       loop: options.loop ?? false,

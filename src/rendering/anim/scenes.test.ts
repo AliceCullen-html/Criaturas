@@ -178,6 +178,14 @@ function soloClips(): Set<string> {
   }
   for (const key of IDLE_FILLERS) keys.add(key);
   for (const key of Object.values(POSE_CLIP)) keys.add(key);
+  // As microanimações de cada estado entram na mesma medida: uma tira pequena
+  // que traga um objeto inventado mente igual à tira do laço. Valem as mesmas
+  // regras — nos estados que GARANTEM o objeto, a cena é verdade também nas
+  // microanimações (a aula diante da máquina é a máquina que está ali).
+  for (const rule of STATES) {
+    if (rule.withProp) continue;
+    for (const key of rule.fillers ?? []) keys.add(key);
+  }
   return keys;
 }
 

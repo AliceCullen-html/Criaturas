@@ -92,7 +92,14 @@ describe('o estado sai do que a criatura é', () => {
     const marcada = { ...assustada, scar: 0.5 };
     run(c, marcada, 0.3);
     expect(c.current).toBe('Trauma');
-    expect(c.clip).toBe('encolher');
+    // Primeiro ela CONGELA — a travessia de entrada do trauma —, e só depois se
+    // encolhe. Este teste cobrava `encolher` em três décimos de segundo, e
+    // passava por um defeito: a animação de entrada era cortada no primeiro
+    // quadro e ninguém nunca a viu. Meio segundo é o tempo dos cinco quadros a
+    // dez por segundo.
+    expect(c.clip, 'a travessia do trauma foi cortada').toBe('congelar');
+    run(c, marcada, 0.5);
+    expect(c.clip, 'depois de congelar, ela fica encolhida').toBe('encolher');
   });
 });
 
@@ -108,6 +115,30 @@ describe('as transições', () => {
     // E depois da freada, o passo entra sozinho.
     run(c, { ...calmo, moving: true, speed: 20 }, 1);
     expect(c.clip).toBe('caminhar');
+  });
+
+  /**
+   * A TRAVESSIA TEM DE DURAR O TEMPO DELA.
+   *
+   * O teste acima olhava a freada no PRIMEIRO tique depois da troca, e por isso
+   * não pegava o defeito: a partir do segundo tique o estado já não era novidade,
+   * a comparação "o que toca não é o laço que eu quero" era verdadeira, e o laço
+   * atropelava a animação de entrada. Toda travessia da tabela durava dezesseis
+   * milésimos de segundo — existia no código e nunca chegou à tela.
+   */
+  it('e ela dura os cinco quadros dela, não um só', () => {
+    const c = controlador({ random: () => 0.99 });
+    run(c, { ...calmo, moving: true, speed: 70 }, 0.4);
+
+    const andando = { ...calmo, moving: true, speed: 20 };
+    let quadros = 0;
+    for (let t = 0; t < 0.45; t += 1 / 60) {
+      c.update(andando, 1 / 60);
+      if (c.clip === 'frear') quadros += 1;
+    }
+    // Cinco quadros a dez por segundo é meio segundo de freada; a sessenta
+    // quadros por segundo, isso é bem mais de um tique.
+    expect(quadros, 'a freada apareceu e sumiu no mesmo instante').toBeGreaterThan(20);
   });
 
   it('e a troca é MACIA: as duas animações convivem por um instante', () => {

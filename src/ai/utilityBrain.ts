@@ -311,10 +311,25 @@ export function createUtilityBrain(): Brain {
         );
       } else if (needs.hunger < 0.5 && needs.thirst < 0.5 && emotions.fear < 0.2) {
         // Tempo bom e barriga cheia: hora de tomar sol sem fazer nada.
+        //
+        // QUEM TOMA SOL É QUEM ESTÁ CANSADA. A nota vinha da felicidade, e tomar
+        // sol deixa a criatura mais feliz: quanto mais ela ficava ali, mais
+        // vontade tinha de continuar ali. Medido no jardim, era o que ela mais
+        // fazia — quase um quinto da vida parada no mesmo lugar sem nada
+        // acontecendo, e nada nunca sacia porque a conta se alimentava de si
+        // mesma. Um bicho que não tem por que se levantar não parece vivo.
+        //
+        // Agora o motivo é o corpo, que é o que faz alguém se esticar no sol: um
+        // pouco de cansaço. Descansada, ela se levanta e vai ver o jardim; e o
+        // cansaço volta sozinho depois de andar por aí, que é quando ela deita
+        // de novo. O mesmo remédio da bola e da borboleta — o que se sacia é o
+        // que dá ritmo ao dia.
         options.push(
           option(
             'sunbathe',
-            (0.5 + emotions.happiness * 0.6) * (1.2 - traits.activity) * 0.75,
+            (0.25 + (1 - needs.energy) * 1.3 + emotions.sleepiness * 0.5) *
+              (1.2 - traits.activity) *
+              0.75,
             self.x,
             self.y,
             NO_TARGET,
@@ -419,11 +434,20 @@ export function createUtilityBrain(): Brain {
         options.push(
           option(
             'watch',
-            (emotions.curiosity * 1.1 + traits.curiosity * 0.5 + (self.isBaby ? 0.5 : 0)) *
+            // A CURIOSIDADE MULTIPLICA, não soma.
+            //
+            // Ela era uma parcela entre três: com a curiosidade gasta, o
+            // temperamento e o bônus de filhote sozinhos ainda ganhavam de tudo,
+            // e a criatura voltava a olhar a borboleta no quadro seguinte. Foi
+            // medido: quarenta por cento da vida dela, um minuto seguido sem se
+            // mexer. Quem sacia tem de mandar na conta — é a mesma forma da
+            // vontade de brincar, que multiplica o gosto pela bola.
+            (0.15 + emotions.curiosity) *
+              (traits.curiosity * 0.9 + (self.isBaby ? 0.5 : 0.15)) *
               proximity *
               (1 - emotions.fear) *
               (1 - perception.rain) *
-              0.95,
+              1.6,
             perception.ambient.x,
             perception.ambient.y,
             NO_TARGET,
