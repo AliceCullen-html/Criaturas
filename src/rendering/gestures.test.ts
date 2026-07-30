@@ -19,7 +19,7 @@ function montar(
     toca?: (x: number, y: number, id: number) => boolean;
   } = {},
 ) {
-  const chamadas = { pet: 0, rough: 0, colo: 0, carrega: 0, solta: 0, atirada: 0 };
+  const chamadas = { pet: 0, rough: 0, colo: 0, carrega: 0, solta: 0, atirada: 0, varre: 0 };
   const handlers = {
     onSelect: () => {},
     onGrab: () => {},
@@ -52,7 +52,9 @@ function montar(
     onDropScenery: () => {},
     onPokeGround: () => {},
     onPokeWater: () => {},
-    onMarquee: () => {},
+    onMarquee: () => {
+      chamadas.varre += 1;
+    },
     onMarqueeEnd: () => {},
     onOrder: () => {},
   } satisfies GestureHandlers;
@@ -60,7 +62,7 @@ function montar(
   // A criatura ocupa um quadradinho na origem; "encostada" é um alcance maior.
   let emCima = true;
   const probe: WorldProbe = {
-    creatureAt: () => (emCima ? BICHO : null),
+    creatureAt: (x, y) => (emCima && (options.toca?.(x, y, BICHO) ?? true) ? BICHO : null),
     canGrab: () => options.canGrab ?? false,
     canHurt: () => options.canHurt ?? false,
     stillTouching: options.toca ?? (() => true),
@@ -327,5 +329,29 @@ describe('o gesto que o jogador faz de verdade', () => {
     fora.agora = true;
     for (let i = 0; i < 6; i++) gestos.tick(0.05);
     expect(chamadas.colo, 'ela andou e a mão a pescou sem querer').toBe(0);
+  });
+});
+
+describe('a mão ocupada não varre o chão', () => {
+  /** Depois que ela sai do chão, o ponto onde o dedo apertou fica VAZIO. */
+  it('carregar a criatura não desenha retângulo de seleção atrás dela', () => {
+    const saiu = { doChao: false };
+    const { gestos, chamadas } = montar({
+      canGrab: true,
+      // O corpo dela: e assim que é levantada, ali não há mais ninguém.
+      toca: (x, y) => !saiu.doChao && Math.hypot(x, y) < 14,
+    });
+    gestos.pointerDown(0, 0, 1000, 0);
+    gestos.pointerMove(40, 10, 1080);
+    expect(chamadas.colo).toBe(1);
+    saiu.doChao = true;
+
+    // Sacode: é aqui que o retângulo aparecia, e a criatura parava de seguir.
+    for (let i = 1; i <= 12; i++) {
+      gestos.pointerMove(40 + (i % 2 === 0 ? 80 : -80), 10 + i, 1100 + i * 50);
+    }
+    expect(chamadas.varre, 'desenhou o retângulo de seleção enquanto a carregava').toBe(0);
+    expect(chamadas.carrega, 'ela deixou de acompanhar a mão').toBeGreaterThan(10);
+    expect(gestos.carriedCreature).toBe(BICHO);
   });
 });

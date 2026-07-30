@@ -434,20 +434,6 @@ export class GestureRecognizer {
 
     if (Math.hypot(x - this.downX, y - this.downY) > DRAG_THRESHOLD) this.moved = true;
 
-    // Varredura: arrastar a partir de chão vazio desenha o retângulo.
-    if (this.marquee || (this.moved && this.holdTarget === null && this.pettingId === null)) {
-      const empty =
-        this.probe.itemAt(this.downX, this.downY) === null &&
-        this.probe.creatureAt(this.downX, this.downY) === null &&
-        this.probe.sceneryAt(this.downX, this.downY) === null;
-      if (this.marquee || empty) {
-        this.marquee = true;
-        this.state = 'open';
-        this.handlers.onMarquee(this.downX, this.downY, x, y);
-        return;
-      }
-    }
-
     // Já carregando cenário: a árvore ou pedra acompanha a mão.
     if (this.heldScenery !== null) {
       this.state = 'holding';
@@ -469,6 +455,29 @@ export class GestureRecognizer {
       const creature = this.probe.creatureAt(x, y);
       if (creature !== null) this.handlers.onOffer(this.heldItem, creature);
       return;
+    }
+
+    // VARREDURA: arrastar a partir de chão vazio desenha o retângulo.
+    //
+    // E ela vem DEPOIS de tudo que pode estar na mão, o que não é ordem à toa.
+    // Enquanto estava antes, levantar a criatura desatava um defeito bonito de
+    // ver: no instante em que ela sai do chão, o ponto onde o dedo apertou fica
+    // VAZIO — a criatura está na mão, não mais ali —, e a varredura concluía
+    // "arrastou a partir do nada" e desenhava o retângulo de seleção. A
+    // criatura parava de acompanhar a mão, o retângulo crescia atrás dela e, ao
+    // soltar, ele ainda a selecionava e abria a ficha dela por cima de tudo.
+    // Mão ocupada não varre.
+    if (this.marquee || (this.moved && this.holdTarget === null && this.pettingId === null)) {
+      const empty =
+        this.probe.itemAt(this.downX, this.downY) === null &&
+        this.probe.creatureAt(this.downX, this.downY) === null &&
+        this.probe.sceneryAt(this.downX, this.downY) === null;
+      if (this.marquee || empty) {
+        this.marquee = true;
+        this.state = 'open';
+        this.handlers.onMarquee(this.downX, this.downY, x, y);
+        return;
+      }
     }
 
     // A MÃO ESTÁ NELA. Três coisas podem sair daqui, e a ordem é a resposta.

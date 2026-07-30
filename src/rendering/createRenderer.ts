@@ -1848,6 +1848,7 @@ export function createRenderer(options: RendererOptions): Renderer {
       let selX = 0;
       let selY = 0;
       let selSize = 0;
+      let selLift = 0;
       let selFound = false;
 
       for (let i = 0; i < creatures.count; i++) {
@@ -1955,6 +1956,7 @@ export function createRenderer(options: RendererOptions): Renderer {
             selX = cx + eggFoot;
             selY = cy + eggFoot;
             selSize = size;
+            selLift = 0;
             selFound = true;
           }
           continue;
@@ -2103,6 +2105,7 @@ export function createRenderer(options: RendererOptions): Renderer {
           selX = cx + foot;
           selY = cy + foot;
           selSize = size;
+          selLift = lift;
           selFound = true;
         }
       }
@@ -2117,11 +2120,17 @@ export function createRenderer(options: RendererOptions): Renderer {
       }
 
       // Posição do selecionado NA TELA, para o cartão flutuante seguir.
+      //
+      // A ALTURA ENTRA NA CONTA. O cartão fica um tanto acima da criatura, e
+      // esse tanto era medido a partir do CHÃO — o que basta enquanto ela anda
+      // por aí. Erguida no colo, ela subia e o cartão não: a ficha dela ficava
+      // por cima do próprio bicho, tapando justamente o que o jogador está
+      // olhando enquanto o segura.
       if (selectedScreenCb) {
         if (selFound) {
           selectedScreenCb(
             isoX(selX, selY) * camera.zoom + screenWidth / 2 - camera.isoX * camera.zoom,
-            (isoY(selX, selY) - selSize * 2.4) * camera.zoom +
+            (isoY(selX, selY) - selSize * 2.4 - selLift) * camera.zoom +
               screenHeight / 2 -
               camera.isoY * camera.zoom,
             true,
