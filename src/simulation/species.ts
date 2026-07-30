@@ -106,6 +106,22 @@ const CONTENT = 0.45;
 /** Teto de população num mundo 1000×1000, o mesmo que vale para os casais. */
 const MAX_POPULATION_BASE = 60;
 
+/**
+ * O GARGALO — quantos sobreviventes ainda são uma espécie.
+ *
+ * Seis. Abaixo disso uma população sexuada não é mais uma população: é um punhado
+ * de bichos que podem ser todos do mesmo sexo, todos velhos, ou longe demais uns
+ * dos outros para se acharem. Medido no jardim de verdade, com a semente do jogo:
+ * a espécie evoluía aos trinta, o pico desabava, e aos oitenta minutos restava
+ * UMA criatura que não podia se reproduzir de jeito nenhum. O jogo continuava
+ * rodando com o fim já decidido.
+ *
+ * A distância até o limiar (trinta) é a histerese: não há como piscar entre as
+ * duas fases: para voltar a ser sexuada, a espécie tem de refazer o caminho
+ * inteiro.
+ */
+const GARGALO = 6;
+
 /** Onde o broto aparece: coladinho, mas não em cima. */
 const BUD_DISTANCE = 14;
 
@@ -128,6 +144,46 @@ export const buddingSystem: System = {
     const eggsLeft = world.hasComponent(Egg) ? world.store(Egg).size : 0;
     if (creatures.size === 0 && eggsLeft === 0) {
       chronicle(world, 'extincao', 'A espécie se extinguiu. O jardim ficou vazio.', true);
+      return;
+    }
+
+    // ---- O GARGALO ------------------------------------------------------
+    // A espécie quase acabou: quem sobrou volta a brotar.
+    //
+    // Isto não é uma rede de segurança de programador — é o que a biologia faz
+    // com um gargalo populacional de verdade. Quando restam poucos indivíduos e
+    // encontrar um par vira improvável, a reprodução assexuada é a saída, e há
+    // bicho neste mundo que faz exatamente isso. Aqui o jardim já tem os dois
+    // modos escritos; o que faltava era o caminho de volta.
+    //
+    // Sem ele havia um beco sem saída medido: a espécie virava sexuada aos
+    // trinta e NUNCA mais voltava, então um pico que desabasse para dois ou três
+    // era o fim, com o jogo continuando a rodar por horas em volta de uma
+    // criatura sozinha. Não é um jogo perdido: é um jogo que parou de acontecer
+    // sem avisar.
+    if (species.phase === PHASE.sexual && creatures.size + eggsLeft <= GARGALO) {
+      species.phase = PHASE.budding;
+      creatures.forEach((_tag, entity) => {
+        const bio = bios.get(entity);
+        if (!bio) return;
+        bio.sex = 'none';
+      });
+      // O progresso de brotamento de antes da transição está velho demais para
+      // valer, e um descanso pendente atrasaria o recomeço logo agora.
+      world.store(Budding).forEach((state) => {
+        state.progress = 0;
+        state.cooldown = 0;
+      });
+      chronicle(
+        world,
+        `gargalo-${world.tick}`,
+        creatures.size === 0
+          ? 'A espécie chegou ao fim de uma linhagem — só as cascas continuam'
+          : creatures.size === 1
+            ? 'Sobrou uma só. A espécie perdeu os sexos e voltou a se duplicar'
+            : `Restaram ${creatures.size}. A espécie perdeu os sexos e voltou a se duplicar`,
+        true,
+      );
       return;
     }
 

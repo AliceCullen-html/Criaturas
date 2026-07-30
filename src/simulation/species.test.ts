@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { SystemScheduler, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
-import { Appearance, Attributes, Bio, Creature, Lineage, Personality } from '@creatures';
+import { Appearance, Attributes, Bio, Creature, Egg, Lineage, Personality } from '@creatures';
 import {
   ambientSystem,
   createWorld,
@@ -31,6 +31,7 @@ import { buddingSystem, PHASE, SpeciesResource } from './species';
 import { ChronicleResource, createChronicle, chronicle } from './chronicle';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
+import { placeEgg } from './toolActions';
 
 /**
  * A ORIGEM DA ESPÉCIE.
@@ -197,6 +198,100 @@ describe('a origem da espécie', () => {
     }
     expect(world.getResource(SpeciesResource).phase).toBe(PHASE.sexual);
     console.log(`depois da transição: ${antes} → ${world.store(Creature).size}`);
+  });
+
+  /**
+   * O GARGALO — e o beco sem saída que ele fecha.
+   *
+   * Isto veio de um jogo de verdade, acelerado, em que o jogador viu a criatura
+   * sumir e nada mais acontecer. Medido depois com a semente do jogo: a espécie
+   * evoluía aos trinta, o pico desabava, e aos oitenta minutos restava UMA
+   * criatura sem par possível. O jardim continuava rodando com o fim já decidido
+   * — que é pior do que perder, porque não avisa.
+   *
+   * O teste roda o mundo inteiro, não o sistema sozinho: leva a espécie até a
+   * transição de verdade, mata quase todo mundo, e cobra que a vida volte.
+   */
+  it('quando quase acaba, a espécie volta a brotar', () => {
+    const world = genesis(99, 8);
+    const run = scheduler();
+    const species = world.getResource(SpeciesResource);
+
+    for (let tick = 0; tick < 20 * 60 * 20 && species.phase !== PHASE.sexual; tick++) {
+      run.update(world, DT);
+      world.tick += 1;
+    }
+    expect(species.phase, 'a espécie nunca evoluiu').toBe(PHASE.sexual);
+
+    // A CATÁSTROFE, em dois passos, para medir os dois lados da linha.
+    // Os ovos vão junto: uma casca no chão é vida esperando, e o sistema conta
+    // as duas coisas — sem limpá-las aqui, a contagem seria outra.
+    const cascas: number[] = [];
+    world.store(Egg).forEach((_egg, entity) => cascas.push(entity));
+    for (const entity of cascas) world.destroyEntity(entity);
+
+    // Primeiro sete: uma população machucada, mas ainda uma população.
+    const vivos: number[] = [];
+    world.store(Creature).forEach((_tag, entity) => vivos.push(entity));
+    for (const entity of vivos.slice(7)) world.destroyEntity(entity);
+    run.update(world, DT);
+    world.tick += 1;
+    expect(species.phase, 'desistiu da fase sexuada cedo demais').toBe(PHASE.sexual);
+
+    // Agora seis, e nada diz de que sexo são: pode muito bem ser meia dúzia de
+    // fêmeas, que é exatamente o beco sem saída que se está fechando.
+    world.destroyEntity(vivos[6] as number);
+    expect(world.store(Creature).size).toBe(6);
+
+    run.update(world, DT);
+    world.tick += 1;
+
+    expect(species.phase, 'a espécie continuou sexuada com seis vivos').toBe(PHASE.budding);
+    world.store(Creature).forEach((_tag, entity) => {
+      expect(world.store(Bio).get(entity)?.sex, 'sobrou alguém com sexo').toBe('none');
+    });
+
+    // E não é só um estado trocado: a vida VOLTA. Ninguém brota num instante —
+    // são quarenta e cinco segundos de vida boa sustentada —, então dá-se ao
+    // jardim o tempo de uma recuperação.
+    const antes = world.store(Creature).size;
+    for (let tick = 0; tick < 20 * 60 * 12; tick++) {
+      run.update(world, DT);
+      world.tick += 1;
+    }
+    const depois = world.store(Creature).size;
+    console.log(`gargalo: ${antes} sobreviventes → ${depois} em doze minutos`);
+    expect(depois, 'os sobreviventes não se reproduziram').toBeGreaterThan(antes);
+  });
+
+  /**
+   * O OVO DO JOGADOR NASCE NA FASE EM QUE A ESPÉCIE ESTÁ.
+   *
+   * A outra metade do mesmo beco sem saída. Um jardim que ficou vazio ainda tem
+   * o gesto de pôr um ovo — é a última coisa que o jogador pode fazer. Se esse
+   * ovo chocasse uma fêmea numa espécie que ainda se duplica, ela não poderia
+   * brotar (só brota quem não tem sexo) nem acasalar (não há par), e o gesto de
+   * recomeçar devolveria uma criatura estéril.
+   */
+  it('o ovo posto pelo jogador nasce da fase da espécie', () => {
+    const world = genesis(3, 99);
+    world.store(Creature).forEach((_tag, entity) => world.destroyEntity(entity));
+
+    expect(placeEgg(world, 400, 400)).toBe('placed');
+    let semSexo = 0;
+    world.store(Bio).forEach((bio) => {
+      if (bio.sex === 'none') semSexo += 1;
+    });
+    expect(semSexo, 'o ovo do jogador chocaria uma criatura estéril').toBe(1);
+
+    // Já numa espécie que tem sexos, o mesmo gesto devolve macho ou fêmea.
+    world.getResource(SpeciesResource).phase = PHASE.sexual;
+    expect(placeEgg(world, 420, 400)).toBe('placed');
+    let sexuados = 0;
+    world.store(Bio).forEach((bio) => {
+      if (bio.sex !== 'none') sexuados += 1;
+    });
+    expect(sexuados, 'o ovo saiu sem sexo numa espécie sexuada').toBe(1);
   });
 
   it('o livro da história registra os marcos, e só uma vez cada', () => {

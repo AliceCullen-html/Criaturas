@@ -13,6 +13,7 @@ import {
 } from '@world';
 import { spawnCreature } from '@creatures';
 import { chronicle } from './chronicle';
+import { isBuddingPhase } from './species';
 import { showAndTell } from './systems/teachingSystem';
 
 /**
@@ -127,11 +128,20 @@ export type EggReply = 'placed' | 'crowded' | 'waiting';
  * se multiplica sem limite deixa de ter história: vira um formigueiro. E ovos
  * demais ao mesmo tempo transformariam o nascimento, que é o acontecimento mais
  * bonito do jogo, num chocadeiro.
+ *
+ * E o ovo nasce NA FASE EM QUE A ESPÉCIE ESTÁ. Sem isto, um ovo posto num jardim
+ * assexuado chocava um macho ou uma fêmea — que não pode brotar, porque só quem
+ * não tem sexo brota, e não pode acasalar, porque a espécie ainda não tem par. O
+ * gesto de recomeçar um jardim vazio devolvia uma criatura estéril.
  */
 export function placeEgg(world: World, x: number, y: number): EggReply {
   if (world.store(Creature).size >= MAX_POPULATION) return 'crowded';
   if (world.hasComponent(Egg) && world.store(Egg).size >= MAX_EGGS) return 'waiting';
-  spawnCreature(world, x, y, { ageFraction: 0, asEgg: true });
+  spawnCreature(world, x, y, {
+    ageFraction: 0,
+    asEgg: true,
+    ...(isBuddingPhase(world) ? { sex: 'none' as const } : {}),
+  });
   return 'placed';
 }
 
