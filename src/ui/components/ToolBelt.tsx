@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { TOOL, TOOL_COUNT, TOOL_HINTS, TOOL_NAMES } from '@core';
 import { useUiStore } from '../store/simulationStore';
 import beltUrl from '../../assets/ui/belt.png';
@@ -24,10 +24,19 @@ import beltUrl from '../../assets/ui/belt.png';
  * segurando sem escrever nada.
  */
 
-/** Lado da célula no atlas em 4×. */
-const CELL = 96;
-/** Lado do botão na tela. */
-const SIZE = 44;
+/**
+ * O TAMANHO DO BOTÃO NÃO MORA MAIS AQUI — mora no CSS, em `--slot`.
+ *
+ * Era quarenta e quatro pixels fixos, e isso é uma suposição sobre o tamanho da
+ * tela. O jardim escala com a janela (a câmera enquadra o mundo inteiro), a
+ * interface não escalava, e numa tela grande — ou num navegador com zoom para
+ * fora — o cinto virava uma pulga de nove pixels no canto, pequena demais para
+ * ler e para acertar com o dedo. Foi assim que o jogador viu.
+ *
+ * O recorte do atlas segue o mesmo `--slot` por `calc`, então o sprite continua
+ * certo em qualquer tamanho. A linha e o estado vão como variáveis; a conta é do
+ * CSS, que é quem sabe quanto o botão está medindo agora.
+ */
 /** Colunas do atlas: normal, hover, press, desabilitado. */
 const STATE = { normal: 0, hover: 1, press: 2, off: 3 } as const;
 
@@ -64,13 +73,13 @@ export function ToolBelt() {
       <button
         key={i}
         className="belt__slot"
-        style={{
-          width: SIZE,
-          height: SIZE,
-          backgroundImage: `url(${beltUrl})`,
-          backgroundSize: `${(SIZE * 4 * CELL) / CELL}px ${(SIZE * 8 * CELL) / CELL}px`,
-          backgroundPosition: `-${state * SIZE}px -${i * SIZE}px`,
-        }}
+        style={
+          {
+            backgroundImage: `url(${beltUrl})`,
+            '--state': state,
+            '--row': i,
+          } as CSSProperties
+        }
         onMouseEnter={() => setHover(i)}
         onMouseLeave={() => setHover((was) => (was === i ? -1 : was))}
         // Clicar na ferramenta que já está na mão a devolve ao cinto: é o

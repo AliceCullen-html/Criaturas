@@ -42,7 +42,15 @@ body {
 }
 
 /* A tela inteira é o mundo. Nada de HUD. */
+/* AS MEDIDAS DO CANTO DE BAIXO À ESQUERDA, num lugar só.
+   Ali moram três coisas — a maçaneta do livro, o relógio e o sussurro da
+   história — e elas precisam saber o tamanho umas das outras para não se
+   desenharem por cima. Já se desenharam: o relógio nasceu exatamente em cima
+   do sussurro. Com as medidas compartilhadas, cada uma se empilha sobre a
+   anterior sozinha, em qualquer tela. */
 .app {
+  --gear: clamp(30px, 4.2vmin, 64px);
+  --mark: clamp(26px, 3.4vmin, 52px);
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -205,7 +213,14 @@ body {
    Encostado na borda esquerda, no meio da altura: perto do polegar de quem
    joga com uma mão no mouse, e fora do caminho do jardim. Ele não tem fundo
    próprio — cada botão já vem com a sua moldura de madeira desenhada. */
+/* O TAMANHO DA INTERFACE ACOMPANHA A JANELA.
+   O jardim escala (a câmera enquadra o mundo inteiro); a interface era pixel
+   fixo. Numa tela grande, ou num navegador com zoom para fora, o cinto virava
+   uma pulga de nove pixels no canto — pequeno demais para ler e para acertar.
+   `vmin` segue a menor dimensão, que é a que manda numa janela alta e estreita;
+   os limites impedem tanto o botão de sumir quanto de virar um portão. */
 .belt {
+  --slot: clamp(38px, 5.4vmin, 84px);
   position: fixed;
   left: 10px;
   top: 50%;
@@ -229,6 +244,12 @@ body {
 }
 
 .belt__slot {
+  width: var(--slot);
+  height: var(--slot);
+  /* O atlas tem quatro estados por linha e oito ferramentas por coluna: a
+     folha inteira mede quatro e oito vezes o botão, em qualquer tamanho. */
+  background-size: calc(var(--slot) * 4) calc(var(--slot) * 8);
+  background-position: calc(var(--state) * var(--slot) * -1) calc(var(--row) * var(--slot) * -1);
   border: none;
   padding: 0;
   background-color: transparent;
@@ -248,7 +269,7 @@ body {
    pequena e discreta. */
 .belt__name {
   margin-top: 4px;
-  font-size: 10px;
+  font-size: clamp(10px, 1.35vmin, 17px);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
@@ -256,9 +277,9 @@ body {
 }
 
 .belt__hint {
-  max-width: 104px;
+  max-width: calc(var(--slot) * 2.4);
   text-align: center;
-  font-size: 9px;
+  font-size: clamp(9px, 1.2vmin, 15px);
   line-height: 1.35;
   color: var(--text-muted);
   opacity: 0.75;
@@ -274,15 +295,15 @@ body {
   left: 12px;
   bottom: 10px;
   z-index: 15;
-  width: 26px;
-  height: 26px;
+  width: var(--mark);
+  height: var(--mark);
   padding: 0;
   border: none;
   border-radius: 7px;
   background: rgba(20, 24, 20, 0.5);
   color: #e8e2cf;
-  font-size: 14px;
-  line-height: 26px;
+  font-size: calc(var(--mark) * 0.54);
+  line-height: var(--mark);
   cursor: pointer;
   opacity: 0.55;
   transition:
@@ -298,16 +319,20 @@ body {
 /* --- O livro da história -------------------------------------------------
    Duas camadas, nenhuma delas um menu. O sussurro passa no canto e some; o
    livro só existe quando o jogador aperta H. A tela é do mundo. */
+/* E o sussurro fica ACIMA do relógio, que fica acima da maçaneta. Antes ele
+   dividia a linha com a maçaneta e o relógio caiu em cima dele; numa tela
+   estreita o texto ainda quebrava em duas linhas e subia por cima das
+   marchas. Empilhado, cada um tem a sua faixa em qualquer largura. */
 .whisper {
   position: absolute;
-  left: 46px;
-  bottom: 12px;
+  left: 12px;
+  bottom: calc(var(--mark) + var(--gear) + 28px);
   pointer-events: none;
-  font-size: 11px;
+  font-size: clamp(11px, 1.4vmin, 18px);
   line-height: 1.5;
   color: var(--text-muted);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
-  max-width: 40vw;
+  max-width: min(62vw, 460px);
 }
 
 .whisper__line--mark {
@@ -361,7 +386,8 @@ body {
 .clock {
   position: fixed;
   left: 12px;
-  bottom: 46px;
+  /* Logo acima da maçaneta do livro. */
+  bottom: calc(var(--mark) + 20px);
   z-index: 15;
   display: flex;
   align-items: center;
@@ -378,17 +404,17 @@ body {
 /* Trinta e quatro pixels, e não vinte e seis: o alvo do dedo num celular é o
    mesmo do mouse, e um número de dez pixels em cima do jardim não se lê. */
 .clock__gear {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 7px;
+  min-width: var(--gear);
+  height: var(--gear);
+  padding: 0 calc(var(--gear) * 0.2);
   border: none;
   border-radius: 9px;
   background: rgba(20, 24, 20, 0.62);
   color: #e8e2cf;
   font-family: inherit;
-  font-size: 12px;
+  font-size: clamp(12px, 1.6vmin, 20px);
   letter-spacing: 0.02em;
-  line-height: 34px;
+  line-height: var(--gear);
   cursor: pointer;
   transition:
     background 0.15s,
@@ -408,12 +434,12 @@ body {
 }
 
 .clock__gear--pause {
-  font-size: 11px;
+  font-size: clamp(11px, 1.4vmin, 18px);
 }
 
 .clock__gear--eye {
-  margin-left: 8px;
-  font-size: 15px;
+  margin-left: calc(var(--gear) * 0.25);
+  font-size: clamp(15px, 2vmin, 26px);
 }
 
 /* --- A tampa aberta ------------------------------------------------------
