@@ -1,4 +1,4 @@
-import { WORD, clamp, subjects } from '@core';
+import { WORD, clamp, placeSpot, subjects, type CreatureMemory } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import {
   Habits,
@@ -41,6 +41,69 @@ const perceivedFood: PerceivedFood[] = [];
 const hiddenSpots: Array<{ x: number; y: number }> = [];
 const hunch = { x: 0, y: 0, distance: 0 };
 const WANDER_RANGE = 150;
+
+/**
+ * A DERIVA PARA UM LUGAR LEMBRADO.
+ *
+ * Quando ela está indo a um lugar de que gosta, o passeio ainda é passeio: o
+ * sorteio continua valendo, só que espalhado em volta do destino em vez de em
+ * volta dela. Um terço do alcance é o bastante para ela chegar POR PERTO e não
+ * em cima do ponto — quem vai sempre à mesma coordenada não está lembrando de
+ * um lugar, está seguindo uma marca no mapa.
+ */
+const MEMORY_SPREAD = 0.35;
+/** Abaixo desta opinião um lugar não puxa ninguém: é só um lugar. */
+const MEMORY_PULL = 0.12;
+/** Lugares mais longe que isto ainda puxam, mas cada vez menos. */
+const MEMORY_REACH = 320;
+/**
+ * A chance máxima de um passeio virar uma visita.
+ *
+ * Nunca 100%: uma criatura que fosse ao lugar bom TODA vez que resolvesse
+ * passear pararia de explorar, e o jardim viraria três criaturas em cima de
+ * três pontos. Metade das vezes ela vai; na outra metade sai à toa, e é dessa
+ * metade que saem os lugares novos.
+ */
+const MEMORY_CHANCE = 0.5;
+
+/**
+ * O melhor lugar que ela lembra — se algum valer a caminhada.
+ *
+ * O "dado" é o capricho do momento, e não um sorteio novo: é o mesmo número que
+ * já inclina as decisões dela, trocado a cada dezoito segundos. Assim a escolha
+ * de ir ou não ir dura o tempo de uma travessia, em vez de mudar a cada passo —
+ * e nenhum número aleatório novo é consumido, o que deixa um jardim de semente
+ * fixa continuar sendo o mesmo jardim.
+ */
+function rememberedSpot(
+  memory: CreatureMemory,
+  x: number,
+  y: number,
+  whim: number,
+): { x: number; y: number } | null {
+  const hereCell = subjects.place(x, y);
+  let best: { x: number; y: number } | null = null;
+  let bestPull = MEMORY_PULL;
+  memory.forEachAbout('place:', (subject, trace) => {
+    // O lugar onde ela JÁ ESTÁ não puxa: senão ela chega e fica.
+    if (subject === hereCell) return;
+    const opinion = trace.valence * trace.strength;
+    if (opinion <= 0) return;
+    const spot = placeSpot(subject);
+    if (!spot) return;
+    // Longe pesa menos, mas não deixa de pesar: um lugar muito bom compensa a
+    // caminhada, e é assim que uma criatura atravessa o jardim para voltar
+    // onde comeu bem.
+    const pull = opinion / (1 + Math.hypot(spot.x - x, spot.y - y) / MEMORY_REACH);
+    if (pull <= bestPull) return;
+    bestPull = pull;
+    best = spot;
+  });
+  if (!best) return null;
+  // Quanto melhor a lembrança, mais provável a visita — até o teto.
+  return whim < Math.min(MEMORY_CHANCE, bestPull * 1.5) ? best : null;
+}
+
 /** O quanto a sede estende o alcance da água além do que a vista enxerga. */
 const THIRST_MEMORY = 700;
 /**
@@ -374,16 +437,33 @@ export const decisionSystem: System = {
         mind.commitment = decision.commitment;
 
         if (decision.intent === 'wander') {
-          mind.targetX = clamp(
-            transform.x + rng.range(-WANDER_RANGE, WANDER_RANGE),
-            4,
-            config.width - 4,
+          // OS DOIS SORTEIOS SAEM PRIMEIRO E SEMPRE, aconteça o que acontecer
+          // depois. Consumir a fila de números aleatórios de um jeito que
+          // dependa da memória da criatura mudaria o mundo inteiro conforme o
+          // que ela lembra — e um jardim com semente fixa tem de continuar
+          // sendo o mesmo jardim.
+          const driftX = rng.range(-WANDER_RANGE, WANDER_RANGE);
+          const driftY = rng.range(-WANDER_RANGE, WANDER_RANGE);
+
+          // PARA ONDE ELA DERIVA.
+          //
+          // Vagar não é sortear um ponto: é ir andando para onde a vida foi boa.
+          // Sem isto, tudo o que uma criatura aprende sobre LUGARES não muda
+          // nada — o jardim guardava a fruta que caiu ali e o esconderijo achado
+          // e nunca voltava a nenhum deles, porque só o lado ruim da lembrança
+          // era lido, para desviar. Um bicho que só sabe de onde fugir não tem
+          // casa, e um saber sobre lugares que ninguém visita não se espalha.
+          const pull = rememberedSpot(
+            memory,
+            transform.x,
+            transform.y,
+            habitsStore?.get(entity)?.whim ?? 0.5,
           );
-          mind.targetY = clamp(
-            transform.y + rng.range(-WANDER_RANGE, WANDER_RANGE),
-            4,
-            config.height - 4,
-          );
+          const spread = pull ? MEMORY_SPREAD : 1;
+          const fromX = pull ? pull.x : transform.x;
+          const fromY = pull ? pull.y : transform.y;
+          mind.targetX = clamp(fromX + driftX * spread, 4, config.width - 4);
+          mind.targetY = clamp(fromY + driftY * spread, 4, config.height - 4);
         } else {
           mind.targetX = decision.targetX;
           mind.targetY = decision.targetY;

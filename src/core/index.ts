@@ -6,7 +6,7 @@ export type { Rng } from './rng';
 export * from './vector2';
 export * from './math';
 export { SpatialHash } from './spatialHash';
-export { CreatureMemory, subjects } from './memory';
+export { CreatureMemory, subjects, placeSpot, PLACE_CELL } from './memory';
 export {
   TILE,
   tileColOf,

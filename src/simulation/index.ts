@@ -18,6 +18,7 @@ export type { CreatureSnapshot } from './creatureSnapshot';
 export { handReactionSystem } from './systems/handReactionSystem';
 export { carrySystem } from './systems/carrySystem';
 export { fearLearningSystem } from './systems/fearLearningSystem';
+export { observationSystem } from './systems/observationSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { rewardSystem } from './systems/rewardSystem';
 export { idleSystem } from './systems/idleSystem';

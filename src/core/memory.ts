@@ -26,8 +26,37 @@ export const subjects = {
    */
   thing: (variant: number): MemorySubject => `thing:${variant}`,
   place: (x: number, y: number): MemorySubject =>
-    `place:${Math.floor(x / 100)},${Math.floor(y / 100)}`,
+    `place:${Math.floor(x / PLACE_CELL)},${Math.floor(y / PLACE_CELL)}`,
 } as const;
+
+/**
+ * O TAMANHO DE UM LUGAR na cabeça de uma criatura.
+ *
+ * Cem por cem. Um lugar não é um ponto — é "ali perto da água", "debaixo
+ * daquelas árvores". Fino demais e a criatura nunca voltaria duas vezes ao
+ * mesmo lugar, porque dois passos ao lado seriam outro lugar; grosso demais e o
+ * jardim inteiro vira um lugar só.
+ */
+export const PLACE_CELL = 100;
+
+/**
+ * O caminho de volta: de uma lembrança de lugar para um ponto do jardim.
+ *
+ * Uma memória que não dá para VISITAR não muda nada. Enquanto isto não existia,
+ * o jardim guardava lugares bons — a fruta que caiu ali, o esconderijo achado —
+ * e nunca ia a nenhum deles: só o lado ruim era lido, para desviar do que
+ * machucou. Uma criatura que só sabe de onde fugir não tem casa.
+ */
+export function placeSpot(subject: MemorySubject): { x: number; y: number } | null {
+  if (!subject.startsWith('place:')) return null;
+  const comma = subject.indexOf(',');
+  if (comma < 0) return null;
+  const cx = Number(subject.slice(6, comma));
+  const cy = Number(subject.slice(comma + 1));
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  // O centro da célula: é o "ali" que ela tem na cabeça.
+  return { x: cx * PLACE_CELL + PLACE_CELL / 2, y: cy * PLACE_CELL + PLACE_CELL / 2 };
+}
 
 export interface MemoryTrace {
   valence: number;
