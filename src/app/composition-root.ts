@@ -112,6 +112,7 @@ import {
   wordForSpot,
 } from '@simulation';
 import { createRenderer, type FeedbackKind, type Renderer } from '@rendering';
+import { AmbientVoice, ambientKindFor } from './ambientSignals';
 import { createMusic } from '@audio';
 import { App } from '@ui';
 import { cardAnchor } from '@ui/cardAnchor';
@@ -453,13 +454,35 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     store.getState().setChronicle(recentEntries(world, 3), [...book.entries].reverse());
   };
 
-  /** Balões espontâneos: o mundo se explica sem texto. */
+  /**
+   * BALÕES ESPONTÂNEOS — o mundo se explica sem texto, e CALA A BOCA no resto.
+   *
+   * Isto varre a população em rodízio, uma criatura por chamada, seis chamadas
+   * por segundo. Numa população de sessenta, cada bicho tem a vez dele a cada
+   * dez segundos e o jardim fica com um balão aqui e outro ali — que é o que se
+   * queria.
+   *
+   * Num jardim de UMA criatura o rodízio degenera: `cursor % 1` é sempre zero,
+   * então a mesma criatura é escolhida seis vezes por segundo, para sempre. E o
+   * jogo COMEÇA com uma criatura só. Medido no que o jogador viu: um filhote
+   * recém-nascido com a atenção acesa ganhava uma interrogação a cada meio
+   * segundo — o espaçamento do `signal`, feito para a esponja, que é um gesto
+   * contínuo do jogador e deve mesmo responder sempre —, e como cada símbolo
+   * vive um segundo e meio, havia três deles no ar o tempo todo, subindo em
+   * fila. Não é uma criatura pensando: é um jogo travado.
+   *
+   * O conserto é o silêncio. Um balão espontâneo é uma coisa que ESCAPA, não uma
+   * legenda do que ela está sentindo — e o que diz que ela está viva é o corpo
+   * dela fazendo coisas, não um ícone repetido em cima da cabeça. Depois de
+   * falar, a criatura fica quieta por uns dez segundos, e o intervalo é
+   * sorteado para não bater como metrônomo.
+   */
+  const voice = new AmbientVoice();
   let ambientCursor = 0;
+
   const emitAmbientSignals = (): void => {
     const creatures = world.store(Creature);
     if (creatures.size === 0) return;
-    const minds = world.store(Mind);
-    const emotions = world.store(Emotions);
     let i = 0;
     let picked = -1;
     creatures.forEach((_tag, entity) => {
@@ -468,16 +491,24 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     ambientCursor += 1;
     if (picked < 0) return;
 
-    const mind = minds.get(picked);
-    const feel = emotions.get(picked);
+    const mind = world.store(Mind).get(picked);
+    const feel = world.store(Emotions).get(picked);
     if (!mind || !feel) return;
 
-    if (mind.intent === 'seekWater') signal('drop', picked);
-    else if (mind.intent === 'sleep') signal('sleep', picked);
-    else if (mind.affection > 0) signal('heart', picked);
-    else if (feel.anger > 0.5) signal('anger', picked);
-    else if (mind.attention > 0) signal('question', picked);
-    else if (feel.happiness > 0.75) signal('heart', picked);
+    const kind = ambientKindFor({
+      intent: mind.intent,
+      affection: mind.affection,
+      attention: mind.attention,
+      anger: feel.anger,
+      happiness: feel.happiness,
+    });
+    if (!kind) return;
+    // O relógio corre no tempo do MUNDO, e não em quadros: acelerado em trinta e
+    // dois, o jardim que o jogador está olhando é o mesmo jardim.
+    if (!voice.speak(picked, world.tick * FIXED_DT)) return;
+
+    signal(kind, picked);
+    if (voice.size > CREATURE_CAPACITY) voice.forget((entity) => creatures.has(entity));
   };
 
   const loop = new SimulationLoop(

@@ -191,10 +191,12 @@ export interface StateRule {
  * volta, bocejar, espreguiçar, cheirar o chão. Sorteadas de tempos em tempos,
  * por cima do laço do ocioso, elas são a diferença entre um boneco e um bicho.
  *
- * E é AQUI que moram as tiras com marca de pensamento — a interrogação, o balão.
- * Uma marca dura o tempo de uma ideia: como microanimação ela aparece, some e
- * volta mais tarde. Como laço de estado ela nunca sai da cabeça da criatura, e
- * foi o que aconteceu duas vezes (observando e no ocioso do filhote).
+ * SÃO TODAS DO CORPO, e nenhuma tem marca de pensamento dentro. Um bicho parado
+ * não pergunta nada: ele pisca, olha em volta, boceja, cheira o chão. As tiras
+ * com interrogação e balão saíram daqui e foram para `THOUGHT_FILLERS`, que só
+ * entra quando a criatura está de fato reparando em alguma coisa — terceira
+ * volta do mesmo defeito, e a mais teimosa: um "?" que aparece sem que exista
+ * pergunta nenhuma não desenha curiosidade, desenha um jogo travado.
  */
 export const IDLE_FILLERS: readonly string[] = [
   'piscar',
@@ -204,11 +206,23 @@ export const IDLE_FILLERS: readonly string[] = [
   'bocejar',
   'espreguicar',
   'farejar',
+  'entediado',
+];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ REPARANDO EM ALGUMA COISA.
+ *
+ * Aqui a marca é honesta: há um objeto, um bicho ou uma novidade na frente
+ * dela, e o balão diz que aquilo entrou na cabeça. O corpo entra junto — a
+ * maior parte do tempo ela só olha, vira a cabeça, cheira — e de vez em quando
+ * sai um pensamento.
+ */
+const THOUGHT_FILLERS: readonly string[] = [
+  ...IDLE_FILLERS,
   'curioso',
   'pensar',
   'filhoteExplora',
   'confuso',
-  'entediado',
 ];
 
 /**
@@ -575,7 +589,7 @@ export const STATES: readonly StateRule[] = [
     clip: () => 'olharLados',
     enter: (_s, from) => (from === 'Curious' ? null : 'curioso'),
     priority: PRIORITY.gesture,
-    fillers: IDLE_FILLERS,
+    fillers: THOUGHT_FILLERS,
   },
   {
     // SENTAR tem entrada e laço diferentes: primeiro ela se abaixa, depois
