@@ -300,8 +300,21 @@ const HIDDEN_FLAG = 256;
  * o jogador precisar olhar o cinto para lembrar o que escolheu.
  */
 const HAND_SCREEN = 40;
-/** A ferramenta na mão vem um pouco menor: ela é objeto, não cursor. */
-const TOOL_SCREEN = 30;
+/**
+ * A ferramenta na mão — metade da mão, encostada na palma.
+ *
+ * Os três números são frações do tamanho da mão, e não pixels soltos: se a mão
+ * mudar de tamanho amanhã, o que ela segura acompanha. Escritos em pixels, uma
+ * mão maior deixaria a bola pendurada no ar a meio palmo do punho.
+ *
+ * A arte tem os dedos para cima e a palma abaixo à direita do ponto do cursor,
+ * e é daí que sai o deslocamento. O que a mão segura é desenhado ANTES dela —
+ * assim os dedos passam por cima, e é essa sobreposição que diz "isto está na
+ * minha mão" em vez de "isto está caído no chão".
+ */
+const TOOL_SCREEN = HAND_SCREEN * 0.5;
+const TOOL_HOLD_X = HAND_SCREEN * 0.52;
+const TOOL_HOLD_Y = HAND_SCREEN * 0.42;
 /** A altura da arte da mão, para o alvo acima virar escala. */
 const HAND_ART = 20;
 
@@ -522,6 +535,8 @@ export function createRenderer(options: RendererOptions): Renderer {
   let feedbackTextures: Record<FeedbackKind, Texture> | null = null;
   let handTextures: Record<HandState, Texture> | null = null;
   let handSprite: Sprite | null = null;
+  /** O que a mão está segurando, desenhado ao lado dela. */
+  let heldSprite: Sprite | null = null;
   let dustTimer = 0;
   let frameId = 0;
   let lastTime = 0;
@@ -1305,6 +1320,10 @@ export function createRenderer(options: RendererOptions): Renderer {
       const particles = new Container();
       const hand = new Sprite(handTextures.open);
       hand.anchor.set(0.25, 0.15);
+      // O QUE A MÃO SEGURA — um desenho à parte, e não a mão trocada por ele.
+      const held = new Sprite(handTextures.open);
+      held.anchor.set(0.5, 0.5);
+      held.visible = false;
       // O CHÃO recebe a matriz isométrica: tudo que for desenhado aqui usa
       // coordenadas cartesianas e sai projetado em losango, de graça.
       const ground = new Container();
@@ -1322,7 +1341,19 @@ export function createRenderer(options: RendererOptions): Renderer {
       // frente — e com camadas separadas isso era inevitável.
       upright.addChild(groundProps, hiddenItems, resources, creatures, itemsLayer, marqueeRect);
 
-      root.addChild(tiles, ground, upright, ambient, particles, rain, tint, glow, rainbow, hand);
+      root.addChild(
+        tiles,
+        ground,
+        upright,
+        ambient,
+        particles,
+        rain,
+        tint,
+        glow,
+        rainbow,
+        held,
+        hand,
+      );
       instance.stage.addChild(root);
 
       // Partículas de folhas.
@@ -1347,6 +1378,7 @@ export function createRenderer(options: RendererOptions): Renderer {
 
       app = instance;
       handSprite = hand;
+      heldSprite = held;
       itemLayer = itemsLayer;
       hiddenItemLayer = hiddenItems;
       reflectionLayer = reflections;
@@ -2258,29 +2290,53 @@ export function createRenderer(options: RendererOptions): Renderer {
         // do banho, porque o contato tem folga: o estado só cede depois dela.
         const inContact = state === 'petting';
         handSprite.visible = handWorld.inside && !inContact;
+        if (heldSprite) heldSprite.visible = false;
         if (handSprite.visible) {
-          const icon = state === 'holding' ? -1 : toolIcon();
-          const tool = icon >= 0 ? iconTextures?.[icon] : null;
-          handSprite.texture = tool ?? handTextures[state];
+          handSprite.texture = handTextures[state];
           // O TAMANHO DA MÃO NA TELA, e não a escala da textura.
           //
           // Era escala fixa, e o resultado eram vinte pixels: do tamanho da
           // setinha do sistema, num jogo em que o cursor É a sua mão dentro do
           // jardim e o desenho dela tem cara. Agora quem manda é o alvo em
-          // pixels de tela, e a escala sai dividindo pela altura da textura —
-          // assim a mão (20 px de arte) e o ícone da ferramenta (16 px) saem do
-          // MESMO tamanho, sem número mágico para acertar a diferença.
+          // pixels de tela, e a escala sai dividindo pela altura da textura.
           //
           // Continua constante na tela: dividir pelo zoom é o que impede o
           // cursor de encolher quando o jogador se afasta do jardim.
-          // A ferramenta na mão é um OBJETO, e vem um pouco menor que a mão:
-          // ela é o que você está segurando, não o cursor em si — e a diferença
-          // impede que uma esponja de quarenta pixels engula um filhote.
           const art = handSprite.texture.height || HAND_ART;
-          handSprite.scale.set((tool ? TOOL_SCREEN : HAND_SCREEN) / art / camera.zoom);
+          handSprite.scale.set(HAND_SCREEN / art / camera.zoom);
+          const hx = isoX(handWorld.x, handWorld.y);
+          const hy = isoY(handWorld.x, handWorld.y);
           // O tremor de esfregar morava aqui. Saiu junto com o cursor: quem
           // esfrega agora é a criatura, e o balanço da esponja é o do desenho.
-          handSprite.position.set(isoX(handWorld.x, handWorld.y), isoY(handWorld.x, handWorld.y));
+          handSprite.position.set(hx, hy);
+
+          // A MÃO CONTINUA SENDO UMA MÃO, E A FERRAMENTA VAI DENTRO DELA.
+          //
+          // A ferramenta SUBSTITUÍA a mão: com a bola escolhida, o cursor era
+          // uma bola solta, do mesmo desenho e quase do mesmo tamanho de uma
+          // bola caída na grama. O jogador largou uma bola, o ponteiro ficou
+          // parado ali do lado, e ele viu DUAS — "puxou outra sei lá de onde".
+          // Ele não tinha como distinguir: as duas eram a mesma figura.
+          //
+          // Uma mão nunca é um objeto do jardim. Desenhando as duas coisas — a
+          // mão, e o que ela segura, menor e encostado na palma —, o que está
+          // na sua mão e o que está no chão param de se confundir, e isso vale
+          // para a bola, o presente, o ovo e a fruta.
+          //
+          // Carregando um objeto do mundo (`holding`), nada entra aqui: o que
+          // está na mão é aquele objeto, e quem o desenha é a camada de itens.
+          const icon = state === 'holding' ? -1 : toolIcon();
+          const tool = icon >= 0 ? iconTextures?.[icon] : null;
+          if (heldSprite && tool) {
+            heldSprite.visible = true;
+            heldSprite.texture = tool;
+            const toolArt = tool.height || HAND_ART;
+            const scale = TOOL_SCREEN / toolArt / camera.zoom;
+            heldSprite.scale.set(scale);
+            // Na palma: um pouco à frente e abaixo do topo da mão, que é onde
+            // ela fecharia em volta da coisa.
+            heldSprite.position.set(hx + TOOL_HOLD_X / camera.zoom, hy + TOOL_HOLD_Y / camera.zoom);
+          }
         }
       }
 
