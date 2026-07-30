@@ -12,7 +12,13 @@ import { GestureRecognizer, type GestureHandlers, type WorldProbe } from './gest
 
 const BICHO = 7;
 
-function montar(options: { canHurt?: boolean; canGrab?: boolean; toca?: () => boolean } = {}) {
+function montar(
+  options: {
+    canHurt?: boolean;
+    canGrab?: boolean;
+    toca?: (x: number, y: number, id: number) => boolean;
+  } = {},
+) {
   const chamadas = { pet: 0, rough: 0, colo: 0, carrega: 0, solta: 0, atirada: 0 };
   const handlers = {
     onSelect: () => {},
@@ -283,5 +289,43 @@ describe('arrastar não é bater', () => {
     gestos.pointerMove(300, 0, 1420);
     gestos.pointerMove(600, 0, 1440);
     expect(chamadas.rough).toBe(0);
+  });
+});
+
+describe('o gesto que o jogador faz de verdade', () => {
+  /** A criatura ocupa um quadradinho na origem: sair dela é passar de 14px. */
+  const corpo = (x: number, y: number) => Math.hypot(x, y) < 14;
+
+  it('apertar nela e PUXAR levanta — sem esperar meio segundo parado', () => {
+    const { gestos, chamadas } = montar({ canGrab: true, toca: corpo });
+    gestos.pointerDown(0, 0, 1000, 0);
+    // O gesto natural: puxa na hora, sem pousar a mão antes.
+    gestos.pointerMove(8, 0, 1040);
+    expect(chamadas.colo, 'ainda em cima dela: isto é carinho').toBe(0);
+    gestos.pointerMove(40, 10, 1090);
+    expect(chamadas.colo, 'puxou a mão para fora dela e nada aconteceu').toBe(1);
+    expect(gestos.carriedCreature).toBe(BICHO);
+  });
+
+  it('passar a mão EM CIMA dela continua sendo carinho, não colo', () => {
+    const { gestos, chamadas } = montar({ canGrab: true, toca: corpo });
+    gestos.pointerDown(0, 0, 1000, 0);
+    for (let i = 1; i <= 10; i++) {
+      gestos.pointerMove(i % 2 === 0 ? 6 : -6, 3, 1000 + i * 60);
+      gestos.tick(0.06);
+    }
+    expect(chamadas.colo).toBe(0);
+    expect(chamadas.pet).toBeGreaterThan(0);
+  });
+
+  it('e a criatura que sai andando de baixo da mão parada não é levantada', () => {
+    const fora = { agora: false };
+    const { gestos, chamadas } = montar({ canGrab: true, toca: () => !fora.agora });
+    gestos.pointerDown(0, 0, 1000, 0);
+    gestos.tick(0.05);
+    // Ela andou: o contato se perde sem que a mão tenha ido a lugar nenhum.
+    fora.agora = true;
+    for (let i = 0; i < 6; i++) gestos.tick(0.05);
+    expect(chamadas.colo, 'ela andou e a mão a pescou sem querer').toBe(0);
   });
 });

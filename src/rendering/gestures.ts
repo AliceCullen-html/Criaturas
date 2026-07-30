@@ -123,12 +123,12 @@ const HOLD_LIFT = 0.45;
 /**
  * Segundos de mão apoiada numa criatura até ela ceder ao colo.
  *
- * Mais que a fruta e mais que a árvore, e é de propósito: apoiar a mão num
- * bicho é fazer carinho, e a pegada não pode roubar o carinho. Passado esse
- * tempo a mão FECHA — mas ela só sai do chão quando o gesto continuar e
- * ARRASTAR. Quem apoiou a mão e soltou fez carinho e depois observou; quem
- * apoiou e puxou pegou a criatura no colo. Dois gestos diferentes, e o
- * jogador aprende a diferença sem ninguém explicar.
+ * O CAMINHO LENTO, para quem segura sem arrastar — o mesmo gesto que o cinto
+ * ensina para os objetos ("segure para pegar"). Passado esse tempo a mão fecha
+ * e o próximo movimento leva a criatura junto.
+ *
+ * O caminho principal é outro e não depende de relógio nenhum: apertar nela e
+ * PUXAR A MÃO PARA FORA dela. Está em `pointerMove`, com o porquê.
  */
 const HOLD_CREATURE = 0.5;
 const OBSERVE_MS = 700;
@@ -462,17 +462,6 @@ export class GestureRecognizer {
       return;
     }
 
-    // A MÃO FECHOU E AGORA PUXA: a criatura sai do chão.
-    if (this.liftArmed && this.pettingId !== null && this.moved) {
-      this.heldCreature = this.pettingId;
-      this.pettingId = null;
-      this.liftArmed = false;
-      this.state = 'holding';
-      this.handlers.onLiftCreature(this.heldCreature);
-      this.handlers.onCarryCreature(this.heldCreature, x, y);
-      return;
-    }
-
     // Já carregando: o objeto acompanha a mão.
     if (this.heldItem !== null) {
       this.state = 'holding';
@@ -482,16 +471,17 @@ export class GestureRecognizer {
       return;
     }
 
-    // Sobre uma criatura: lento = carinho, rápido e longe = agressão.
+    // A MÃO ESTÁ NELA. Três coisas podem sair daqui, e a ordem é a resposta.
     if (this.pettingId !== null) {
       const travel = Math.hypot(x - this.downX, y - this.downY);
-      // Só a mão nua machuca. Com a esponja ou a maçã, depressa é só depressa.
+
+      // 1. TAPA. Só a mão nua machuca, e só o reflexo: rápido e imediato. Com a
+      //    esponja ou a maçã, depressa é só depressa.
       if (
         this.probe.canHurt() &&
         this.speed > ROUGH_SPEED &&
         travel > ROUGH_MIN_TRAVEL &&
         !this.roughSent &&
-        // Reflexo, não transporte: a mão nem chegou a pousar nela.
         time - this.downTime < ROUGH_WINDOW_MS &&
         !this.liftArmed
       ) {
@@ -499,12 +489,42 @@ export class GestureRecognizer {
         this.state = 'rough';
         this.handlers.onRough(this.pettingId, this.speed, this.velX, this.velY);
         this.pettingId = null;
-      } else if (this.probe.stillTouching(x, y, this.pettingId)) {
-        // De volta em cima dela: o contato continua inteiro.
+        return;
+      }
+
+      // 2. COLO. Você apertou nela e PUXOU A MÃO PARA FORA dela: ela vem junto.
+      //
+      //    Esta é a regra inteira, e a primeira versão errou feio. Ela pedia
+      //    meio segundo de mão parada ANTES de arrastar — e ninguém faz isso.
+      //    O jogador aperta e puxa, como se pega um bicho de verdade; o que
+      //    acontecia era carinho, carinho e mais carinho, e a criatura nunca
+      //    saía do chão.
+      //
+      //    Enquanto a mão está EM CIMA dela, é afago: passar a mão no bicho é
+      //    passar a mão no bicho. No instante em que a mão sai de cima e ela
+      //    continua apertada, é porque você está levando ela. Sem número
+      //    mágico: o alcance é o corpo dela, então funciona igual no filhote e
+      //    no adulto, de perto e de longe.
+      //
+      //    `moved` é o que impede o falso positivo: se a mão está parada e é a
+      //    CRIATURA que sai andando de baixo dela, ninguém levantou nada.
+      const pulled = this.moved && !this.probe.stillTouching(x, y, this.pettingId);
+      if (this.probe.canGrab() && (this.liftArmed || pulled)) {
+        this.heldCreature = this.pettingId;
+        this.pettingId = null;
+        this.liftArmed = false;
+        this.state = 'holding';
+        this.handlers.onLiftCreature(this.heldCreature);
+        this.handlers.onCarryCreature(this.heldCreature, x, y);
+        return;
+      }
+
+      // 3. CARINHO, que é o que sobra — e é o caso comum.
+      if (this.probe.stillTouching(x, y, this.pettingId)) {
         this.petAway = 0;
         if (this.speed < PET_SPEED_MAX) this.state = 'petting';
       }
-      // Fora dela, quem desiste é o relógio, no `tick` — não este quadro.
+      // Fora dela e sem mão livre, quem desiste é o relógio, no `tick`.
       return;
     }
 

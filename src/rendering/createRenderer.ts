@@ -1175,9 +1175,26 @@ export function createRenderer(options: RendererOptions): Renderer {
         propWind[kind] ? [propWind[kind]![0]!] : variants,
       );
       propTextures[PROP_LOG] = [art.statics.log];
-      // AS ANIMAÇÕES DA CRIATURA — a pasta inteira, de uma vez.
-      clips = await loadClipCatalog();
-      // E os quadros do ovo, que vêm da folha antiga (ver `eggFrames`).
+      // AS ANIMAÇÕES DA CRIATURA — a pasta inteira, mas SEM SEGURAR O JARDIM.
+      //
+      // São 223 tiras. Esperá-las para só então montar o chão, as árvores e o
+      // lago é abrir o jogo numa tela verde vazia enquanto elas chegam — e foi
+      // o que aconteceu. O jardim não depende delas: quem depende é a criatura,
+      // que aparece assim que a pasta chegar (e o desenho dela já sabe lidar
+      // com uma animação que ainda não existe, caindo no ocioso).
+      void loadClipCatalog().then((loaded) => {
+        if (destroyed) {
+          for (const clip of loaded.values()) {
+            const source = clip.frames[0]?.source ?? null;
+            for (const frame of clip.frames) frame.destroy();
+            source?.destroy();
+          }
+          return;
+        }
+        clips = loaded;
+      });
+      // O ovo, esse, é uma folha só e vem antes de tudo: ele é a primeira coisa
+      // que o jogador vê.
       eggFrames = await loadTintimFrames();
 
       // A bola e os presentes NÃO são desenhados por código: são os ícones

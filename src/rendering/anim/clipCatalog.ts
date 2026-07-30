@@ -106,7 +106,19 @@ export async function loadClipCatalog(): Promise<ClipCatalog> {
 
       const image = new Image();
       image.src = url;
-      await image.decode();
+      try {
+        await image.decode();
+      } catch {
+        // UMA TIRA QUE NÃO CARREGA NÃO PODE LEVAR O JARDIM JUNTO.
+        //
+        // Isto era um `await` solto dentro de um `Promise.all`: bastava um
+        // arquivo falhar — rede ruim, cache estranho, um PNG corrompido — para
+        // a promessa inteira rejeitar, o `mount` rejeitar junto e o jogo abrir
+        // numa tela verde vazia, sem chão, sem árvore, sem nada. Duzentas e
+        // vinte e três chances de o jogo não existir.
+        problems.push(`${what.key}: o arquivo não carregou (${url})`);
+        return;
+      }
 
       // Quantos quadros cabem, pela conta da ficha — e a conta tem de FECHAR.
       const count = Math.round((image.width + GUTTER) / (FRAME_W + GUTTER));
