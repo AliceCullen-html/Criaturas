@@ -21,6 +21,25 @@ export const PROP = {
 
 export type PropKind = (typeof PROP)[keyof typeof PROP];
 
+/**
+ * QUANTO MATO ALTO O JARDIM AGUENTA.
+ *
+ * Grama alta e junco são os únicos detalhes do chão que ficam DE PÉ: eles
+ * entram na ordenação por profundidade junto com as criaturas e, por isso, são
+ * os únicos que podem esconder o bicho de quem está olhando. Um jardim cheio
+ * deles não fica exuberante, fica poluído — e a criatura, que é o assunto da
+ * tela, some no meio do mato.
+ *
+ * Estes quatro números são a dose, e ficam juntos aqui de propósito: o mato
+ * alto vem de quatro lugares diferentes do gerador, e afinar um só não muda
+ * quase nada. A margem do lago era o pior deles — mais da metade das casas da
+ * beira nasciam com junco, formando uma cerca em volta da água inteira.
+ */
+const TALL_IN_CLEARING = 0.16;
+const TALL_IN_FIELD = 0.08;
+const TALL_AT_TREE = 0.2;
+const REEDS_ON_SHORE = 0.2;
+
 /** Props altos entram na ordenação por profundidade; os planos ficam no chão. */
 const TALL_PROPS = new Set<number>([PROP.grassTall, PROP.log, PROP.reed]);
 export const isTallProp = (kind: number): boolean => TALL_PROPS.has(kind);
@@ -79,7 +98,7 @@ export function generateProps(
   // Quantidades escritas como densidade: o jardim tem a mesma cara por tela
   // em qualquer tamanho de mundo.
   const clearings = countFor(9, width, height, 3);
-  const grassTufts = countFor(420, width, height, 90);
+  const grassTufts = countFor(340, width, height, 90);
   const paths = countFor(4, width, height, 2);
   const logs = countFor(7, width, height, 3);
 
@@ -107,7 +126,7 @@ export function generateProps(
       // Mais flores no miolo, mais grama nas beiradas.
       const core = dist < radius * 0.6;
       if (core && rng.chance(0.55)) add(PROP.flower, x, y, flowerVariant);
-      else add(rng.chance(0.5) ? PROP.grassTall : PROP.grassLow, x, y, rng.int(3));
+      else add(rng.chance(TALL_IN_CLEARING) ? PROP.grassTall : PROP.grassLow, x, y, rng.int(3));
     }
   }
 
@@ -116,7 +135,7 @@ export function generateProps(
     const x = rng.range(0, width);
     const y = rng.range(0, height);
     if (!onLand(x, y)) continue;
-    add(rng.chance(0.25) ? PROP.grassTall : PROP.grassLow, x, y, rng.int(3));
+    add(rng.chance(TALL_IN_FIELD) ? PROP.grassTall : PROP.grassLow, x, y, rng.int(3));
   }
 
   // ---- Trilhas naturais -----------------------------------------------
@@ -150,7 +169,7 @@ export function generateProps(
       for (let i = 0; i < 3; i++) {
         add(PROP.moss, piece.x + rng.range(-24, 24), piece.y + rng.range(-4, 22), rng.int(2));
       }
-      if (rng.chance(0.5)) {
+      if (rng.chance(TALL_AT_TREE)) {
         add(PROP.grassTall, piece.x + rng.range(-22, 22), piece.y + rng.range(2, 16), rng.int(3));
       }
     } else if (piece.kind === 'rock') {
@@ -190,7 +209,7 @@ export function generateProps(
 
       if (!water && nearWater) {
         // Beira: juncos e conchinhas.
-        if (rng.chance(0.55))
+        if (rng.chance(REEDS_ON_SHORE))
           add(PROP.reed, x + rng.range(-8, 8), y + rng.range(-8, 8), rng.int(2));
         if (rng.chance(0.3))
           add(PROP.shell, x + rng.range(-10, 10), y + rng.range(-10, 10), rng.int(2));

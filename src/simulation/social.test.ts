@@ -201,11 +201,17 @@ describe('vida social', () => {
     });
     expect(vitima, 'ninguém tinha amiga para perder').toBeGreaterThanOrEqual(0);
 
+    // QUEM SENTE É QUEM ESTÁ VIVO E FORA DA CASCA.
+    //
+    // A varredura era pela memória, e memória um OVO também tem: ele herda
+    // parte do que os pais sabiam, inclusive a opinião sobre quem morreu. Só
+    // que ovo não sente falta de ninguém — ele nem é criatura ainda, e é por
+    // isso que nenhum sistema do jogo o enxerga. O teste enxergava, e cobrava
+    // luto de uma casca.
     const enlutados: number[] = [];
     world.store(Memory).forEach((memory, entity) => {
-      if (entity !== vitima && memory.valenceOf(subjects.creature(vitima)) > 0.12) {
-        enlutados.push(entity);
-      }
+      if (entity === vitima || !world.store(Creature).get(entity)) return;
+      if (memory.valenceOf(subjects.creature(vitima)) > 0.12) enlutados.push(entity);
     });
     const antes = enlutados.map((id) => world.store(Emotions).get(id)!.happiness);
 
