@@ -268,6 +268,78 @@ export interface Mind {
 export const Mind = defineComponent<Mind>('Mind');
 
 /**
+ * O QUE COSTUMA VALER A PENA — a experiência de vida desta criatura.
+ *
+ * Para cada intenção, o quanto ela historicamente saiu melhor do que entrou.
+ * Não é uma nota escrita por ninguém: é a média do que aconteceu com o
+ * BEM-ESTAR dela enquanto fazia aquilo. Comer com fome faz o bem-estar subir, e
+ * `seekFood` sobe junto; vagar com fome faz descer, e `wander` desce.
+ *
+ * É a peça que faltava para duas criaturas com o MESMO genoma virarem
+ * indivíduos diferentes. Antes, o que as separava era só o gene e a lembrança
+ * dos objetos — duas irmãs com os mesmos genes decidiam igual a vida inteira.
+ * Agora cada uma carrega o saldo do que a vida dela deu certo, e uma que teve
+ * sorte procurando comida vira uma que procura comida; a que passou fome
+ * tentando, vira outra coisa.
+ *
+ * Sem valor "certo" em lugar nenhum: o jardim é que ensina, e ensina diferente
+ * para cada uma. Um jardim com muita fruta e um jardim seco criam
+ * personalidades diferentes a partir do mesmo ovo.
+ */
+export interface Habits {
+  /**
+   * O valor aprendido de cada intenção, 0..1, indexado por `INTENT` (de @core).
+   *
+   * Começa em 0,5 — nem bom nem ruim. É importante que comece no meio e não em
+   * zero: uma criatura que nasce achando que tudo é ruim não experimenta nada, e
+   * sem experimentar não aprende. A ignorância aqui é neutra, não pessimista.
+   */
+  value: number[];
+  /** Quantas vezes cada intenção já foi julgada. Poucas tentativas pesam menos. */
+  tries: number[];
+  /** O bem-estar no instante em que a intenção em curso começou. */
+  since: number;
+  /** Há quanto tempo ela está nesta intenção, para não julgar um piscar de olhos. */
+  elapsed: number;
+  /** Qual intenção está sendo julgada agora (índice em `INTENT`). */
+  judging: number;
+  /**
+   * O CAPRICHO DO MOMENTO — a semente do ruído da decisão, que muda devagar.
+   *
+   * Um número qualquer, trocado de tempos em tempos. Dele sai um empurrãozinho
+   * diferente para cada intenção, e o ponto é que ele DURA: enquanto não troca,
+   * a criatura tem a mesma inclinação, e por isso não muda de ideia no meio do
+   * caminho.
+   *
+   * Foi a segunda tentativa. Na primeira, o ruído era sorteado a cada
+   * reavaliação — e numa caminhada de um minuto até em casa são umas quinze
+   * reavaliações, bastando uma virar para ela largar o caminho. Medido: a fração
+   * de criaturas que dormiam no próprio ninho caiu de 59–64% para 37–49%. Um
+   * ruído que muda a cada instante não é temperamento, é tremor.
+   */
+  whim: number;
+  /** Segundos até o próximo capricho. */
+  whimIn: number;
+  /**
+   * COMO A VIDA VEM INDO, em bem-estar por segundo.
+   *
+   * A média lenta do que acontece com ela, faça o que fizer. Serve de linha de
+   * base: uma intenção é julgada contra ELA, e não contra zero.
+   *
+   * Sem esta linha, o julgamento não julgava nada. Foi visto no painel: um
+   * filhote apavorado e sozinho, com o bem-estar caindo o dia inteiro, tinha
+   * aprendido que vagar vale 0,15 e seguir vale 0,11 — tudo ruim, porque tudo
+   * mesmo estava ruim. A conta media a vida dele, não as escolhas dele.
+   *
+   * Contra a linha de base, o que sobra é o que a escolha ACRESCENTA: numa fase
+   * ruim, a coisa que faz menos mal sobe. É a diferença entre "estou mal" e "isto
+   * aqui me faz bem".
+   */
+  drift: number;
+}
+export const Habits = defineComponent<Habits>('Habits');
+
+/**
  * O microcomportamento em curso — o que a criatura está fazendo enquanto não
  * está indo a lugar nenhum. Fica separado de `Mind` de propósito: `Mind` é a
  * intenção (para onde vou, por quê), isto é o gesto (o que meu corpo faz agora).

@@ -67,6 +67,7 @@ import {
   plantSeed,
   searchSystem,
   idleSystem,
+  rewardSystem,
   confinementSystem,
   planSystem,
   socialSystem,
@@ -183,6 +184,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(buddingSystem)
     .add(metabolismSystem)
     .add(confinementSystem)
+    // Julga DEPOIS de agir e metabolizar: a consequência precisa já ter
+    // acontecido para ser creditada na intenção que a causou.
+    .add(rewardSystem)
     .add(itemSystem)
     .add(ballSystem)
     .add(searchSystem)

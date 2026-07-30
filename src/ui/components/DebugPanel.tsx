@@ -89,6 +89,24 @@ export function DebugPanel() {
           ))}
       </section>
 
+      {/* A EXPERIÊNCIA DE VIDA. É aqui que se vê duas irmãs de mesmo genoma
+          virarem pessoas diferentes: a mesma lista, com números diferentes,
+          porque a vida delas foi diferente. Nada disto está escrito no código —
+          é a média do que aconteceu com o bem-estar de cada uma. */}
+      {bicho.habits.length > 0 && (
+        <section className="mind__box">
+          <h4>O que costuma dar certo</h4>
+          {bicho.habits.slice(0, 6).map((h) => (
+            <Barra
+              key={h.intent}
+              rotulo={INTENCAO[h.intent] ?? h.intent}
+              valor={h.value}
+              bom={h.value >= 0.5}
+            />
+          ))}
+        </section>
+      )}
+
       {bicho.friends.length > 0 && (
         <section className="mind__box">
           <h4>Quem ela conhece</h4>

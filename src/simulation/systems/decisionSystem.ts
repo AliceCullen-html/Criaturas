@@ -1,6 +1,7 @@
 import { WORD, clamp, subjects } from '@core';
 import { Transform, Velocity, type System } from '@engine';
 import {
+  Habits,
   Attributes,
   Bio,
   Bond,
@@ -29,6 +30,9 @@ import { CreatureIndexResource } from '../creatureIndex';
 import { BrainResource } from '../brainResource';
 import { PlayerResource } from '../player';
 import { WatchedResource } from '../watched';
+
+/** A experiência de quem ainda não tem componente de experiência: nenhuma. */
+const VAZIO: readonly number[] = [];
 import { isBaby } from '../age';
 
 const candidates: number[] = [];
@@ -135,6 +139,7 @@ export const decisionSystem: System = {
     // montam o jardim com os sistemas de que precisam e nada mais, que é como
     // deve ser. Uma ferramenta de depuração que obriga todo mundo a instalá-la
     // deixou de ser opcional.
+    const habitsStore = world.hasComponent(Habits) ? world.store(Habits) : null;
     const watched = world.hasResource(WatchedResource) ? world.getResource(WatchedResource) : null;
     const { rng, config } = world;
 
@@ -323,6 +328,12 @@ export const decisionSystem: System = {
             emotions,
             personality: traits,
             attributes,
+            // A EXPERIÊNCIA DELA. Sem o componente — num teste que monta só
+            // meia dúzia de sistemas —, a lista vazia faz o cérebro cair no
+            // 0,5 de "não sei ainda", que é exatamente o certo.
+            habits: habitsStore?.get(entity)?.value ?? VAZIO,
+            doing: mind.intent,
+            whim: habitsStore?.get(entity)?.whim ?? 0.5,
             memory,
             matingCooldown: bio.matingCooldown,
           },

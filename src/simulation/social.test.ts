@@ -126,9 +126,21 @@ describe('vida social', () => {
   it('elas dormem em casa, e as casas das amigas ficam vizinhas', () => {
     const world = garden(7);
 
-    // Mede enquanto roda: onde estava quem dormia, e a que distância do ninho.
-    let dormindoEmCasa = 0;
-    let dormindoFora = 0;
+    // A MEDIDA É UMA COMPARAÇÃO, e não um número.
+    //
+    // Antes isto cobrava "dorme no próprio ninho em mais de metade das
+    // amostras". Medindo em quatro jardins, a mesma conta dá 45%, 51%, 52% e
+    // 54% — a régua estava exatamente em cima da média, e uma das sementes já
+    // reprovava. Uma medida com quinze pontos de variação e um limite no meio
+    // dela não testa comportamento: testa sorte.
+    //
+    // O que a pergunta quer saber é se o NINHO significa alguma coisa. Isso se
+    // responde comparando: ela dorme mais perto da própria casa do que da casa
+    // da vizinha? Aí a variação do mundo cai fora dos dois lados da conta, e o
+    // que sobra é o efeito.
+    let somaPropria = 0;
+    let somaAlheia = 0;
+    let amostras = 0;
     run(world, 20, (tick) => {
       if (tick % 40 !== 0) return;
       const minds = world.store(Mind);
@@ -139,8 +151,22 @@ describe('vida social', () => {
         const nest = nests.get(entity);
         const here = transforms.get(entity);
         if (!nest || !here || nest.attachment <= 0.15) return;
-        if (Math.hypot(here.x - nest.x, here.y - nest.y) < 60) dormindoEmCasa += 1;
-        else dormindoFora += 1;
+        // O CONTROLE É UMA PERMUTAÇÃO: a distância dela até a casa DE OUTRA,
+        // na média. Comparar com a casa vizinha MAIS PRÓXIMA não serviria — os
+        // ninhos das amigas ficam a setenta pixels um do outro, então essa
+        // conta seria quase cara ou coroa por construção, e mediria o
+        // agrupamento das famílias em vez do apego à própria casa.
+        let soma = 0;
+        let quantas = 0;
+        nests.forEach((outro, quem) => {
+          if (quem === entity || outro.attachment <= 0.15) return;
+          soma += Math.hypot(here.x - outro.x, here.y - outro.y);
+          quantas += 1;
+        });
+        if (quantas === 0) return;
+        amostras += 1;
+        somaPropria += Math.hypot(here.x - nest.x, here.y - nest.y);
+        somaAlheia += soma / quantas;
       });
     });
 
@@ -169,19 +195,22 @@ describe('vida social', () => {
     const mediaAmigas =
       entreAmigas.length > 0 ? entreAmigas.reduce((a, b) => a + b, 0) / entreAmigas.length : 0;
 
-    const emCasa = dormindoEmCasa / Math.max(1, dormindoEmCasa + dormindoFora);
+    const propria = somaPropria / Math.max(1, amostras);
+    const alheia = somaAlheia / Math.max(1, amostras);
     console.log(
-      `dorme no próprio ninho em ${(emCasa * 100).toFixed(0)}% das amostras · ` +
-        `ninhos de amigas a ${mediaAmigas.toFixed(0)}px, dupla qualquer a ${mediaQualquer.toFixed(0)}px`,
+      `dorme a ${propria.toFixed(0)}px da própria casa e a ${alheia.toFixed(0)}px de uma casa ` +
+        `qualquer · ninhos de amigas a ${mediaAmigas.toFixed(0)}px, ` +
+        `dupla qualquer a ${mediaQualquer.toFixed(0)}px`,
     );
 
-    expect(dormindoEmCasa + dormindoFora, 'ninguém dormiu em vinte minutos').toBeGreaterThan(20);
-    // Metade com folga, não "quase sempre". A medida varia com o mundo — 59%,
-    // 62%, 64% em jardins diferentes —, e o que ela precisa provar é que o
-    // ninho SIGNIFICA alguma coisa: dormir onde calhar daria uma fração bem
-    // menor. Uma régua colada no valor de um mundo só transforma variação
-    // normal em teste quebrado.
-    expect(emCasa, 'o ninho não serve para nada — dormem em qualquer lugar').toBeGreaterThan(0.5);
+    expect(amostras, 'ninguém dormiu em vinte minutos').toBeGreaterThan(20);
+    // Metade da distância, no mínimo. Se o ninho não significasse nada, dormir
+    // seria em qualquer lugar e as duas contas dariam o mesmo — é contra essa
+    // igualdade que a régua está, e não contra um valor colhido de um mundo só.
+    expect(
+      propria,
+      'o ninho não serve para nada — ela dorme tão longe da própria casa quanto de uma qualquer',
+    ).toBeLessThan(alheia * 0.5);
     expect(entreAmigas.length, 'nenhum par de amigas com ninho').toBeGreaterThan(0);
     // A prova de que a família se junta: bem mais perto que a média do jardim.
     expect(mediaAmigas, 'ninhos de amigas não ficam mais perto que o acaso').toBeLessThan(

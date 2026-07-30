@@ -1,4 +1,4 @@
-import { clamp01 } from '@core';
+import { INTENT, clamp01 } from '@core';
 import type { Intent } from '@creatures';
 import type { Brain, Decision, Perception, ScoredOption } from './brain';
 
@@ -34,8 +34,66 @@ function option(
   return { intent, score, targetX, targetY, targetEntity, commitment };
 }
 
+/**
+ * O QUANTO A EXPERIÊNCIA PESA na nota — de 0,75× (nunca deu certo) a 1,25×.
+ *
+ * Meio para cada lado. Menos que isto e a criatura não aprende nada visível;
+ * muito mais e a experiência atropela a necessidade, e um bicho que teve uma
+ * má fase procurando comida morreria de fome em cima de uma macieira.
+ */
+const EXPERIENCE_FLOOR = 0.75;
+const EXPERIENCE_RANGE = 0.5;
+
+/**
+ * A MÃO TRÊMULA da decisão.
+ *
+ * O tamanho saiu de uma MEDIDA, não de um palpite, e o palpite estava errado.
+ * Medindo seis mil decisões de um jardim comum, a folga entre a primeira e a
+ * segunda opção é apertada quase sempre: fica abaixo de 20% em 63% das vezes, e
+ * a média é 19%. Com a faixa de 6% a 20% que eu tinha escrito primeiro, o ruído
+ * virava sorteio — e deu para ver: num teste, uma criatura faminta a quarenta
+ * pixels de uma fruta levou duzentos e dezesseis segundos para chegar nela,
+ * mudando de ideia o caminho inteiro.
+ *
+ * Nesta faixa ele volta a ser o que devia: 2% para qualquer um, mais 5% para
+ * quem é curiosa de nascença. Pela distribuição medida, isso alcança as decisões
+ * com folga abaixo de ~4%, que são 3% delas — e até ~10% para a mais curiosa do
+ * jardim. Aceitar de vez em quando a segunda melhor ideia é a definição honesta
+ * de curiosidade; aceitar sempre é não ter opinião.
+ */
+const NOISE_BASE = 0.02;
+const NOISE_CURIOUS = 0.05;
+
+/**
+ * A INÉRCIA — o quanto ela puxa para continuar o que já estava fazendo.
+ *
+ * Sem isto, o ruído destrói qualquer objetivo que leve tempo, e a medida foi
+ * clara: a fração de criaturas que dormem no PRÓPRIO ninho caiu de 59–64% para
+ * 37–49% em quatro jardins diferentes. Não era acaso — era o ruído sendo
+ * sorteado de novo a cada reavaliação. Numa caminhada de um minuto até em casa
+ * são umas quinze escolhas, e basta uma virar para ela largar o caminho.
+ *
+ * Doze por cento é o bastante para atravessar o jardim sem mudar de ideia e
+ * pouco para não teimar contra a fome: uma necessidade que aperta ganha disso
+ * com folga. É também o começo da TEIMOSIA que o briefing pede como traço — hoje
+ * é igual para todas; quando virar gene, é este número que passa a variar.
+ */
+const PERSISTENCE = 0.12;
+
 /** Urgência cresce mais rápido que linearmente perto do limite (curva de pressão). */
 const urgency = (value: number): number => value * value;
+
+/**
+ * O empurrãozinho que este capricho dá a esta intenção, de -1 a 1.
+ *
+ * Uma conta, e não um sorteio, de propósito: assim ela é a MESMA enquanto o
+ * capricho for o mesmo, e a criatura não muda de ideia no meio do caminho. E o
+ * jardim continua reprodutível sem o cérebro precisar tocar no sorteador.
+ */
+function whimFor(whim: number, intent: number): number {
+  const x = Math.sin(whim * 127.1 + intent * 311.7) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
 
 /** A melhor nota de cada intenção, da maior para a menor — para o painel. */
 function bestPerIntent(options: readonly Option[]): ScoredOption[] {
@@ -526,6 +584,30 @@ export function createUtilityBrain(): Brain {
           3,
         ),
       );
+
+      // ---- A VIDA DELA ENTRA NA CONTA -----------------------------------
+      //
+      // Até aqui a nota saiu de necessidade × emoção × temperamento × memória
+      // dos objetos. Falta a quarta coisa, e é a que faz duas irmãs de mesmo
+      // genoma pararem de decidir igual: o que costuma dar certo PARA ELA.
+      //
+      // Multiplica, não soma. Somar faria uma criatura com boas lembranças de
+      // beber ir beber sem sede; multiplicando, a experiência só desempata o
+      // que a necessidade já pôs na mesa. Fome é fome em qualquer biografia.
+      //
+      // E o ruído, por cima. Sem ele o cérebro é um `argmax`: dadas as mesmas
+      // entradas, sempre a mesma saída, e uma criatura que nunca faz nada
+      // inesperado não parece viva — nem descobre nada, porque nunca sai do que
+      // já sabe. Quem é mais curiosa tem a mão mais trêmula, que é a definição
+      // honesta de curiosidade: aceitar de vez em quando a segunda melhor
+      // ideia. O ruído é pequeno de propósito: ele desempata, não sorteia.
+      const inquieta = NOISE_BASE + traits.curiosity * NOISE_CURIOUS;
+      for (const o of options) {
+        const i = INTENT[o.intent];
+        o.score *= EXPERIENCE_FLOOR + (self.habits[i] ?? 0.5) * EXPERIENCE_RANGE;
+        if (o.intent === self.doing) o.score *= 1 + PERSISTENCE;
+        o.score *= 1 + whimFor(self.whim, i) * inquieta;
+      }
 
       let best = options[0]!;
       for (let i = 1; i < options.length; i++) {

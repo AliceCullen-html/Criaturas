@@ -1,9 +1,10 @@
-import { CreatureMemory, Lexicon } from '@core';
+import { CreatureMemory, INTENT_COUNT, Lexicon } from '@core';
 import { Transform, Velocity, World } from '@engine';
 import { express, randomGenome, type Genome } from '@genetics';
 import {
   Behavior,
   Bond,
+  Habits,
   Carried,
   Falling,
   Nest,
@@ -72,6 +73,7 @@ export function registerCreatureComponents(world: World): void {
   world.register(Identity);
   world.register(Mind);
   world.register(Behavior);
+  world.register(Habits);
   world.register(Carried);
   world.register(Falling);
   world.register(Bond);
@@ -177,6 +179,20 @@ export function spawnCreature(
     surprise: 0,
     attention: 0,
     blocked: 0,
+  });
+
+  // A EXPERIÊNCIA COMEÇA EM BRANCO — e em branco quer dizer no MEIO, não em
+  // zero. Uma criatura que nasce achando que nada vale a pena não experimenta
+  // nada, e sem experimentar não aprende. O jardim é que vai dizer.
+  world.store(Habits).set(entity, {
+    value: new Array<number>(INTENT_COUNT).fill(0.5),
+    tries: new Array<number>(INTENT_COUNT).fill(0),
+    since: 0.5,
+    elapsed: 0,
+    judging: -1,
+    whim: rng.next(),
+    whimIn: rng.range(0, 18),
+    drift: 0,
   });
 
   world.store(Behavior).set(entity, {

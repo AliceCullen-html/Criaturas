@@ -1,9 +1,10 @@
-import { WORD_TEXT, subjects, type Episode } from '@core';
+import { INTENT_NAMES, WORD_TEXT, subjects, type Episode } from '@core';
 import { Plan } from './systems/planSystem';
 import { ROUTINE, ROUTINE_NAMES } from './routines';
 import type { World } from '@engine';
 import { describePersonality, type PersonalityTraits } from '@genetics';
 import {
+  Habits,
   Appearance,
   Egg,
   Attributes,
@@ -84,6 +85,15 @@ export interface CreatureSnapshot {
    * que passou meia hora ensinando precisa poder conferir o que entrou.
    */
   words: string[];
+  /**
+   * O QUE COSTUMA VALER A PENA PARA ELA — por intenção, 0..1.
+   *
+   * Vai para a ficha porque é a coisa mais invisível que a criatura tem: um
+   * vínculo se vê, a fome se vê, mas "esta aqui aprendeu que procurar comida dá
+   * certo e aquela aprendeu que não" só existe dentro da cabeça dela. É o que o
+   * painel usa para mostrar duas irmãs virando pessoas diferentes.
+   */
+  habits: Array<{ intent: Intent; value: number; tries: number }>;
   memories: Episode[];
   children: string[];
   friends: Array<{ name: string; affinity: number }>;
@@ -152,10 +162,34 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     scar: emotions.scar,
     bond: memory.valenceOf(subjects.player()),
     words: (world.store(Words).get(id)?.known() ?? []).map((word) => WORD_TEXT[word] ?? '?'),
+    habits: readHabits(world, id),
     memories: memory.episodes.slice(0, 8),
     children: findChildren(world, identity.name),
     friends: findFriends(world, id, memory),
   };
+}
+
+/**
+ * A experiência de vida dela, das intenções que ela já julgou.
+ *
+ * Só as que têm tentativa: uma intenção nunca vivida está em 0,5 porque ninguém
+ * a julgou, e mostrar isso como opinião seria mentir. O que interessa ver é onde
+ * a vida dela já deixou marca.
+ */
+function readHabits(
+  world: World,
+  id: number,
+): Array<{ intent: Intent; value: number; tries: number }> {
+  if (!world.hasComponent(Habits)) return [];
+  const habit = world.store(Habits).get(id);
+  if (!habit) return [];
+  const out: Array<{ intent: Intent; value: number; tries: number }> = [];
+  for (let i = 0; i < INTENT_NAMES.length; i++) {
+    const tries = habit.tries[i] ?? 0;
+    if (tries === 0) continue;
+    out.push({ intent: INTENT_NAMES[i]!, value: habit.value[i] ?? 0.5, tries });
+  }
+  return out.sort((a, b) => b.value - a.value);
 }
 
 /** Descendentes vivos, pelo nome dos pais registrado na linhagem. */

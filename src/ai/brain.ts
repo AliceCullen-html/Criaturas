@@ -41,6 +41,26 @@ export interface Perception {
     attributes: Attributes;
     memory: CreatureMemory;
     matingCooldown: number;
+    /** O que ela já estava fazendo — para não largar tudo no meio a cada escolha. */
+    doing: Intent;
+    /**
+     * O CAPRICHO DO MOMENTO: a semente do ruído da decisão.
+     *
+     * Muda devagar, de tempos em tempos, e é isso que importa. Um ruído sorteado
+     * a cada reavaliação não é temperamento, é tremor — e desfaz qualquer
+     * objetivo que leve tempo, porque numa caminhada de um minuto são umas
+     * quinze reavaliações e basta uma virar.
+     */
+    whim: number;
+    /**
+     * O QUE COSTUMA VALER A PENA PARA ELA, por intenção (índice em `INTENT`).
+     *
+     * 0,5 é "não sei ainda". Acima disso, aquilo costuma deixá-la melhor; abaixo,
+     * pior. Não é conselho de ninguém — é a média do que aconteceu com o
+     * bem-estar dela enquanto fazia aquilo, e é o que faz duas criaturas de mesmo
+     * genoma pararem de decidir igual.
+     */
+    habits: readonly number[];
   };
   creatures: PerceivedCreature[];
   food: PerceivedFood[];
