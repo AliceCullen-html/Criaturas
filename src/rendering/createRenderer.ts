@@ -300,6 +300,8 @@ const HIDDEN_FLAG = 256;
  * o jogador precisar olhar o cinto para lembrar o que escolheu.
  */
 const HAND_SCREEN = 40;
+/** A ferramenta na mão vem um pouco menor: ela é objeto, não cursor. */
+const TOOL_SCREEN = 30;
 /** A altura da arte da mão, para o alvo acima virar escala. */
 const HAND_ART = 20;
 
@@ -2240,9 +2242,21 @@ export function createRenderer(options: RendererOptions): Renderer {
       // Carregando alguma coisa, volta a mão: o que está na mão é o objeto que
       // ela pegou, e uma esponja fechada em volta de uma fruta seria mentira.
       if (handSprite && handTextures) {
-        handSprite.visible = handWorld.inside;
-        if (handWorld.inside) {
-          const state = gestures?.handState ?? 'open';
+        const state = gestures?.handState ?? 'open';
+        // A MÃO SOME QUANDO A ANIMAÇÃO JÁ A DESENHA.
+        //
+        // As tiras do artista são CENAS: `esfregar` tem a esponja, `afagar` tem
+        // a mão do jogador, `receberPresente` tem o embrulho. Enquanto o cursor
+        // desenhava a mesma coisa por cima, o banho num filhote virava duas
+        // esponjas empilhadas em cima de um bicho de vinte e oito pixels — e o
+        // que o jogador via não era o cuidado dele, era um amontoado.
+        //
+        // Em contato com a criatura, quem mostra a sua mão é o desenho dela.
+        // O cursor volta no instante em que a mão sai — e não pisca no vaivém
+        // do banho, porque o contato tem folga: o estado só cede depois dela.
+        const inContact = state === 'petting';
+        handSprite.visible = handWorld.inside && !inContact;
+        if (handSprite.visible) {
           const icon = state === 'holding' ? -1 : toolIcon();
           const tool = icon >= 0 ? iconTextures?.[icon] : null;
           handSprite.texture = tool ?? handTextures[state];
@@ -2257,14 +2271,14 @@ export function createRenderer(options: RendererOptions): Renderer {
           //
           // Continua constante na tela: dividir pelo zoom é o que impede o
           // cursor de encolher quando o jogador se afasta do jardim.
+          // A ferramenta na mão é um OBJETO, e vem um pouco menor que a mão:
+          // ela é o que você está segurando, não o cursor em si — e a diferença
+          // impede que uma esponja de quarenta pixels engula um filhote.
           const art = handSprite.texture.height || HAND_ART;
-          handSprite.scale.set(HAND_SCREEN / art / camera.zoom);
-          // Esfregando, o objeto na mão treme junto — é o gesto do banho.
-          const wobble = state === 'petting' ? Math.sin(elapsed * 9) * 1.5 : 0;
-          handSprite.position.set(
-            isoX(handWorld.x, handWorld.y) + (tool ? Math.sin(elapsed * 9) * wobble * 0.4 : 0),
-            isoY(handWorld.x, handWorld.y) + wobble / camera.zoom,
-          );
+          handSprite.scale.set((tool ? TOOL_SCREEN : HAND_SCREEN) / art / camera.zoom);
+          // O tremor de esfregar morava aqui. Saiu junto com o cursor: quem
+          // esfrega agora é a criatura, e o balanço da esponja é o do desenho.
+          handSprite.position.set(isoX(handWorld.x, handWorld.y), isoY(handWorld.x, handWorld.y));
         }
       }
 
