@@ -256,6 +256,31 @@ const FEAR_FILLERS: readonly string[] = ['tremer', 'encolher', 'congelar', 'olha
 const SICK_FILLERS: readonly string[] = ['tossir', 'espirrar', 'febre', 'tremer'];
 
 /**
+ * O REPERTÓRIO DE QUEM ESTÁ COM ALGUÉM.
+ *
+ * Medido num jardim de meia hora: sessenta e quatro criaturas, e quarenta e sete
+ * delas paradas em duas tiras — `cortejar` e `conversar`. As duas têm a boca
+ * bem aberta (uma canta, a outra fala), e de longe uma boca aberta parece grito:
+ * o jogador olhou o jardim e leu pânico onde havia namoro e conversa.
+ *
+ * O comportamento não estava errado — o jardim estava cheio, bem alimentado e se
+ * reproduzindo, que é o que a espécie faz quando vai bem. Errado era o jardim
+ * inteiro fazendo a mesma cara. Estas tiras estavam paradas na pasta: acenar,
+ * cumprimentar, olhar a outra, se aproximar, abraçar. Todas mostram a criatura
+ * COM alguém, que é a cena que está acontecendo.
+ */
+const SOCIAL_FILLERS: readonly string[] = [
+  'acenar',
+  'cumprimentar',
+  'olharOutro',
+  'aproximar',
+  'abracarAmigo',
+];
+
+/** E o de quem está cortejando: interesse, aceitação, um beijinho. */
+const COURT_FILLERS: readonly string[] = ['interesse', 'aceitar', 'beijinho', 'olharOutro'];
+
+/**
  * O REPERTÓRIO DE UMA AULA.
  *
  * Aprender diante da máquina era `aprender` em laço, e medido no jardim dava
@@ -505,6 +530,7 @@ export const STATES: readonly StateRule[] = [
       s.moving ? (s.isBaby ? 'seguirMae' : 'seguirAmigo') : s.isBaby ? 'pedirColo' : 'conversar',
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: SOCIAL_FILLERS,
   },
   {
     // Cortejar é diante do par. A travessia do jardim até ele é caminhada.
@@ -513,6 +539,7 @@ export const STATES: readonly StateRule[] = [
     clip: () => 'cortejar',
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: COURT_FILLERS,
   },
   {
     // Levando comida ela ANDA — e a comida continua desenhada, porque quem

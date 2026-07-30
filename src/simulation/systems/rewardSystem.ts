@@ -66,6 +66,23 @@ const GANHO_CHEIO = 0.2;
  * a diferença seria sempre zero — nada seria bom nem ruim.
  */
 const DERIVA = 0.25;
+/**
+ * O QUANTO A OPINIÃO VOLTA AO MEIO, por segundo.
+ *
+ * Sem isto o sistema se engole. Medido, com o mesmo jardim e a mesma semente,
+ * ligando e desligando só a recompensa: sem ela o jardim tinha estudo 14,
+ * seguir 10, conviver 5, dividir 4, dormir 4, vagar, observar, brigar, brincar;
+ * com ela, trinta e três das sessenta e quatro criaturas estavam cortejando e o
+ * resto seguindo. É a armadilha clássica do reforço ingênuo: o que dá certo é
+ * escolhido mais, o que é escolhido mais é creditado mais, e em meia hora o
+ * jardim inteiro faz uma coisa só.
+ *
+ * Uma opinião que volta devagar ao meio obriga o hábito a se PAGAR de novo para
+ * continuar de pé, e devolve à criatura o direito de experimentar outra coisa.
+ * A meia-vida é de uns três minutos de jardim: o suficiente para uma preferência
+ * durar uma fase da vida, e não a vida inteira.
+ */
+const ESQUECE = 0.004;
 
 export const rewardSystem: System = {
   name: 'reward',
@@ -89,6 +106,13 @@ export const rewardSystem: System = {
       if (habit.whimIn <= 0) {
         habit.whim = world.rng.next();
         habit.whimIn = CAPRICHO;
+      }
+
+      // A OPINIÃO DESBOTA. Ver `ESQUECE`: sem isto o hábito vencedor se
+      // realimenta até o jardim inteiro fazer uma coisa só.
+      for (let i = 0; i < habit.value.length; i++) {
+        const v = habit.value[i] ?? 0.5;
+        habit.value[i] = v + (0.5 - v) * ESQUECE * dt;
       }
 
       const agora = estar(needs, emotions);

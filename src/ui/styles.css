@@ -351,20 +351,23 @@ body {
 }
 
 /* --- O relógio do jardim -------------------------------------------------
-   Ao lado da maçaneta do livro, no mesmo canto e com a mesma discrição: uma
-   fileira de marchas que some da vista até você procurar por ela. Existe
-   porque uma amizade ou uma tradição levam horas de jardim, e sem marcha alta
-   o jogo contaria uma história que ninguém chega a ler. */
+   ACIMA da maçaneta do livro, e não ao lado dela: ao lado é onde mora o
+   sussurro da história, e as duas coisas estavam desenhadas exatamente uma em
+   cima da outra — o relógio saiu pequeno demais e ainda por cima ilegível, em
+   cima de um texto. Uma fileira de marchas merece um canto seu.
+
+   Existe porque uma amizade ou uma tradição levam horas de jardim, e sem marcha
+   alta o jogo contaria uma história que ninguém chega a ler. */
 .clock {
   position: fixed;
-  left: 44px;
-  bottom: 10px;
+  left: 12px;
+  bottom: 46px;
   z-index: 15;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   user-select: none;
-  opacity: 0.5;
+  opacity: 0.72;
   transition: opacity 0.2s;
 }
 
@@ -372,18 +375,20 @@ body {
   opacity: 1;
 }
 
+/* Trinta e quatro pixels, e não vinte e seis: o alvo do dedo num celular é o
+   mesmo do mouse, e um número de dez pixels em cima do jardim não se lê. */
 .clock__gear {
-  min-width: 26px;
-  height: 26px;
-  padding: 0 5px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 7px;
   border: none;
-  border-radius: 7px;
-  background: rgba(20, 24, 20, 0.5);
+  border-radius: 9px;
+  background: rgba(20, 24, 20, 0.62);
   color: #e8e2cf;
   font-family: inherit;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  line-height: 26px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  line-height: 34px;
   cursor: pointer;
   transition:
     background 0.15s,
@@ -403,12 +408,12 @@ body {
 }
 
 .clock__gear--pause {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .clock__gear--eye {
-  margin-left: 6px;
-  font-size: 12px;
+  margin-left: 8px;
+  font-size: 15px;
 }
 
 /* --- A tampa aberta ------------------------------------------------------
