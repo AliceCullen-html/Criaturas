@@ -2,6 +2,8 @@ import { SimulationCanvas } from './components/SimulationCanvas';
 import { CreatureCard } from './components/CreatureCard';
 import { HistoryBook } from './components/HistoryBook';
 import { ToolBelt } from './components/ToolBelt';
+import { TimeControl } from './components/TimeControl';
+import { DebugPanel } from './components/DebugPanel';
 
 export interface AppProps {
   mountCanvas: (container: HTMLElement) => () => void;
@@ -23,6 +25,8 @@ export function App({ mountCanvas }: AppProps) {
       <ToolBelt />
       <CreatureCard />
       <HistoryBook />
+      <TimeControl />
+      <DebugPanel />
     </div>
   );
 }

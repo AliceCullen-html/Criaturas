@@ -28,6 +28,7 @@ import { FoodIndexResource } from '../foodIndex';
 import { CreatureIndexResource } from '../creatureIndex';
 import { BrainResource } from '../brainResource';
 import { PlayerResource } from '../player';
+import { WatchedResource } from '../watched';
 import { isBaby } from '../age';
 
 const candidates: number[] = [];
@@ -128,6 +129,13 @@ export const decisionSystem: System = {
     const ambient = world.getResource(AmbientResource);
     const scenery = world.getResource(SceneryResource);
     const weather = world.getResource(WeatherResource);
+    // O PAINEL É OPCIONAL, E A SIMULAÇÃO NÃO DEPENDE DELE.
+    //
+    // Pedir o recurso direto quebrou cinquenta e um testes de uma vez: eles
+    // montam o jardim com os sistemas de que precisam e nada mais, que é como
+    // deve ser. Uma ferramenta de depuração que obriga todo mundo a instalá-la
+    // deixou de ser opcional.
+    const watched = world.hasResource(WatchedResource) ? world.getResource(WatchedResource) : null;
     const { rng, config } = world;
 
     // Objetos que o jogador escondeu atrás de pedras. São poucos, e ficam fora
@@ -339,7 +347,17 @@ export const decisionSystem: System = {
           rival: bond && bond.rival >= 0 ? { id: bond.rival, strength: bond.rivalry } : null,
         };
 
+        // A CONTA FICA GUARDADA SÓ PARA QUEM ESTÁ SENDO OLHADO.
+        //
+        // O painel quer ver a decisão sendo tomada — o que ganhou e o que quase
+        // ganhou. Pedir isso de todas as criaturas seria alocar uma lista por
+        // decisão para ninguém ler; pedir de uma é de graça.
+        if (watched && watched.id === entity) perception.explain = true;
         const decision = brain.decide(perception);
+        if (watched && watched.id === entity && decision.options) {
+          watched.options = decision.options;
+          watched.tick = world.tick;
+        }
         mind.intent = decision.intent;
         mind.targetEntity = decision.targetEntity;
         mind.commitment = decision.commitment;

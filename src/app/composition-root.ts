@@ -79,6 +79,8 @@ import {
   PHASE,
   ChronicleResource,
   createChronicle,
+  WatchedResource,
+  createWatched,
   chronicle,
   recentEntries,
   DiscoveryResource,
@@ -147,6 +149,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   world.setResource(DeathsResource, []);
   world.setResource(SpeechResource, []);
   world.setResource(ChronicleResource, createChronicle());
+  world.setResource(WatchedResource, createWatched());
   world.setResource(SpeciesResource, {
     phase: PHASE.budding,
     threshold: SEXUAL_THRESHOLD,
@@ -338,7 +341,14 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   };
 
   const pushSelected = (): void => {
-    const id = store.getState().selectedId;
+    const state = store.getState();
+    const id = state.selectedId;
+    // QUEM O PAINEL OLHA É QUEM O CÉREBRO EXPLICA. A simulação não conhece a
+    // interface: ela só sabe que existe uma criatura observada, e é a interface
+    // que diz qual. Com o painel fechado não há ninguém, e o cérebro volta a não
+    // gastar nada com isso.
+    const watched = world.getResource(WatchedResource);
+    if (watched) watched.id = state.debug && id !== null ? id : -1;
     if (id === null) return;
     const snapshot = readCreatureSnapshot(world, id);
     if (!snapshot) {
@@ -346,6 +356,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       return;
     }
     store.getState().setSelected(snapshot);
+    if (state.debug && watched && watched.id === id) {
+      store.getState().setThinking({ options: watched.options, tick: watched.tick });
+    }
   };
 
   const step = (dt: number): void => {
@@ -841,12 +854,20 @@ export function createApp(rootElement: HTMLElement): AppInstance {
       music.toggleMute();
       return;
     }
+    if (event.key === 'd' || event.key === 'D') {
+      state.toggleDebug();
+      return;
+    }
     if (event.code === 'Space') {
       event.preventDefault();
       state.toggleRunning();
     } else if (event.key === '1') state.setSpeed(1);
     else if (event.key === '2') state.setSpeed(2);
     else if (event.key === '4') state.setSpeed(4);
+    // As marchas altas: é nelas que uma tarde de jardim cabe num café.
+    else if (event.key === '8') state.setSpeed(8);
+    else if (event.key === '9') state.setSpeed(16);
+    else if (event.key === '0') state.setSpeed(32);
   };
   window.addEventListener('keydown', onKeyDown);
 

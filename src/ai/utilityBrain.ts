@@ -1,6 +1,6 @@
 import { clamp01 } from '@core';
 import type { Intent } from '@creatures';
-import type { Brain, Decision, Perception } from './brain';
+import type { Brain, Decision, Perception, ScoredOption } from './brain';
 
 /**
  * Cérebro por utilidade.
@@ -36,6 +36,18 @@ function option(
 
 /** Urgência cresce mais rápido que linearmente perto do limite (curva de pressão). */
 const urgency = (value: number): number => value * value;
+
+/** A melhor nota de cada intenção, da maior para a menor — para o painel. */
+function bestPerIntent(options: readonly Option[]): ScoredOption[] {
+  const best = new Map<Intent, number>();
+  for (const o of options) {
+    const atual = best.get(o.intent);
+    if (atual === undefined || o.score > atual) best.set(o.intent, o.score);
+  }
+  return [...best.entries()]
+    .map(([intent, score]) => ({ intent, score }))
+    .sort((a, b) => b.score - a.score);
+}
 
 export function createUtilityBrain(): Brain {
   return {
@@ -526,6 +538,11 @@ export function createUtilityBrain(): Brain {
         targetY: best.targetY,
         targetEntity: best.targetEntity,
         commitment: best.commitment,
+        // A CONTA, quando alguém está olhando. A mesma intenção pode aparecer
+        // várias vezes na lista — brincar com a bola, com um amigo e com a mão
+        // do jogador são três opções `play` —, e o que interessa ao painel é a
+        // melhor nota de cada uma: é ela que disputou a decisão.
+        ...(perception.explain ? { options: bestPerIntent(options) } : {}),
       };
     },
   };

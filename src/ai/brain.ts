@@ -85,6 +85,21 @@ export interface Perception {
   /** A melhor amiga e o maior desafeto, lidos da memória. */
   friend: { id: number; x: number; y: number; distance: number; strength: number } | null;
   rival: { id: number; strength: number } | null;
+  /**
+   * ESTÃO OLHANDO PARA DENTRO DESTA CABEÇA.
+   *
+   * Ligado só para a criatura que o jogador está observando no painel, e por um
+   * motivo prático: a lista de opções pontuadas é a coisa mais interessante que
+   * o cérebro produz e a que ele mais joga fora. Guardá-la para todo mundo, a
+   * cada decisão, seria alocar centenas de listas por segundo para ninguém ler.
+   */
+  explain?: boolean;
+}
+
+/** Uma opção que o cérebro considerou, com a nota que ela tirou. */
+export interface ScoredOption {
+  intent: Intent;
+  score: number;
 }
 
 /** O que a criatura decidiu fazer. */
@@ -95,6 +110,14 @@ export interface Decision {
   targetEntity: number;
   /** Por quanto tempo manter a decisão antes de reavaliar (segundos). */
   commitment: number;
+  /**
+   * O que mais ela considerou, e quanto cada coisa valia — só quando pediram.
+   *
+   * É a resposta à pergunta que o painel faz: "por que ela fez isso, e o que
+   * quase ganhou?". Sem isto, um cérebro por utilidade é uma caixa preta que
+   * cospe uma intenção; com isto, dá para ver a decisão sendo tomada.
+   */
+  options?: ScoredOption[];
 }
 
 /**

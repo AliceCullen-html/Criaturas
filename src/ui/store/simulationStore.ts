@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { TOOL } from '@core';
+import type { ScoredOption } from '@ai';
 import type { ChronicleEntry, CreatureSnapshot } from '@simulation';
 
 /**
@@ -7,7 +8,22 @@ import type { ChronicleEntry, CreatureSnapshot } from '@simulation';
  * controles de interface, seleção e um retrato (snapshot) da criatura
  * selecionada, atualizado pelo composition root a cada poucos quadros.
  */
-export type SimulationSpeed = 0 | 1 | 2 | 4;
+/**
+ * As MARCHAS DO TEMPO.
+ *
+ * Iam até 4×, que serve para não esperar a criatura atravessar o jardim. Não
+ * serve para o que este jogo é: um jardim que se quer deixar rodando e ao qual
+ * se volta para ver o que aconteceu. Gerações, tradições e amizades levam
+ * horas de tempo de jardim — em 4× isso ainda é uma tarde inteira de tempo de
+ * gente.
+ *
+ * O passo da simulação não muda com a marcha: o que muda é quantos passos
+ * cabem num segundo real. O jardim em 32× é o MESMO jardim, só visto depressa.
+ */
+export type SimulationSpeed = 0 | 1 | 2 | 4 | 8 | 16 | 32;
+
+/** As marchas na ordem em que aparecem no controle. */
+export const SPEEDS: readonly SimulationSpeed[] = [1, 2, 4, 8, 16, 32];
 
 export interface SimulationStats {
   tick: number;
@@ -40,7 +56,19 @@ interface UiState {
    * mundo — e por isso mora aqui, onde o cinto escreve e o jogo lê.
    */
   tool: number;
+  /**
+   * O painel de dentro da cabeça dela, ligado ou desligado.
+   *
+   * Fica desligado por padrão, e é assim que tem de ser: o jogo é olhar o
+   * jardim e não entender tudo. Mas quem está construindo o bicho precisa poder
+   * abrir a tampa e ver a conta que ele acabou de fazer.
+   */
+  debug: boolean;
+  /** A última conta do cérebro da criatura observada, para o painel. */
+  thinking: { options: ScoredOption[]; tick: number } | null;
   setRunning: (running: boolean) => void;
+  setThinking: (thinking: { options: ScoredOption[]; tick: number } | null) => void;
+  toggleDebug: () => void;
   toggleRunning: () => void;
   setSpeed: (speed: SimulationSpeed) => void;
   setStats: (stats: SimulationStats) => void;
@@ -64,7 +92,11 @@ export const useUiStore = create<UiState>((set) => ({
   book: [],
   // A mão aberta é o começo: pegar as coisas é o gesto mais antigo do jogo.
   tool: TOOL.hand,
+  debug: false,
+  thinking: null,
   toggleRunning: () => set((state) => ({ isRunning: !state.isRunning })),
+  toggleDebug: () => set((state) => ({ debug: !state.debug, thinking: null })),
+  setThinking: (thinking) => set({ thinking }),
   setRunning: (running) => set({ isRunning: running }),
   setSpeed: (speed) => set({ speed }),
   setStats: (stats) => set({ stats }),

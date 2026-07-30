@@ -54,6 +54,8 @@ export {
 export type { Utterance, LessonReply } from './systems/teachingSystem';
 export { SpeciesResource, Budding, PHASE, buddingSystem, isBuddingPhase } from './species';
 export type { SpeciesState } from './species';
+export { WatchedResource, createWatched } from './watched';
+export type { Watched } from './watched';
 export { ChronicleResource, createChronicle, chronicle, recentEntries } from './chronicle';
 export type { Chronicle, ChronicleEntry } from './chronicle';
 export type { OrderKind, OrderReply } from './orders';

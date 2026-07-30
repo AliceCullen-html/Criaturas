@@ -349,3 +349,212 @@ body {
 .book__line--mark {
   color: var(--accent);
 }
+
+/* --- O relógio do jardim -------------------------------------------------
+   Ao lado da maçaneta do livro, no mesmo canto e com a mesma discrição: uma
+   fileira de marchas que some da vista até você procurar por ela. Existe
+   porque uma amizade ou uma tradição levam horas de jardim, e sem marcha alta
+   o jogo contaria uma história que ninguém chega a ler. */
+.clock {
+  position: fixed;
+  left: 44px;
+  bottom: 10px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  user-select: none;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.clock:hover {
+  opacity: 1;
+}
+
+.clock__gear {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  border: none;
+  border-radius: 7px;
+  background: rgba(20, 24, 20, 0.5);
+  color: #e8e2cf;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 26px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.12s;
+}
+
+.clock__gear:hover {
+  transform: scale(1.1);
+}
+
+/* A marcha em curso acende. Sem isto o controle é uma fileira de botões
+   iguais, e o jogador não sabe em que velocidade o jardim está. */
+.clock__gear--on {
+  background: var(--accent);
+  color: #14180f;
+}
+
+.clock__gear--pause {
+  font-size: 9px;
+}
+
+.clock__gear--eye {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+/* --- A tampa aberta ------------------------------------------------------
+   O painel de dentro da cabeça. Não é interface de jogo: é ferramenta de
+   construção, e por isso pode ser dura e cheia de número — mas continua fora
+   do caminho, encostada na borda, e só existe quando alguém a chama. */
+.mind {
+  position: fixed;
+  right: 10px;
+  top: 10px;
+  bottom: 10px;
+  z-index: 14;
+  width: 236px;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(14, 18, 14, 0.82);
+  color: #e8e2cf;
+  font-size: 10px;
+  line-height: 1.4;
+  backdrop-filter: blur(2px);
+}
+
+.mind--empty {
+  bottom: auto;
+}
+
+.mind__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.mind__now {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mind__box {
+  margin-bottom: 9px;
+}
+
+.mind__box h4 {
+  margin: 0 0 4px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.mind__box h4 em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.mind__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mind__bar {
+  display: grid;
+  grid-template-columns: 86px 1fr 28px;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.mind__barName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mind__barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+.mind__barFill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: #b06a5a;
+}
+
+.mind__barFill--good {
+  background: #79a35f;
+}
+
+/* A opção que ganhou. É o desenho inteiro do painel: dá para ver de relance
+   quem venceu e por quanto. */
+.mind__bar--win .mind__barFill {
+  background: var(--accent);
+}
+
+.mind__bar--win .mind__barName {
+  color: var(--accent);
+}
+
+.mind__barNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.mind__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mind__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mind__good {
+  color: #9ac47a;
+}
+
+.mind__bad {
+  color: #d08a7a;
+}
+
+.mind__memory {
+  margin: 0;
+  color: #cfc9b6;
+}
+
+.mind__memory em {
+  font-style: normal;
+  color: var(--text-muted);
+}
+
+.mind__hint {
+  margin: 0;
+  color: var(--text-muted);
+}
