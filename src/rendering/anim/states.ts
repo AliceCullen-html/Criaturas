@@ -42,6 +42,14 @@ import { MOOD, POSE, type Intent } from '@core';
  * riscos de velocidade e o "Z" do sono são linguagem de quadrinho, não objetos
  * do jardim — ninguém tenta pegar um coração.
  *
+ * E NÃO BASTA A INTENÇÃO DIZER QUE O OBJETO EXISTE. Uma regra marcada com
+ * `withProp` promete que aquilo está lá — mas promessa não é verificação. A
+ * intenção `play` cobre quatro brincadeiras (a bola, um amigo, a mão do jogador
+ * e a chuva) e só uma tem bola: enquanto a regra olhava a intenção sozinha, um
+ * filhote recém-saído do ovo aparecia chutando uma bola que ninguém deu a ele.
+ * O `when` de uma regra com objeto tem de cobrar o objeto, e o sinal que
+ * responde por ele vem da simulação, que é quem sabe.
+ *
  * O OVO NÃO ESTÁ AQUI, e é uma decisão. A folha traz `chocarOvo`,
  * `ovoRachando`, `nascimento` — mas nenhuma delas é um ovo: todas mostram o
  * PAI ao lado do ovo, chocando, esperando, recebendo. Usar qualquer uma para
@@ -64,6 +72,14 @@ export interface CreatureSignals {
   speed: number;
   /** Carregando alguma coisa na boca? */
   carrying: boolean;
+  /**
+   * A brincadeira dela é com uma bola QUE EXISTE no jardim?
+   *
+   * A intenção `play` sozinha não diz: brincar é com a bola, com um amigo, com
+   * a mão do jogador ou com a chuva. Só a primeira tem bola, e só ela pode usar
+   * um desenho que traz uma.
+   */
+  ball: boolean;
   /** 0..1 — a marca que não passa. */
   scar: number;
   fear: number;
@@ -289,9 +305,20 @@ export const STATES: readonly StateRule[] = [
     rate: () => 0.7,
   },
   {
+    // BRINCAR COM A BOLA — e a bola tem de estar lá.
+    //
+    // A intenção `play` é a mesma para quatro brincadeiras: a bola largada no
+    // chão, um amigo por perto, a mão do jogador e a chuva. Os três desenhos de
+    // brincar têm uma bola dentro, então só a primeira delas pode usá-los. As
+    // outras três caem nas regras de baixo — andando ela anda, parada e
+    // brincalhona ela salta de alegria —, que é a verdade sem objeto nenhum.
+    //
+    // Sem esta condição um filhote recém-saído do ovo aparecia chutando uma
+    // bola que o jogador nunca deu a ele: a marca `withProp` era uma promessa
+    // que ninguém cobrava. Agora ela é cobrada aqui, no `when`.
     state: 'PlayBall',
-    when: (s) => s.intent === 'play',
-    clip: (s) => (s.moving ? 'buscarBola' : 'chutarBola'),
+    when: (s) => s.intent === 'play' && s.ball,
+    clip: (s) => (s.moving ? 'buscarBola' : s.isBaby ? 'filhoteBrinca' : 'chutarBola'),
     priority: PRIORITY.gesture,
     withProp: true,
   },

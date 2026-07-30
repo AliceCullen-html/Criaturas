@@ -30,7 +30,7 @@ export interface CreatureRenderRow {
   poseTime: number;
   carrying: number;
   egg: number;
-  playing: number;
+  ball: number;
   intent: number;
   carried: number;
   lift: number;
@@ -71,13 +71,15 @@ export class CreatureRenderBuffer {
    */
   readonly egg: Float32Array;
   /**
-   * 0 = não está brincando; 1..5 = o quadro de brincar com a bola (olhar,
-   * empurrar, pular, abraçar, perseguir).
+   * 1 quando a brincadeira dela é COM UMA BOLA que existe mesmo no jardim.
    *
-   * Canal próprio, e não mais uma pose: pose é maneirismo de quem não está
-   * fazendo nada, e brincar é o que ela ESTÁ fazendo.
+   * "Brincar" na simulação é quatro coisas diferentes: a bola, um amigo, a mão
+   * do jogador e a chuva. O desenho de brincar é uma só — e tem uma bola dentro.
+   * Sem este canal o renderer não tinha como saber a diferença, e um filhote
+   * feliz na chuva aparecia chutando uma bola que ninguém deu a ele. Quem sabe
+   * se a bola existe é a simulação; é ela que responde aqui.
    */
-  readonly playing: Uint8Array;
+  readonly ball: Uint8Array;
   /** O que ela está tentando fazer (índice em INTENT, de @core). */
   readonly intent: Uint8Array;
   /** 1 enquanto ela está no colo do jogador — no ar, e não no chão. */
@@ -119,7 +121,7 @@ export class CreatureRenderBuffer {
     this.poseTime = new Float32Array(capacity);
     this.carrying = new Uint8Array(capacity);
     this.egg = new Float32Array(capacity);
-    this.playing = new Uint8Array(capacity);
+    this.ball = new Uint8Array(capacity);
     this.intent = new Uint8Array(capacity);
     this.carried = new Uint8Array(capacity);
     this.lift = new Float32Array(capacity);
@@ -165,7 +167,7 @@ export class CreatureRenderBuffer {
     this.poseTime[i] = row.poseTime;
     this.carrying[i] = row.carrying;
     this.egg[i] = row.egg;
-    this.playing[i] = row.playing;
+    this.ball[i] = row.ball;
     this.intent[i] = row.intent;
     this.carried[i] = row.carried;
     this.lift[i] = row.lift;

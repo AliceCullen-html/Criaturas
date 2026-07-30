@@ -538,6 +538,7 @@ export function createRenderer(options: RendererOptions): Renderer {
     moving: false,
     speed: 0,
     carrying: false,
+    ball: false,
     scar: 0,
     fear: 0,
     happiness: 0.5,
@@ -1989,6 +1990,7 @@ export function createRenderer(options: RendererOptions): Renderer {
         signals.moving = moving;
         signals.speed = speed;
         signals.carrying = creatures.carrying[i] === 1;
+        signals.ball = creatures.ball[i] === 1;
         signals.scar = creatures.scar[i]!;
         signals.fear = creatures.fear[i]!;
         signals.happiness = creatures.happiness[i]!;

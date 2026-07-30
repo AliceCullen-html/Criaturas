@@ -23,6 +23,7 @@ const base: CreatureSignals = {
   moving: false,
   speed: 0,
   carrying: false,
+  ball: false,
   scar: 0,
   fear: 0,
   happiness: 0.5,

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { MOOD } from '@core';
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BODY_INK_WIDTH, widestInk } from './inkWidth';
@@ -108,6 +109,7 @@ const base: CreatureSignals = {
   moving: false,
   speed: 0,
   carrying: false,
+  ball: false,
   scar: 0,
   fear: 0,
   happiness: 0.5,
@@ -146,6 +148,14 @@ function soloClips(): Set<string> {
     { ...base, scar: 0.6, fear: 0.7, moving: true },
     { ...base, intent: 'search' },
     { ...base, intent: 'watch' },
+    // BRINCAR SEM BOLA. A intenção é a mesma para brincar com a bola, com um
+    // amigo, com a mão do jogador e com a chuva — e só a primeira tem bola.
+    // Sem `ball`, brincar é um estado de criatura sozinha como qualquer outro,
+    // e a medida de tinta abaixo cobra isso.
+    { ...base, intent: 'play' },
+    { ...base, intent: 'play', isBaby: true },
+    { ...base, intent: 'play', moving: true, speed: 30 },
+    { ...base, intent: 'play', isBaby: true, mood: MOOD.playful },
     { ...base, intent: 'sleep' },
     { ...base, intent: 'sleep', isBaby: true },
     { ...base, moving: true, speed: 80 },
@@ -188,6 +198,35 @@ describe('o desenho não inventa objetos', () => {
       'estas tiras têm mais que o corpo da criatura dentro — se for só marca, ' +
         'acrescente à lista MARKS_ONLY; se for objeto, o estado precisa de outra tira',
     ).toEqual([]);
+  });
+
+  it('brincar sem bola não desenha bola, e com bola desenha', () => {
+    // Quatro brincadeiras cabem na intenção `play`: a bola, um amigo, a mão do
+    // jogador e a chuva. O filhote que acabou de sair do ovo estava na terceira
+    // e apareceu chutando a primeira.
+    const semBola = [
+      { ...base, intent: 'play' as const },
+      { ...base, intent: 'play' as const, isBaby: true },
+      { ...base, intent: 'play' as const, moving: true, speed: 30 },
+    ];
+    for (const signals of semBola) {
+      const rule = STATES.find((r) => r.when(signals))!;
+      expect(rule.state, 'sem bola no jardim, brincar não é o estado da bola').not.toBe('PlayBall');
+      const key = rule.clip(signals);
+      if (MARKS_ONLY.has(key)) continue; // marca de quadrinho, já olhada
+      expect(
+        widestInk(paths.get(key)!, FRAME_W, GUTTER),
+        `${key} tem um objeto dentro`,
+      ).toBeLessThanOrEqual(BODY_INK_WIDTH);
+    }
+
+    // E o contrário: com a bola no chão, a bola aparece.
+    const comBola = { ...base, intent: 'play' as const, ball: true };
+    const rule = STATES.find((r) => r.when(comBola))!;
+    expect(rule.state).toBe('PlayBall');
+    expect(widestInk(paths.get(rule.clip(comBola))!, FRAME_W, GUTTER)).toBeGreaterThan(
+      BODY_INK_WIDTH,
+    );
   });
 
   it('e a lista de exceções não guarda nome que ninguém mais usa', () => {

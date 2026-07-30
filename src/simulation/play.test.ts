@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { SystemScheduler, Transform, type World } from '@engine';
+import { CreatureRenderBuffer, SystemScheduler, Transform, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
 import { Creature, Emotions, Memory, Mind, Needs, Personality } from '@creatures';
-import { subjects } from '@core';
+import { INTENT, subjects } from '@core';
 import { createWorld, Item, itemSystem, ballSystem, spawnBall, spawnGift, VARIANT } from '@world';
 import { spawnCreatures } from './spawnCreatures';
+import { writeCreatureBuffer } from './creatureRender';
 import { creatureIndexSystem } from './creatureIndex';
 import { foodIndexSystem } from './foodIndex';
 import { decisionSystem } from './systems/decisionSystem';
@@ -85,6 +86,64 @@ describe('a bola oferecida na mão', () => {
     expect(world.store(Item).has(bola), 'a criatura COMEU a bola').toBe(true);
     // E ficou com vontade de brincar: mostrar o brinquedo é um convite.
     expect(world.store(Needs).get(id)!.play).toBeGreaterThan(0.9);
+  });
+
+  /**
+   * BRINCAR SEM BOLA NÃO É BRINCAR COM A BOLA.
+   *
+   * A intenção `play` cobre quatro brincadeiras — a bola largada no chão, um
+   * amigo por perto, a mão do jogador e a chuva — e o desenho de brincar traz
+   * uma bola dentro. Um filhote recém-saído do ovo, num jardim onde ninguém
+   * jogou bola nenhuma, aparecia chutando uma. O canal `ball` do buffer é a
+   * resposta da simulação a essa pergunta, e este teste mede a resposta com o
+   * jardim rodando, não com um objeto montado à mão.
+   */
+  it('num jardim sem bola, ela brinca mas o buffer nunca pede a bola', () => {
+    const world = createWorld(CONFIG, 5);
+    spawnCreatures(world, 6);
+    world.setResource(BrainResource, createUtilityBrain());
+    // O jogador presente é uma das brincadeiras SEM bola — é a do print.
+    world.setResource(PlayerResource, { x: 300, y: 300, present: true });
+    world.store(Personality).forEach((traits) => (traits.playfulness = 1));
+    world.store(Needs).forEach((needs) => {
+      needs.play = 1;
+      needs.hunger = 0.1;
+      needs.thirst = 0.1;
+    });
+
+    const run = scheduler();
+    const buffer = new CreatureRenderBuffer(64);
+    let brincou = 0;
+    let comBolaNoDesenho = 0;
+    for (let tick = 0; tick < 20 * 120; tick++) {
+      run.update(world, DT);
+      writeCreatureBuffer(world, buffer);
+      for (let i = 0; i < buffer.count; i++) {
+        if (buffer.intent[i] === INTENT.play) brincou += 1;
+        if (buffer.ball[i] === 1) comBolaNoDesenho += 1;
+      }
+    }
+
+    console.log(`brincou em ${brincou} quadros de criatura, com bola em ${comBolaNoDesenho}`);
+    // Que ela tenha brincado é o que dá sentido à outra medida: sem isto, o
+    // teste passaria num jardim onde ninguém brincou.
+    expect(brincou, 'ninguém brincou em dois minutos — o teste não provou nada').toBeGreaterThan(0);
+    expect(comBolaNoDesenho, 'o desenho pediu uma bola que não existe no jardim').toBe(0);
+  });
+
+  it('e com a bola no chão o canal acende', () => {
+    // A outra metade: um canal que responde "não" para tudo também passaria no
+    // teste de cima, e não serviria para nada.
+    const { world } = comBola();
+    const run = scheduler();
+    const buffer = new CreatureRenderBuffer(8);
+    let acendeu = 0;
+    for (let tick = 0; tick < 20 * 60; tick++) {
+      run.update(world, DT);
+      writeCreatureBuffer(world, buffer);
+      for (let i = 0; i < buffer.count; i++) if (buffer.ball[i] === 1) acendeu += 1;
+    }
+    expect(acendeu, 'com a bola do lado, o desenho nunca soube dela').toBeGreaterThan(0);
   });
 
   it('e um presente também fica — e vira gosto', () => {

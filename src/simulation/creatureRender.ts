@@ -23,46 +23,28 @@ const inHand = new Set<number>();
 /** Marca de "esta linha é uma criatura, não um ovo". */
 const NOT_AN_EGG = -1;
 
-/** Distâncias que separam olhar de perseguir, de empurrar. */
-const PLAY_TOUCH = 22;
-const PLAY_NEAR = 70;
-
 /**
- * QUAL QUADRO DE BRINCAR, se ela estiver brincando com a bola.
+ * A BRINCADEIRA DELA É COM UMA BOLA?
  *
- * A ficha da folha nomeia cinco: olha, empurra, pula, abraça, persegue. A
- * escolha sai da distância e do que ela acabou de fazer — parada de longe ela
- * arma a PERSEGUIÇÃO, chegando perto OLHA, encostada PULA ou ABRAÇA.
+ * "Brincar" é uma intenção só e quatro brincadeiras diferentes: a bola largada
+ * no chão, um amigo por perto, a mão do jogador e a chuva. Do lado do desenho
+ * existe uma animação de brincar, e ela tem uma BOLA dentro — o artista
+ * desenhou a cena, não a pose. Enquanto o renderer via só a intenção, um
+ * filhote recém-nascido que estava feliz perto do jogador aparecia chutando uma
+ * bola que ninguém tinha dado a ele.
  *
- * ANDANDO, quem manda é a caminhada. Este é o ponto que estava errado: a pose
- * de brincar cobria tudo, inclusive a corrida atrás da bola, e uma criatura
- * atravessava o jardim inteiro num desenho só — pernas paradas, deslizando no
- * chão. Um quadro fixo em cima de um corpo que anda é o contrário de animação.
- * A única pose que atropela a caminhada é o EMPURRÃO, e por um instante só:
- * é o gesto em si, e ele precisa ser visto.
+ * Quem sabe se a bola existe é a simulação, e responder isso é o trabalho desta
+ * função: uma bola de verdade, no chão, que é justamente o alvo dela.
  */
-function playFrame(
-  world: World,
-  mind: { intent: string; targetEntity: number; actionCooldown: number },
-  transform: { x: number; y: number },
-  moving: boolean,
-): number {
+function playsWithBall(world: World, mind: { intent: string; targetEntity: number }): 0 | 1 {
   if (mind.intent !== 'play' || mind.targetEntity < 0) return 0;
   if (!world.hasComponent(Ball)) return 0;
-  const ball = world.store(Ball).get(mind.targetEntity);
-  if (!ball) return 0;
-  const spot = world.store(Transform).get(mind.targetEntity);
-  if (!spot) return 0;
-
-  // Acabou de empurrar: o quadro do empurrão fica um instante no ar.
-  if (mind.actionCooldown > 0.55) return 2;
-  if (moving) return 0;
-
-  const distance = Math.hypot(spot.x - transform.x, spot.y - transform.y);
-  if (distance > PLAY_NEAR) return 5;
-  if (distance > PLAY_TOUCH) return 1;
-  // Coladinha: se a bola está no alto, ela pula atrás; no chão, abraça.
-  return ball.z > 14 ? 3 : 4;
+  if (!world.store(Ball).get(mind.targetEntity)) return 0;
+  // Na mão de alguém não dá para brincar, e sem lugar no mundo não há o que
+  // desenhar ao lado dela.
+  const item = world.store(Item).get(mind.targetEntity);
+  if (!item || item.held || item.carriedBy >= 0) return 0;
+  return world.store(Transform).get(mind.targetEntity) ? 1 : 0;
 }
 
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
@@ -130,7 +112,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       poseTime,
       carrying: carrying.has(entity) ? 1 : 0,
       egg: NOT_AN_EGG,
-      playing: playFrame(world, mind, transform, moving),
+      ball: playsWithBall(world, mind),
       intent: INTENT[mind.intent],
       carried: inHand.has(entity) ? 1 : 0,
       lift: hands?.get(entity)?.z ?? falls?.get(entity)?.z ?? 0,
@@ -174,7 +156,7 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       poseTime: 0,
       carrying: 0,
       egg: Math.min(1, egg.time / egg.duration),
-      playing: 0,
+      ball: 0,
       intent: 0,
       carried: 0,
       lift: 0,
