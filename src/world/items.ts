@@ -99,14 +99,28 @@ export const maxItems = (config: WorldConfig): number => countIn(MAX_ITEMS_BASE,
 /**
  * Quantos objetos contam para o teto.
  *
+ * O teto existe para o jardim não virar um depósito de fruta caída. Quem conta,
+ * então, é o que o JARDIM produz sozinho — e não o que o jogador põe lá.
+ *
  * Pedra grande não conta: ela é cenário que por acaso se empurra, é permanente
  * e não apodrece. Deixá-la ocupando vaga fazia as árvores pararem de frutificar
  * — cinco pedras comiam um quinto da despensa do jardim.
+ *
+ * A BOLA E OS PRESENTES TAMBÉM NÃO CONTAM, e isso foi um defeito que o jogador
+ * viu antes de mim: dar um presente simplesmente não funcionava, às vezes.
+ * Medido — num jardim comum o número de objetos soltos vive encostado no teto
+ * (57 de 57), porque fruta cai o tempo todo. O presente perdia a vaga para uma
+ * fruta no chão, e o jogo respondia com uma interrogaçãozinha e nada mais.
+ *
+ * Um gesto do jogador não pode perder para o cenário se acumulando. As duas
+ * coisas que ele larga têm cota PRÓPRIA, pequena (três bolas, seis presentes),
+ * e por isso podem sair desta conta sem risco de o jardim virar depósito.
  */
 export function loose(world: World): number {
   let count = 0;
   world.store(Item).forEach((item) => {
-    if (item.kind !== 'boulder') count += 1;
+    if (item.kind === 'boulder' || item.kind === 'ball' || item.kind === 'gift') return;
+    count += 1;
   });
   return count;
 }

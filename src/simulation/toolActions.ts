@@ -29,6 +29,8 @@ import { showAndTell } from './systems/teachingSystem';
 
 /** Quantas bolas cabem no jardim ao mesmo tempo. */
 const MAX_BALLS = 3;
+/** E de presentes espalhados. Ver `placeGift`. */
+const MAX_GIFTS = 6;
 /** E quantos ovos podem estar chocando de uma vez. */
 const MAX_EGGS = 4;
 /** Teto de população: a partir daqui o jardim não aceita mais ovos. */
@@ -95,9 +97,24 @@ export function placeBall(world: World, x: number, y: number): BallReply {
   return 'placed';
 }
 
-/** Deixa um presente sorteado no chão. */
+/**
+ * Deixa um presente sorteado no chão.
+ *
+ * COTA PRÓPRIA, como a bola. Antes isto disputava vaga com a fruta caída no
+ * teto geral de objetos — e o jardim vive encostado nesse teto, porque as
+ * árvores frutificam o tempo todo. O resultado: dar presente funcionava às
+ * vezes, e quando não funcionava o jogo só piscava uma interrogação. Um gesto
+ * do jogador não pode perder para o cenário se acumulando.
+ *
+ * Seis é uma quantidade de lembranças, não de entulho: dá para presentear cada
+ * criatura de um grupo pequeno e ainda ver cada coisa individualmente no chão.
+ */
 export function placeGift(world: World, x: number, y: number): number {
-  if (loose(world) >= maxItems(world.config)) return -1;
+  let gifts = 0;
+  world.store(Item).forEach((item) => {
+    if (item.kind === 'gift') gifts += 1;
+  });
+  if (gifts >= MAX_GIFTS) return -1;
   return spawnGift(world, x, y);
 }
 
