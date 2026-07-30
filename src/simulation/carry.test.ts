@@ -9,6 +9,7 @@ import { foodIndexSystem } from './foodIndex';
 import { decisionSystem } from './systems/decisionSystem';
 import { movementSystem } from './systems/movementSystem';
 import { carrySystem } from './systems/carrySystem';
+import { emotionSystem } from './systems/emotionSystem';
 import {
   CARRY_HEIGHT,
   CARRY_PATIENCE,
@@ -238,5 +239,50 @@ describe('a criatura no colo', () => {
 
     expect(world.store(Carried).get(id)!.shaken).toBeLessThan(0.45);
     expect(emotions.stress, 'uma caminhada com ela no colo virou maus-tratos').toBeLessThan(0.1);
+  });
+
+  it('sacudir aflige, mas não condena a criatura a viver com medo', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.fear = 0.1;
+    emotions.trauma = 0;
+    const noColo = new SystemScheduler().add(carrySystem);
+    const vivendo = new SystemScheduler().add(emotionSystem).add(carrySystem);
+
+    // Três segundos de chacoalho — o que o jogador faz para ver a animação.
+    liftCreature(world, id);
+    for (let i = 0; i < 60; i++) {
+      moveCarried(world, id, 200 + (i % 2 === 0 ? 90 : -90), 200);
+      noColo.update(world, 1 / 20);
+    }
+    const assustada = emotions.fear;
+    expect(assustada, 'sacudiram e ela não se importou').toBeGreaterThan(0.25);
+    expect(assustada, 'um chacoalhão a jogou no pavor de fuga').toBeLessThan(0.55);
+
+    dropCreature(world, id, 0, 0);
+    // Meio minuto de paz depois: ela tem de estar de volta ao normal.
+    for (let i = 0; i < 30 * 20; i++) vivendo.update(world, 1 / 20);
+    expect(emotions.fear, 'meio minuto depois e ela ainda vive apavorada').toBeLessThan(0.2);
+  });
+
+  it('mas sacudir SEMPRE deixa marca: o trauma é o que se acumula', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const emotions = world.store(Emotions).get(id)!;
+    emotions.trauma = 0;
+    const noColo = new SystemScheduler().add(carrySystem);
+
+    for (let volta = 0; volta < 4; volta++) {
+      liftCreature(world, id);
+      for (let i = 0; i < 100; i++) {
+        moveCarried(world, id, 200 + (i % 2 === 0 ? 90 : -90), 200);
+        noColo.update(world, 1 / 20);
+      }
+      dropCreature(world, id, 0, 0);
+    }
+    expect(emotions.trauma, 'chacoalharam vinte segundos e não sobrou nada').toBeGreaterThan(0.25);
   });
 });

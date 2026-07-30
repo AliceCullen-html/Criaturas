@@ -27,6 +27,14 @@ const SHAKEN_ENOUGH = 0.45;
 const SHAKE_CALM = 0.9;
 /** Quão depressa ela sobe para a mão. Não é teletransporte: é um gesto. */
 const RISE = 9;
+/**
+ * O teto do medo que a sacudida sozinha alcança.
+ *
+ * Abaixo do limiar em que a criatura entra em estado de FUGA (0,55): chacoalhar
+ * deixa o bicho aflito e querendo descer, não em pânico permanente. O que faz
+ * uma criatura viver com medo é o trauma acumulado, e esse sobe devagar.
+ */
+const SHAKE_FEAR_CAP = 0.5;
 
 export const carrySystem: System = {
   name: 'carry',
@@ -56,12 +64,27 @@ function inTheHand(world: World, dt: number): void {
 
     // SACUDIR NÃO É CARREGAR. Levar o bicho de um lado para o outro é uma
     // coisa; chacoalhar é outra, e nenhum bicho do mundo acha isso engraçado.
+    //
+    // MAS A DOSE ESTAVA ABSURDA. Era medo a 0,35 POR SEGUNDO — três segundos de
+    // chacoalho equivaliam a dez tapas, e o medo, que cede devagar de
+    // propósito, empurrava a criatura para um pavor de dois minutos e meio.
+    // Quem sacudiu uma vez para ver a animação ficou com um bicho apavorado e
+    // chorando pelo resto da partida. Agora é assim:
+    //
+    // - o medo sobe devagar e TEM TETO: sacudir aflige, não traumatiza de uma
+    //   vez, e sozinho nunca joga a criatura no pavor de fuga;
+    // - o que ACUMULA entre uma sacudida e outra é o trauma, que é o lugar
+    //   certo para a repetição pesar — quem faz isso sempre deixa marca, quem
+    //   fez uma vez é perdoado.
     if (carried.shaken > SHAKEN_ENOUGH) {
-      emotion.fear = clamp01(emotion.fear + 0.35 * dt);
-      emotion.stress = clamp01(emotion.stress + 0.5 * dt);
-      emotion.trust = clamp01(emotion.trust - 0.06 * dt);
-      emotion.happiness = clamp01(emotion.happiness - 0.25 * dt);
-      memories.get(entity)?.record(subjects.player(), -0.6, 0.12 * dt);
+      if (emotion.fear < SHAKE_FEAR_CAP) {
+        emotion.fear = Math.min(SHAKE_FEAR_CAP, emotion.fear + 0.12 * dt);
+      }
+      emotion.stress = clamp01(emotion.stress + 0.3 * dt);
+      emotion.trauma = clamp01(emotion.trauma + 0.02 * dt);
+      emotion.trust = clamp01(emotion.trust - 0.03 * dt);
+      emotion.happiness = clamp01(emotion.happiness - 0.15 * dt);
+      memories.get(entity)?.record(subjects.player(), -0.6, 0.08 * dt);
       return;
     }
 

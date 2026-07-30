@@ -206,4 +206,18 @@ describe('o colo, no corpo dela', () => {
     expect(c.current).toBe('Pose');
     expect(c.clip, 'passou do ar para o gesto seguinte sem se levantar').toBe('levantarQueda');
   });
+
+  it('e no colo ela SE DEBATE — não chora encolhida como quem está sozinha', () => {
+    const c = controlador({ random: () => 0.99 });
+    // Um filhote apavorado, no chão, chora.
+    run(c, { ...calmo, isBaby: true, fear: 0.9 }, 0.3);
+    expect(c.current).toBe('Fear');
+    expect(c.clip).toBe('filhoteChora');
+
+    // O mesmo filhote apavorado, na sua mão, se debate: o colo é o fato que
+    // manda, e chorar encolhido no mato é uma cena que não é essa.
+    run(c, { ...calmo, isBaby: true, fear: 0.9, carried: true, lift: 18 }, 1);
+    expect(c.current).toBe('Held');
+    expect(c.clip).toBe('balancar');
+  });
 });

@@ -192,6 +192,28 @@ export const STATES: readonly StateRule[] = [
     priority: PRIORITY.fatal,
   },
   {
+    // NO COLO — e vem logo depois da morte, na frente do medo inclusive.
+    //
+    // Estar na sua mão é o fato dominante: uma criatura aterrorizada pendurada
+    // no ar não foge nem chora encolhida no chão, ela SE DEBATE. Enquanto o
+    // medo vinha antes desta regra, sacudir um filhote o deixava chorando
+    // dentro da sua palma, com a animação de quem está sozinho e apavorado no
+    // meio do mato — o desenho contava uma cena que não era aquela.
+    //
+    // Os três desenhos são a história inteira do gesto: quem confia se aninha,
+    // quem não confia se debate, e quem está sendo CHACOALHADO se sacode. É a
+    // mesma mão fazendo coisas muito diferentes — e é a velocidade dela que
+    // separa levar um bicho de um lado para o outro de chacoalhar o bicho.
+    state: 'Held',
+    when: (s) => s.carried,
+    clip: (s) =>
+      s.speed > SHAKE_SPEED ? 'sacudir' : s.fear > 0.5 || s.scar > 0.3 ? 'balancar' : 'colo',
+    enter: () => 'erguer',
+    priority: PRIORITY.interaction,
+    rate: (s) => (s.speed > SHAKE_SPEED ? 1.5 : s.fear > 0.5 ? 1.4 : 0.9),
+    withProp: true,
+  },
+  {
     state: 'Sick',
     when: (s) => s.health < 0.35,
     clip: (s) => (s.moving ? 'cambalear' : 'doente'),
@@ -215,23 +237,6 @@ export const STATES: readonly StateRule[] = [
       s.isBaby ? (s.moving ? 'filhoteFoge' : 'filhoteChora') : s.moving ? 'fugir' : 'medo',
     priority: PRIORITY.urgent,
     rate: () => 1.2,
-  },
-  {
-    // NO COLO. Vem antes de tudo que é rotina e depois do que é grave: uma
-    // criatura morrendo na sua mão está morrendo, não sendo carregada.
-    //
-    // Os três desenhos são a história inteira do gesto: quem confia se aninha,
-    // quem não confia se debate, e quem está sendo CHACOALHADO se sacode. É a
-    // mesma mão fazendo coisas muito diferentes — e é a velocidade dela que
-    // separa levar um bicho de um lado para o outro de chacoalhar o bicho.
-    state: 'Held',
-    when: (s) => s.carried,
-    clip: (s) =>
-      s.speed > SHAKE_SPEED ? 'sacudir' : s.fear > 0.5 || s.scar > 0.3 ? 'balancar' : 'colo',
-    enter: () => 'erguer',
-    priority: PRIORITY.interaction,
-    rate: (s) => (s.speed > SHAKE_SPEED ? 1.5 : s.fear > 0.5 ? 1.4 : 0.9),
-    withProp: true,
   },
   {
     // CAINDO. Largada da mão, ela desce — e o desenho da queda é o da queda da

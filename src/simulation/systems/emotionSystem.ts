@@ -28,6 +28,10 @@ import {
  * evitando quem a assustou.
  */
 const FEAR_CALM = 0.007;
+/** Acima deste trauma, o medo cede na marcha lenta: ele tem dono. */
+const TRAUMA_HOLDS_FEAR = 0.25;
+/** E sem trauma por trás, um susto passa tantas vezes mais depressa. */
+const STARTLE_RECOVERY = 5;
 /** Acima deste trauma, e só acima dele, a cicatriz começa a se formar. */
 const SCAR_AT = 0.45;
 /** O quanto a cicatriz cresce por segundo de trauma alto. */
@@ -107,9 +111,27 @@ export const emotionSystem: System = {
         emotions.scar * SCAR_FEAR,
         emotions.pain * 0.5,
       );
+      // O MEDO SEM TRAUMA PASSA; O MEDO COM TRAUMA É O QUE FICA.
+      //
+      // A taxa lenta foi escrita para a pancada, e está certa para ela: quem
+      // apanha fica arisco por bastante tempo, e não adianta esperar um minuto
+      // para continuar de onde parou. Mas ela valia para TODO susto, e um susto
+      // qualquer — ser pega no colo, levar um chacoalhão, ver a mão chegar
+      // depressa — condenava a criatura a dois minutos e meio de pavor. O
+      // jogador via um bicho preso num medo que não tinha causa visível.
+      //
+      // Quem separa os dois casos é o trauma: sem ele por trás, o susto é só um
+      // susto e cede várias vezes mais depressa. É a diferença entre levar um
+      // susto e ter medo de alguém.
+      const scarred = emotions.trauma > TRAUMA_HOLDS_FEAR;
       emotions.fear = Math.max(
         fearFloor,
-        approach(emotions.fear, fearFloor, FEAR_CALM * (0.6 + traits.bravery), dt),
+        approach(
+          emotions.fear,
+          fearFloor,
+          FEAR_CALM * (0.6 + traits.bravery) * (scarred ? 1 : STARTLE_RECOVERY),
+          dt,
+        ),
       );
 
       emotions.anger = approach(
