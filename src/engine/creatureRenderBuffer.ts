@@ -40,6 +40,10 @@ export interface CreatureRenderRow {
   happiness: number;
   energy: number;
   health: number;
+  /** Quem está ao lado dela agora: ver `COMPANY` em @core. */
+  company: number;
+  /** A historinha em curso: ver `ROUTINE` na simulação. 0 = nenhuma. */
+  routine: number;
 }
 
 export class CreatureRenderBuffer {
@@ -100,6 +104,19 @@ export class CreatureRenderBuffer {
   readonly happiness: Float32Array;
   readonly energy: Float32Array;
   readonly health: Float32Array;
+  /**
+   * QUEM ESTÁ AO LADO DELA — o canal que faltava para o desenho ver a cena.
+   *
+   * O artista entregou dezenove tiras de convívio: brigar, discutir, empurrar,
+   * pedir desculpas, dar presente, brincar junto, dormir junto, ignorar. Treze
+   * delas nunca apareceram no jogo, e a razão era esta: o renderer sabia a
+   * INTENÇÃO ('attack', 'play', 'sleep') e nada sobre com quem. Sem saber se há
+   * alguém do lado, "brincar" não pode virar "brincar junto" — vira uma
+   * criatura brincando sozinha ao lado de outra criatura brincando sozinha.
+   */
+  readonly company: Uint8Array;
+  /** E a historinha em curso, que o `planSystem` já conduzia sem ninguém ver. */
+  readonly routine: Uint8Array;
   count = 0;
 
   constructor(readonly capacity: number) {
@@ -131,6 +148,8 @@ export class CreatureRenderBuffer {
     this.happiness = new Float32Array(capacity);
     this.energy = new Float32Array(capacity);
     this.health = new Float32Array(capacity);
+    this.company = new Uint8Array(capacity);
+    this.routine = new Uint8Array(capacity);
   }
 
   clear(): void {
@@ -177,6 +196,8 @@ export class CreatureRenderBuffer {
     this.happiness[i] = row.happiness;
     this.energy[i] = row.energy;
     this.health[i] = row.health;
+    this.company[i] = row.company;
+    this.routine[i] = row.routine;
     this.count = i + 1;
   }
 }

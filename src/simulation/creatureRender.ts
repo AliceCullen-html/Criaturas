@@ -1,4 +1,4 @@
-import { INTENT, MOOD } from '@core';
+import { COMPANY, INTENT, MOOD } from '@core';
 import { CreatureRenderBuffer, Transform, Velocity, type World } from '@engine';
 import { Ball, Item } from '@world';
 import {
@@ -13,8 +13,14 @@ import {
   Emotions,
   Mind,
   Needs,
+  Bond,
 } from '@creatures';
-import { growthScale, lifeStage } from './age';
+import { growthScale, isBaby, lifeStage } from './age';
+import { CreatureIndexResource } from './creatureIndex';
+import { Plan } from './systems/planSystem';
+
+/** Vizinhos ao alcance do braço — reaproveitado a cada criatura. */
+const neighbours: number[] = [];
 
 const carrying = new Set<number>();
 /** Quem está no colo do jogador — reaproveitado a cada tique, como o de cima. */
@@ -47,6 +53,58 @@ function playsWithBall(world: World, mind: { intent: string; targetEntity: numbe
   return world.store(Transform).get(mind.targetEntity) ? 1 : 0;
 }
 
+/**
+ * QUEM ESTÁ AO LADO DELA — a cena, e não só a intenção.
+ *
+ * O desenho sabia o que a criatura queria ('attack', 'play', 'sleep') e nada
+ * sobre com quem. Sem isso, treze das dezenove tiras de convívio que o artista
+ * entregou não tinham como aparecer: "brincar junto" precisa de alguém junto, e
+ * "ignorar" precisa de alguém para ignorar.
+ *
+ * O alcance é curto de propósito. Isto não é "há gente no jardim": é "há um
+ * bicho ao alcance do braço", que é a distância em que duas criaturas se
+ * encostam, se empurram e dividem uma fruta. Longe demais e toda criatura
+ * estaria sempre acompanhada, o que é o mesmo que nunca estar.
+ */
+const REACH = 34;
+
+function companyOf(world: World, self: number, selfBaby: boolean): number {
+  const here = world.store(Transform).get(self);
+  if (!here) return COMPANY.alone;
+  const bond = world.store(Bond).get(self);
+  const bios = world.store(Bio);
+  const transforms = world.store(Transform);
+
+  let best: number = COMPANY.alone;
+  const index = world.hasResource(CreatureIndexResource)
+    ? world.getResource(CreatureIndexResource)
+    : null;
+  neighbours.length = 0;
+  if (index) index.query(here.x, here.y, REACH, neighbours);
+  else world.store(Creature).forEach((_tag, other) => neighbours.push(other));
+
+  for (const other of neighbours) {
+    if (other === self) continue;
+    const there = transforms.get(other);
+    const otherBio = bios.get(other);
+    if (!there || !otherBio) continue;
+    if (Math.hypot(there.x - here.x, there.y - here.y) > REACH) continue;
+    // Um adulto ao lado de um filhote está com um filhote — é a cena mais
+    // forte que existe, e é dela que saem as tiras de cuidar.
+    const kind = isBaby(otherBio)
+      ? selfBaby
+        ? COMPANY.someone
+        : COMPANY.baby
+      : bond && other === bond.rival
+        ? COMPANY.rival
+        : bond && other === bond.friend
+          ? COMPANY.friend
+          : COMPANY.someone;
+    if (kind > best) best = kind;
+  }
+  return best;
+}
+
 /** Projeta as criaturas no buffer de render (posição, aparência, humor, fase). */
 export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer): void {
   const creatures = world.store(Creature);
@@ -59,6 +117,9 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
   const behaviors = world.store(Behavior);
   const emotions = world.store(Emotions);
   const needs = world.store(Needs);
+  // A historinha em curso. Opcional: num teste que monta meia dúzia de
+  // sistemas o componente não existe, e aí não há história nenhuma.
+  const plans = world.hasComponent(Plan) ? world.store(Plan) : null;
   // Quem está no colo do jogador. O renderer precisa saber: no ar, a criatura
   // não anda, não gesticula e é desenhada erguida, presa à mão.
   const hands = world.hasComponent(Carried) ? world.store(Carried) : null;
@@ -122,6 +183,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       happiness: emotion?.happiness ?? 0.5,
       energy: need?.energy ?? 1,
       health: need?.health ?? 1,
+      company: companyOf(world, entity, isBaby(bio)),
+      routine: plans?.get(entity)?.routine ?? 0,
     });
   });
 
@@ -166,6 +229,8 @@ export function writeCreatureBuffer(world: World, buffer: CreatureRenderBuffer):
       happiness: 0.5,
       energy: 1,
       health: 1,
+      company: COMPANY.alone,
+      routine: 0,
     });
   });
 }

@@ -72,3 +72,31 @@ export const MOOD = Object.fromEntries(MOOD_NAMES.map((name, index) => [name, in
 >;
 
 export const MOOD_COUNT = MOOD_NAMES.length;
+
+/**
+ * QUEM ESTÁ AO LADO DELA.
+ *
+ * Uma coisa que a simulação sempre soube e o desenho nunca: com quem a criatura
+ * está. É pouca informação — cinco valores —, e é o que separa "brincar" de
+ * "brincar JUNTO", "dormir" de "dormir junto", "atacar" de "discutir com
+ * alguém". O artista desenhou as duas versões de cada uma; só a primeira
+ * chegava à tela.
+ *
+ * A ordem é de PRIORIDADE, do mais forte para o mais fraco: quem tem um filhote
+ * ao lado está com um filhote, mesmo que haja um desafeto atrás. Uma cena por
+ * vez, e a mais importante.
+ */
+export const COMPANY = {
+  /** Ninguém por perto. */
+  alone: 0,
+  /** Outra criatura qualquer, sem laço nem rixa. */
+  someone: 1,
+  /** Alguém de quem ela gosta. */
+  friend: 2,
+  /** O desafeto. */
+  rival: 3,
+  /** Um filhote — e ela não é um. */
+  baby: 4,
+} as const;
+
+export const COMPANY_COUNT = 5;

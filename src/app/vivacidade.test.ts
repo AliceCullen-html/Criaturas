@@ -188,6 +188,8 @@ function observar(seed: number): Medida {
         carried: false,
         lift: 0,
         isBaby: buffer.stage[i] === 0,
+        company: buffer.company[i]!,
+        routine: buffer.routine[i]!,
       };
       controller.update(signals, DT);
       const tira = controller.clip ?? '';

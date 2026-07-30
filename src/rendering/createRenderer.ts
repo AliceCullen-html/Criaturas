@@ -563,6 +563,8 @@ export function createRenderer(options: RendererOptions): Renderer {
     carried: false,
     lift: 0,
     isBaby: false,
+    company: 0,
+    routine: 0,
   };
   /** Onde a criatura que está tocando uma animação está, para as partículas. */
   const emitAt = { x: 0, y: 0, size: 8 };
@@ -2032,6 +2034,8 @@ export function createRenderer(options: RendererOptions): Renderer {
         signals.carried = creatures.carried[i] === 1;
         signals.lift = creatures.lift[i]!;
         signals.isBaby = stage === 0;
+        signals.company = creatures.company[i]!;
+        signals.routine = creatures.routine[i]!;
 
         // Onde as partículas de quadro vão sair. Lido pelo `onEvent` do slot,
         // que dispara lá dentro do `update` — logo abaixo, no mesmo instante.

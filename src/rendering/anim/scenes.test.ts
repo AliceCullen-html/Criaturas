@@ -126,6 +126,8 @@ const base: CreatureSignals = {
   carried: false,
   lift: 0,
   isBaby: false,
+  company: 0,
+  routine: 0,
 };
 
 /** Toda animação que uma regra SEM objeto garantido pode pedir. */

@@ -28,6 +28,8 @@ const calmo: CreatureSignals = {
   carried: false,
   lift: 0,
   isBaby: false,
+  company: 0,
+  routine: 0,
 };
 
 /** Tudo existe e tem cinco quadros, como a folha de verdade. */

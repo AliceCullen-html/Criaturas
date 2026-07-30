@@ -33,6 +33,8 @@ const base: CreatureSignals = {
   carried: false,
   lift: 0,
   isBaby: false,
+  company: 0,
+  routine: 0,
 };
 
 /** Todo sinal que muda alguma escolha da tabela, variado um a um. */
@@ -86,6 +88,17 @@ function everySignal(): CreatureSignals[] {
     { ...base, carried: true, scar: 0.5 },
   );
   out.push({ ...base, moving: true, speed: 80 });
+  // COM QUEM ELA ESTÁ, e que história está acontecendo. Sem variar estes dois,
+  // a varredura passava por cima de todas as tiras de convívio — e foi
+  // exatamente assim que treze delas ficaram anos na pasta sem ninguém notar:
+  // o teste que confere a tabela contra a pasta não tinha como chegar lá.
+  for (let company = 0; company <= 4; company++) {
+    for (const intent of ['attack', 'play', 'sleep', 'socialize', 'mate', 'wander'] as const) {
+      out.push({ ...base, company, intent });
+      out.push({ ...base, company, intent, isBaby: true });
+    }
+    for (let routine = 0; routine <= 5; routine++) out.push({ ...base, company, routine });
+  }
   return out;
 }
 

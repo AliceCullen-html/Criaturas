@@ -1,4 +1,16 @@
-import { MOOD, POSE, type Intent } from '@core';
+import { COMPANY, MOOD, POSE, type Intent } from '@core';
+
+/**
+ * As historinhas, por número.
+ *
+ * Repetidos aqui de propósito: `ROUTINE` mora na simulação, e o desenho não
+ * pode importar a simulação — a fronteira entre as camadas é o que impede o
+ * renderer de virar um segundo cérebro. O que atravessa é o número, pelo buffer,
+ * e o teste de cena cobra que os dois lados continuem contando a mesma coisa.
+ */
+const ROUTINE_STEAL = 2;
+const ROUTINE_PROTEST = 3;
+const ROUTINE_MAKEUP = 4;
 
 /**
  * A MÁQUINA DE ESTADOS DA CRIATURA.
@@ -93,6 +105,24 @@ export interface CreatureSignals {
   /** A que altura do chão ela está, em pixels de tela. Caindo, isto some. */
   lift: number;
   isBaby: boolean;
+  /**
+   * QUEM ESTÁ AO ALCANCE DO BRAÇO — ver `COMPANY` em @core.
+   *
+   * O sinal que faltava. A intenção diz o que ela quer; isto diz com quem ela
+   * está, e é a diferença entre "brincar" e "brincar junto", entre "dormir" e
+   * "dormir junto", entre "atacar" e "discutir com alguém". O artista desenhou
+   * as duas versões de cada uma dessas cenas; só a primeira chegava à tela.
+   */
+  company: number;
+  /**
+   * A HISTORINHA EM CURSO — ver `ROUTINE` na simulação.
+   *
+   * Levar uma fruta para uma amiga, roubar, reclamar do roubo, fazer as pazes,
+   * guardar um tesouro. Cinco histórias que a simulação conduz desde sempre e
+   * que a tela nunca mostrou: por fora eram duas criaturas andando uma na
+   * direção da outra, iguais a qualquer outra caminhada.
+   */
+  routine: number;
 }
 
 /** Nome do estado — o vocabulário do briefing. */
@@ -109,6 +139,10 @@ export type StateName =
   | 'Drink'
   | 'Sleep'
   | 'PlayBall'
+  | 'PlayTogether'
+  | 'Fight'
+  | 'Story'
+  | 'Tending'
   | 'Learn'
   | 'Social'
   | 'Courtship'
@@ -244,7 +278,31 @@ const THOUGHT_FILLERS: readonly string[] = [
  * medido, não prometido: `clips.test.ts` reprova quem não tiver corte limpo, e o
  * carregador reclama alto em vez de serrar a criatura ao meio.
  */
-export const PROP_IN_THE_WORLD: ReadonlySet<string> = new Set(['buscarBola', 'filhoteBrinca']);
+export const PROP_IN_THE_WORLD: ReadonlySet<string> = new Set([
+  'buscarBola',
+  'filhoteBrinca',
+  // O COMPANHEIRO FANTASMA — a mesma história da bola, do outro lado.
+  //
+  // Todas estas tiras de convívio trazem uma SEGUNDA criatura desenhada, pálida,
+  // ao lado da primeira. Era por isso que treze das dezenove tiras de convívio
+  // nunca entraram no jogo: com as duas criaturas de verdade uma diante da
+  // outra, cada uma desenhando a sua sombra, apareceriam quatro bichos numa
+  // conversa de dois.
+  //
+  // A saída é a mesma da bola: recortar. O outro está no jardim, com corpo, cor
+  // e genoma próprios — não precisa de retrato. Medido tira a tira: em todas
+  // estas há uma coluna limpa entre o corpo e o fantasma. As que não têm ficam
+  // de fora e continuam guardadas.
+  'brincarJunto',
+  'discutir',
+  'dormirJunto',
+  'empurrarOutro',
+  'ignorar',
+  'desculpas',
+  'reclamar',
+  'rejeitar',
+  'limparFilhote',
+]);
 
 /**
  * O REPERTÓRIO DE QUEM ESTÁ COM MEDO.
@@ -258,6 +316,50 @@ export const PROP_IN_THE_WORLD: ReadonlySet<string> = new Set(['buscarBola', 'fi
  * Definido antes da tabela porque é a tabela que o usa.
  */
 const FEAR_FILLERS: readonly string[] = ['tremer', 'encolher', 'congelar', 'olharLados'];
+
+/**
+ * O REPERTÓRIO DE UMA BRIGA.
+ *
+ * Brigar existia na simulação desde sempre — a intenção `attack`, o dano, o
+ * medo depois — e na tela era uma criatura andando até outra e as duas paradas.
+ * O acontecimento mais violento do jardim não tinha desenho nenhum.
+ *
+ * `brigar` continua de fora: é a única do conjunto em que o fantasma encosta no
+ * corpo, e serrá-la ao meio deixaria a criatura sem braço. As três que sobram
+ * contam a mesma cena — encarar, discutir, empurrar.
+ */
+const FIGHT_FILLERS: readonly string[] = ['discutir', 'empurrarOutro', 'irritado'];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ CUIDANDO DE UM FILHOTE.
+ *
+ * Nada aqui obriga ninguém a cuidar de ninguém: quem chega perto de um filhote
+ * chega porque quis. Mas quando chega, o desenho passa a ser o de um adulto com
+ * um filhote ao lado — limpar, ensinar, defender — em vez do de um adulto
+ * qualquer parado. É a mesma diferença entre "estar perto" e "estar com".
+ */
+const TENDING_FILLERS: readonly string[] = [
+  'limparFilhote',
+  'carinhoso',
+  'olharBaixo',
+  'piscar',
+  'farejar',
+];
+
+/**
+ * O REPERTÓRIO DE UMA BRINCADEIRA A DOIS.
+ *
+ * Sem isto, `brincarJunto` ficou vinte segundos seguidos na tela — medido pelo
+ * teste de vivacidade, que existe justamente para isso. Brincar dura, e um laço
+ * que dura precisa de coisas acontecendo dentro dele, senão é um poste alegre.
+ */
+const PLAY_FILLERS: readonly string[] = [
+  'muitoFeliz',
+  'feliz',
+  'comemorar',
+  'acenar',
+  'olharOutro',
+];
 
 /**
  * O REPERTÓRIO DE QUEM ESTÁ DOENTE — tosse, espirro, febre, tremor.
@@ -496,11 +598,69 @@ export const STATES: readonly StateRule[] = [
   {
     // Ela VAI para o ninho antes de dormir, e no caminho ela anda — devagar,
     // porque a caminhada já conta o cansaço no ritmo do passo.
+    // A BRIGA — o acontecimento mais violento do jardim, e o que menos aparecia.
+    //
+    // `attack` existe na simulação desde sempre: a raiva, a mordida, o dano, o
+    // medo que fica depois. Na tela eram duas criaturas paradas uma diante da
+    // outra, e o jogador via o resultado (uma delas fugindo machucada) sem
+    // nunca ver a causa.
+    state: 'Fight',
+    when: (s) => s.intent === 'attack' && s.company !== COMPANY.alone,
+    clip: () => 'discutir',
+    enter: (_s, from) => (from === 'Fight' ? null : 'bravo'),
+    priority: PRIORITY.interaction,
+    withProp: true,
+    fillers: FIGHT_FILLERS,
+  },
+  {
+    // AS HISTORINHAS, finalmente com cara.
+    //
+    // Cinco rotinas que o `planSystem` conduz há muito tempo — levar uma fruta
+    // para uma amiga, roubar, reclamar do roubo, ir atrás de quem brigou e
+    // fazer as pazes, guardar um tesouro. Por fora eram duas criaturas
+    // caminhando uma na direção da outra, indistinguíveis de qualquer passeio.
+    // Uma história que ninguém consegue ver não é uma história.
+    //
+    // Só vale PARADA e COM ALGUÉM: a viagem até a outra continua sendo
+    // caminhada, e uma desculpa sem ninguém na frente é uma criatura falando
+    // sozinha.
+    // DAR E GUARDAR ficam DE FORA, e é a regra da cena mandando de novo. Nas
+    // duas a criatura está com uma fruta de verdade na boca, desenhada pelo
+    // mundo, e as tiras que o artista fez para elas — `darPresente`,
+    // `guardarFavorito` — trazem um embrulho desenhado dentro. Seriam dois
+    // objetos na mesma cena, e o segundo não existe. Essas duas já têm desenho
+    // honesto: `segurarComida`, na regra de carregar, logo abaixo.
+    state: 'Story',
+    when: (s) =>
+      !s.moving &&
+      s.company !== COMPANY.alone &&
+      (s.routine === ROUTINE_STEAL ||
+        s.routine === ROUTINE_PROTEST ||
+        s.routine === ROUTINE_MAKEUP),
+    clip: (s) =>
+      s.routine === ROUTINE_STEAL
+        ? 'empurrarOutro'
+        : s.routine === ROUTINE_PROTEST
+          ? 'reclamar'
+          : 'desculpas',
+    priority: PRIORITY.interaction,
+    withProp: true,
+  },
+  {
+    // DORMIR JUNTO. O ninho já puxa quem tem amiga para perto da amiga dela —
+    // "ninguém programou durmam em grupo", diz o comentário do ninho — e o
+    // resultado disso estava na tela como dois bichos dormindo, cada um por si.
     state: 'Sleep',
     when: (s) => (s.intent === 'sleep' && !s.moving) || s.pose === POSE.lie,
-    clip: (s) => (s.isBaby ? 'filhoteDorme' : 'dormir'),
+    clip: (s) =>
+      s.isBaby
+        ? 'filhoteDorme'
+        : s.company === COMPANY.friend || s.company === COMPANY.baby
+          ? 'dormirJunto'
+          : 'dormir',
     enter: (_s, from) => (from === 'Sleep' ? null : 'bocejar'),
     priority: PRIORITY.gesture,
+    withProp: true,
     rate: () => 0.7,
   },
   {
@@ -529,6 +689,34 @@ export const STATES: readonly StateRule[] = [
     withProp: true,
   },
   {
+    // BRINCAR JUNTO — a segunda das quatro brincadeiras que `play` cobre, e a
+    // única que precisava de alguém do lado para poder existir na tela. Sem bola
+    // e com companhia é isto; sem bola e sozinha cai nas regras de baixo.
+    state: 'PlayTogether',
+    when: (s) => s.intent === 'play' && !s.ball && !s.moving && s.company !== COMPANY.alone,
+    clip: () => 'brincarJunto',
+    priority: PRIORITY.gesture,
+    withProp: true,
+    fillers: PLAY_FILLERS,
+  },
+  {
+    // CUIDAR DE UM FILHOTE. Ninguém é obrigado a chegar perto de um: quem chega,
+    // chegou porque quis — a empatia, o laço, o ninho comum. Mas quem está com
+    // um filhote ao lado é desenhado com um filhote ao lado.
+    // E CUIDAR É UM GESTO, NÃO UM ESTADO. A primeira versão pôs `limparFilhote`
+    // como laço, e o teste de vivacidade mediu o estrago no mesmo minuto: 30%
+    // da vida da criatura e treze segundos seguidos lavando o mesmo filhote.
+    // Filhote anda atrás de adulto o tempo todo — estar perto de um é o normal,
+    // não o acontecimento. O laço é ela DE OLHO nele; limpar, acariciar e
+    // cheirar entram por cima, de vez em quando, que é como cuidado acontece.
+    state: 'Tending',
+    when: (s) => !s.moving && !s.isBaby && s.company === COMPANY.baby,
+    clip: () => 'olharOutro',
+    priority: PRIORITY.gesture,
+    withProp: true,
+    fillers: TENDING_FILLERS,
+  },
+  {
     // Ela para DIANTE da tela para aprender. Andando até lá, ela anda.
     state: 'Learn',
     when: (s) => s.intent === 'study' && !s.moving,
@@ -541,7 +729,18 @@ export const STATES: readonly StateRule[] = [
     state: 'Social',
     when: (s) => s.intent === 'socialize' || s.intent === 'follow',
     clip: (s) =>
-      s.moving ? (s.isBaby ? 'seguirMae' : 'seguirAmigo') : s.isBaby ? 'pedirColo' : 'conversar',
+      s.moving
+        ? s.isBaby
+          ? 'seguirMae'
+          : 'seguirAmigo'
+        : s.isBaby
+          ? 'pedirColo'
+          : // O DESAFETO. Parada ao lado de quem ela não suporta, ela não
+            // conversa: vira a cara. É a mesma rixa que já existia no laço
+            // social e que na tela era um bate-papo cordial.
+            s.company === COMPANY.rival
+            ? 'ignorar'
+            : 'conversar',
     priority: PRIORITY.gesture,
     withProp: true,
     fillers: SOCIAL_FILLERS,
@@ -550,7 +749,8 @@ export const STATES: readonly StateRule[] = [
     // Cortejar é diante do par. A travessia do jardim até ele é caminhada.
     state: 'Courtship',
     when: (s) => s.intent === 'mate' && !s.moving,
-    clip: () => 'cortejar',
+    // Cortejar quem não quer nada é levar um fora, e o artista desenhou isso.
+    clip: (s) => (s.company === COMPANY.rival ? 'rejeitar' : 'cortejar'),
     priority: PRIORITY.gesture,
     withProp: true,
     fillers: COURT_FILLERS,
@@ -695,6 +895,29 @@ export function stateFor(signals: CreatureSignals): StateRule {
   for (const rule of STATES) if (rule.when(signals)) return rule;
   return STATES[STATES.length - 1]!;
 }
+
+/**
+ * TODOS OS REPERTÓRIOS, para o inventário poder contá-los.
+ *
+ * As microanimações são metade das tiras que o jogo mostra, e elas não saem de
+ * nenhum `clip:` — entram por cima do laço. Sem esta lista, um teste que varre
+ * a tabela conta pela metade.
+ */
+export const FILLER_SETS: readonly (readonly string[])[] = [
+  IDLE_FILLERS,
+  THOUGHT_FILLERS,
+  FEAR_FILLERS,
+  FIGHT_FILLERS,
+  TENDING_FILLERS,
+  PLAY_FILLERS,
+  SICK_FILLERS,
+  SOCIAL_FILLERS,
+  COURT_FILLERS,
+  LEARN_FILLERS,
+];
+
+/** Só para o inventário conferir os nomes do cortejo. */
+export const COURT_FILLERS_TEST = COURT_FILLERS;
 
 /** Segundos entre duas microanimações — sorteado dentro desta faixa. */
 export const FILLER_GAP: readonly [number, number] = [2.5, 9];
