@@ -284,6 +284,24 @@ export const actionSystem: System = {
               needs.energy = clamp01(needs.energy - 0.01);
               needs.play = clamp01(needs.play - PLAY_SATED);
               memory.record(subjects.player(), 0.12, 0.05);
+              // E A COISA EM SI FICA NA LEMBRANÇA — não só o jogador, a BOLA.
+              //
+              // Este era um buraco de fundo. O comentário de `subjects.thing`
+              // diz, desde sempre, que é por ali que nasce o gosto: "não existe
+              // 'criatura que gosta de flores' escrito em lugar nenhum do
+              // genoma; existe uma criatura que topou com uma flor num dia bom".
+              // Só que nada no jardim escrevia esse traço sozinho — ele só
+              // aparecia pela mão do jogador ou pela rotina do tesouro. Medido:
+              // num jardim de cinquenta bichos rodando setenta minutos, ZERO
+              // criaturas tinham opinião sobre qualquer coisa do mundo.
+              //
+              // E a nota sai do HUMOR do momento, não da bola: duas criaturas
+              // que empurraram a mesma bola em dias diferentes ficam com
+              // opiniões diferentes sobre ela. É isso que faz o gosto ser
+              // arbitrário, e é de coisa arbitrária que se faz tradição — numa
+              // fruta venenosa todo mundo acaba concordando, porque veneno é
+              // veneno; numa bola, não há verdade a descobrir.
+              memory.record(subjects.thing(ballItem.variant), 0.2 + emotions.happiness * 0.6, 0.08);
               if (world.rng.chance(0.06)) {
                 memory.addEpisode({
                   text: 'Brinquei com a bola',
