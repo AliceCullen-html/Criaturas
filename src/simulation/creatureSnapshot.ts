@@ -25,6 +25,7 @@ import {
   type Sex,
 } from '@creatures';
 import { isBaby, isElder } from './age';
+import { Goal, goalText } from './systems/goalSystem';
 
 /** Retrato de leitura de uma criatura para a UI (dados planos, sem o ECS). */
 export interface CreatureSnapshot {
@@ -94,6 +95,17 @@ export interface CreatureSnapshot {
    * painel usa para mostrar duas irmãs virando pessoas diferentes.
    */
   habits: Array<{ intent: Intent; value: number; tries: number }>;
+  /**
+   * O QUE ELA ANDA QUERENDO DA VIDA, em palavras.
+   *
+   * O briefing pedia "objetivo atual" no painel e ele não existia: tudo o que
+   * a criatura tinha era curto — a intenção dura segundos, a historinha meio
+   * minuto. `null` quando ela ainda não tem projeto nenhum, que é o caso de
+   * todo filhote.
+   */
+  goal: string | null;
+  /** Há quantos segundos ela vive em volta disso. */
+  goalFor: number;
   memories: Episode[];
   children: string[];
   friends: Array<{ name: string; affinity: number }>;
@@ -163,6 +175,8 @@ export function readCreatureSnapshot(world: World, id: number): CreatureSnapshot
     bond: memory.valenceOf(subjects.player()),
     words: (world.store(Words).get(id)?.known() ?? []).map((word) => WORD_TEXT[word] ?? '?'),
     habits: readHabits(world, id),
+    goal: goalText(world, id),
+    goalFor: world.store(Goal).get(id)?.elapsed ?? 0,
     memories: memory.episodes.slice(0, 8),
     children: findChildren(world, identity.name),
     friends: findFriends(world, id, memory),

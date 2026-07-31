@@ -47,6 +47,7 @@ import {
   handReactionSystem,
   fearLearningSystem,
   observationSystem,
+  goalSystem,
   metabolismSystem,
   moveHeldItem,
   moveCarried,
@@ -175,6 +176,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(carrySystem)
     .add(fearLearningSystem)
     .add(observationSystem)
+    .add(goalSystem)
     .add(socialSystem)
     .add(teachingSystem)
     .add(orderSystem)

@@ -487,6 +487,19 @@ body {
   margin-bottom: 9px;
 }
 
+/* O projeto de vida — uma frase, não uma barra: é a única coisa no painel
+   que não é um número, porque não há número que diga o que alguém quer. */
+.mind__goal {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #e8e3d4;
+}
+.mind__goal em {
+  color: #9a927f;
+  font-style: normal;
+}
+
 .mind__box h4 {
   margin: 0 0 4px;
   font-size: 9px;

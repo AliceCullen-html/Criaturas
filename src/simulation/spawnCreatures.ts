@@ -17,6 +17,7 @@ import { Plan } from './systems/planSystem';
 import { Order } from './orders';
 import { Budding } from './species';
 import { Chatter } from './systems/teachingSystem';
+import { Goal } from './systems/goalSystem';
 
 /**
  * A que distância da água uma criatura pode começar a vida.
@@ -94,6 +95,8 @@ export function spawnCreatures(world: World, count: number, group: SpawnGroup = 
   world.register(Budding);
   // Ritmo da fala: quem sabe uma palavra a repete de tempos em tempos.
   world.register(Chatter);
+  // O projeto de vida: o que ela anda querendo, para além do próximo minuto.
+  world.register(Goal);
   const terrain = world.getResource(TerrainResource);
   // Nem na água, nem debaixo de uma pedra grande.
   solids.rebuild(world);

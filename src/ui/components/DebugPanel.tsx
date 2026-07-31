@@ -89,6 +89,19 @@ export function DebugPanel() {
           ))}
       </section>
 
+      {/* O PROJETO. Tudo o mais no painel é curto: a intenção dura segundos, o
+          que aperta muda a todo instante. Esta linha é a única que responde
+          "o que ela anda querendo da vida" — e ela sobrevive a um dia ruim. */}
+      {bicho.goal && (
+        <section className="mind__box">
+          <h4>O que ela quer da vida</h4>
+          <p className="mind__goal">
+            {bicho.goal}
+            <em> · há {Math.round(bicho.goalFor / 60)} min</em>
+          </p>
+        </section>
+      )}
+
       {/* A EXPERIÊNCIA DE VIDA. É aqui que se vê duas irmãs de mesmo genoma
           virarem pessoas diferentes: a mesma lista, com números diferentes,
           porque a vida delas foi diferente. Nada disto está escrito no código —

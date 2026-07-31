@@ -30,6 +30,7 @@ import { CreatureIndexResource } from '../creatureIndex';
 import { BrainResource } from '../brainResource';
 import { PlayerResource } from '../player';
 import { WatchedResource } from '../watched';
+import { goalSpot } from './goalSystem';
 
 /** A experiência de quem ainda não tem componente de experiência: nenhuma. */
 const VAZIO: readonly number[] = [];
@@ -453,12 +454,21 @@ export const decisionSystem: System = {
           // e nunca voltava a nenhum deles, porque só o lado ruim da lembrança
           // era lido, para desviar. Um bicho que só sabe de onde fugir não tem
           // casa, e um saber sobre lugares que ninguém visita não se espalha.
-          const pull = rememberedSpot(
-            memory,
-            transform.x,
-            transform.y,
-            habitsStore?.get(entity)?.whim ?? 0.5,
-          );
+          // O PROJETO DE VIDA MANDA MAIS QUE A LEMBRANÇA SOLTA.
+          //
+          // É aqui que um objetivo deixa de ser um número guardado e vira uma
+          // criatura vivendo em volta de alguma coisa. Ela ainda come, foge,
+          // dorme e briga como sempre — o que muda é para onde ela deriva
+          // quando nada aperta, e é dessa deriva que sai "a que mora perto do
+          // lago" e "a que anda sempre atrás da irmã".
+          const pull =
+            goalSpot(world, entity) ??
+            rememberedSpot(
+              memory,
+              transform.x,
+              transform.y,
+              habitsStore?.get(entity)?.whim ?? 0.5,
+            );
           const spread = pull ? MEMORY_SPREAD : 1;
           const fromX = pull ? pull.x : transform.x;
           const fromY = pull ? pull.y : transform.y;
