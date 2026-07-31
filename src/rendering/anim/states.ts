@@ -234,6 +234,9 @@ export interface StateRule {
  */
 export const IDLE_FILLERS: readonly string[] = [
   'piscar',
+  'ansioso',
+  'estressado',
+  'orgulhoso',
   'olharLados',
   'olharCima',
   'olharBaixo',
@@ -373,7 +376,112 @@ const PLAY_FILLERS: readonly string[] = [
  * essas coisas pequenas que dizem ao jogador que ela precisa de cuidado — um
  * laço parado não pede nada a ninguém.
  */
-const SICK_FILLERS: readonly string[] = ['tossir', 'espirrar', 'febre', 'tremer'];
+const SICK_FILLERS: readonly string[] = [
+  'tossir',
+  'espirrar',
+  'febre',
+  'tremer',
+  'desmaiar',
+  'recuperando',
+];
+
+/**
+ * O REPERTÓRIO DE UMA REFEIÇÃO.
+ *
+ * Comer era uma tira só em laço. Uma refeição não é um gesto repetido: é
+ * examinar, morder, mastigar, engolir. O artista desenhou a refeição inteira e
+ * essas tiras estavam paradas na pasta — e todas mostram a criatura COM a
+ * comida, que é justamente o que existe no estado de comer.
+ */
+const EAT_FILLERS: readonly string[] = ['mastigar', 'engolir', 'examinarComida', 'cheirarComida'];
+
+/**
+ * O REPERTÓRIO DE UM BANHO.
+ *
+ * Mesma história: a esponja é a MÃO DO JOGADOR, e ela está lá — este estado só
+ * existe enquanto você esfrega. Espuma, esfregar, limpar o rosto, secar, e o
+ * espreguiçar de quem está gostando.
+ */
+const BATH_FILLERS: readonly string[] = [
+  'espuma',
+  'esfregar',
+  'limparCorpo',
+  'limparRosto',
+  'secar',
+  'espreguicarBanho',
+];
+
+/**
+ * O REPERTÓRIO DE QUEM DORME.
+ *
+ * Dormir era um laço de treze segundos. Quem dorme ronca, se mexe, e acorda —
+ * e acordar é o que devolve a criatura ao mundo à vista do jogador.
+ */
+const SLEEP_FILLERS: readonly string[] = ['roncar', 'acordar', 'bocejar'];
+
+/**
+ * O REPERTÓRIO DE QUEM FOI MALTRATADO.
+ *
+ * O trauma tinha quatro tiras e o artista desenhou treze. Estas são as que
+ * mostram a criatura SOZINHA com o que ficou nela — esconder o rosto, chorar,
+ * olhar de longe, e o começo lento de voltar a confiar. As de recusar (colo,
+ * carinho, comida) ficam de fora: elas têm a mão desenhada, e a mão só existe
+ * quando o jogador está de fato ali.
+ */
+const SCAR_FILLERS: readonly string[] = ['esconderRosto', 'chorarT', 'encolher', 'tremer'];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ SENDO ACARICIADA.
+ *
+ * Todas com a MÃO desenhada dentro, e é por isso que só podem viver aqui: este
+ * estado só existe enquanto o jogador está de fato encostado nela. `cocegas`,
+ * `abracar` e o balançar são o carinho variando; `negarCarinho` é quem não quer
+ * — a mão está lá do mesmo jeito, e a recusa é a resposta.
+ */
+const PET_FILLERS: readonly string[] = ['cocegas', 'abracar', 'balancar', 'negarCarinho'];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ COM A BOLA.
+ *
+ * Oito tiras paradas na pasta, todas com a bola desenhada — e a bola EXISTE
+ * neste estado, é a que o jogador largou. Brincar era um laço só; agora é pegar,
+ * chutar, girar, sacudir, devolver, largar. É a diferença entre uma criatura
+ * empurrando uma bola e uma criatura brincando.
+ */
+const BALL_FILLERS: readonly string[] = [
+  'pegarBola',
+  'chutarBola',
+  'jogarBola',
+  'devolverBola',
+  'girarBrinquedo',
+  'sacudirBrinquedo',
+  'largarBrinquedo',
+  'brincarSozinho',
+];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ BEBENDO — a água está ali, e é ela que aparece.
+ */
+const DRINK_FILLERS: readonly string[] = ['beberSozinho', 'procurarAgua'];
+
+/**
+ * O REPERTÓRIO DE QUEM ESTÁ NA SUA MÃO.
+ *
+ * No colo, os pés dela não tocam o chão e a mão está desenhada em todas: cair,
+ * ser sacudida, ser solta, recusar o colo. Nenhuma delas poderia aparecer em
+ * outro lugar — e todas descrevem exatamente o que está acontecendo aqui.
+ */
+const HELD_FILLERS: readonly string[] = ['sacudir', 'negarColo', 'cairMao'];
+
+/**
+ * E o de quem carrega comida na boca: colher, pegar, guardar, jogar fora.
+ */
+const CARRY_FILLERS: readonly string[] = [
+  'colherFruta',
+  'pegarComida',
+  'guardarComida',
+  'jogarComida',
+];
 
 /**
  * O REPERTÓRIO DE QUEM ESTÁ COM ALGUÉM.
@@ -395,10 +503,18 @@ const SOCIAL_FILLERS: readonly string[] = [
   'olharOutro',
   'aproximar',
   'abracarAmigo',
+  'amizade',
+  'agradecer',
 ];
 
 /** E o de quem está cortejando: interesse, aceitação, um beijinho. */
-const COURT_FILLERS: readonly string[] = ['interesse', 'aceitar', 'beijinho', 'olharOutro'];
+const COURT_FILLERS: readonly string[] = [
+  'interesse',
+  'aceitar',
+  'beijinho',
+  'olharOutro',
+  'apaixonado',
+];
 
 /**
  * O REPERTÓRIO DE UMA AULA.
@@ -418,6 +534,10 @@ const LEARN_FILLERS: readonly string[] = [
   'associarObjeto',
   'lembrar',
   'descobrir',
+  'copiarOutro',
+  'falar',
+  'esquecer',
+  'observar',
 ];
 
 /** Acima disto o passo vira corrida. */
@@ -489,6 +609,7 @@ export const STATES: readonly StateRule[] = [
     priority: PRIORITY.interaction,
     rate: (s) => (s.speed > SHAKE_SPEED ? 1.5 : s.fear > 0.5 ? 1.4 : 0.9),
     withProp: true,
+    fillers: HELD_FILLERS,
   },
   {
     state: 'Sick',
@@ -507,7 +628,7 @@ export const STATES: readonly StateRule[] = [
     enter: (_s, from) => (from === 'Trauma' ? null : 'congelar'),
     priority: PRIORITY.urgent,
     rate: () => 1.15,
-    fillers: FEAR_FILLERS,
+    fillers: SCAR_FILLERS,
   },
   {
     // O MEDO TEM UM ARCO — ele começa em pânico e termina em tremor.
@@ -556,13 +677,22 @@ export const STATES: readonly StateRule[] = [
     enter: () => 'espuma',
     priority: PRIORITY.interaction,
     withProp: true,
+    fillers: BATH_FILLERS,
   },
   {
+    // VOLTAR A CONFIAR. A tira mostra a criatura E A MÃO, e é por isso que ela
+    // não podia entrar em nenhum estado de bicho sozinho — mas aqui a mão está
+    // ali de verdade, encostada nela. É a cena exata que o artista desenhou:
+    // alguém que foi maltratado deixando ser tocado de novo, devagar.
     state: 'Pet',
     when: (s) => s.touched,
-    clip: () => 'afagar',
+    // Quem carrega uma cicatriz não recebe carinho como quem nunca apanhou:
+    // recebe com reserva, e é outra tira. A marca é permanente, então esta cena
+    // volta toda vez que a mão chega — a criatura aceita, mas nunca esquece.
+    clip: (s) => (s.scar > 0.2 ? 'recuperarConfianca' : 'afagar'),
     priority: PRIORITY.interaction,
     withProp: true,
+    fillers: PET_FILLERS,
   },
   {
     // ANDANDO, QUEM MANDA É A CAMINHADA — e daqui para baixo é essa a regra.
@@ -590,6 +720,7 @@ export const STATES: readonly StateRule[] = [
     enter: (s) => (s.pose === POSE.eat ? 'pegarComida' : null),
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: EAT_FILLERS,
   },
   {
     // Beber é de boca na água. O caminho até o lago é caminhada.
@@ -598,6 +729,7 @@ export const STATES: readonly StateRule[] = [
     clip: () => 'beber',
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: DRINK_FILLERS,
   },
   {
     // Ela VAI para o ninho antes de dormir, e no caminho ela anda — devagar,
@@ -665,6 +797,7 @@ export const STATES: readonly StateRule[] = [
     enter: (_s, from) => (from === 'Sleep' ? null : 'bocejar'),
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: SLEEP_FILLERS,
     rate: () => 0.7,
   },
   {
@@ -691,6 +824,7 @@ export const STATES: readonly StateRule[] = [
     clip: (s) => (s.isBaby ? 'filhoteBrinca' : 'buscarBola'),
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: BALL_FILLERS,
   },
   {
     // BRINCAR JUNTO — a segunda das quatro brincadeiras que `play` cobre, e a
@@ -771,6 +905,7 @@ export const STATES: readonly StateRule[] = [
     clip: () => 'segurarComida',
     priority: PRIORITY.gesture,
     withProp: true,
+    fillers: CARRY_FILLERS,
   },
   {
     // Farejar é de nariz no chão, parada. Ir até o lugar é caminhada.
@@ -915,6 +1050,15 @@ export const FILLER_SETS: readonly (readonly string[])[] = [
   IDLE_FILLERS,
   THOUGHT_FILLERS,
   FEAR_FILLERS,
+  SCAR_FILLERS,
+  PET_FILLERS,
+  BALL_FILLERS,
+  DRINK_FILLERS,
+  HELD_FILLERS,
+  CARRY_FILLERS,
+  EAT_FILLERS,
+  BATH_FILLERS,
+  SLEEP_FILLERS,
   FIGHT_FILLERS,
   TENDING_FILLERS,
   PLAY_FILLERS,

@@ -136,6 +136,9 @@ function reachable(): Set<string> {
     { fear: 0.9 },
     { fear: 0.9, moving: true, isBaby: true },
     { touched: true },
+    // Carinho em quem carrega cicatriz é outra cena, e sem esta combinação a
+    // varredura não chegava lá.
+    { touched: true, scar: 0.6 },
     { carrying: true },
     { carried: true },
     { carried: true, fear: 0.9 },
@@ -173,7 +176,7 @@ describe('o inventário das animações', () => {
     // O PISO. Não é uma meta: é uma catraca. Ele sobe quando alguém liga uma
     // tira nova e nunca desce sozinho — se descer, é porque um estado foi
     // removido ou um nome foi trocado, e isso tem de doer aqui e não no jardim.
-    expect(usadas, 'alguma tira que já aparecia parou de aparecer').toBeGreaterThanOrEqual(86);
+    expect(usadas, 'alguma tira que já aparecia parou de aparecer').toBeGreaterThanOrEqual(130);
   });
 
   it('e o convívio é a metade que mais importa: ninguém brinca sozinho num jardim cheio', () => {
