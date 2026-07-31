@@ -97,6 +97,14 @@ const MAX_EPISODES = 24;
 const DECAY_PER_SECOND = 0.0012;
 /** Lembranças fortes (traumas e afetos) resistem muito mais ao esquecimento. */
 const DECAY_RESISTANCE = 0.85;
+/**
+ * A força com que um lugar entra na memória da primeira vez.
+ *
+ * Acima do piso em que o esquecimento apaga um traço (0,02), e por pouco: pisar
+ * num canto é saber que ele existe, e nada mais. Se ninguém voltar lá, some em
+ * poucos segundos.
+ */
+const FIRST_VISIT = 0.05;
 
 export class CreatureMemory {
   private readonly traces = new Map<MemorySubject, MemoryTrace>();
@@ -138,6 +146,40 @@ export class CreatureMemory {
 
   knows(subject: MemorySubject): boolean {
     return this.traces.has(subject);
+  }
+
+  /**
+   * ESTIVE AQUI — sem opinião nenhuma sobre o lugar.
+   *
+   * Reforça só a FORÇA do traço, e nunca a valência. Usar `record` com valência
+   * zero para isto seria um defeito silencioso: `record` faz média ponderada, e
+   * então um lugar onde a criatura quase morreu iria virando neutro só de ela
+   * ficar parada lá. Conhecer não é perdoar.
+   */
+  visit(subject: MemorySubject, weight: number): void {
+    const trace = this.traces.get(subject);
+    if (!trace) {
+      // O PRIMEIRO INSTANTE JÁ CONTA. Nascendo com o peso de um tique, o traço
+      // nasce ABAIXO do piso do esquecimento e é apagado no mesmo quadro em que
+      // é criado — medido: uma criatura meio minuto parada num lugar continuava
+      // sem conhecer aquele lugar, e um jardim de sessenta bichos tinha seis
+      // cantos conhecidos ao todo. Pisar num lugar é saber que ele existe.
+      this.traces.set(subject, { valence: 0, strength: Math.max(weight, FIRST_VISIT), encounters: 1 });
+      return;
+    }
+    trace.strength = Math.min(1, trace.strength + weight);
+  }
+
+  /**
+   * O QUANTO ISTO LHE É FAMILIAR, de 0 (nunca vi) a 1 (conheço bem).
+   *
+   * Diferente de `valenceOf`, que pergunta se é bom ou ruim: aqui pergunta-se
+   * apenas se ela SABE da existência daquilo, e quanto. Um lugar péssimo e um
+   * lugar ótimo podem ser igualmente familiares — e é a familiaridade, não a
+   * opinião, que decide se ainda há novidade ali.
+   */
+  familiarityOf(subject: MemorySubject): number {
+    return this.traces.get(subject)?.strength ?? 0;
   }
 
   addEpisode(input: EpisodeInput): void {

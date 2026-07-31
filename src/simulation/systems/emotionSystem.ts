@@ -1,4 +1,4 @@
-import { approach, clamp01 } from '@core';
+import { approach, clamp01, subjects } from '@core';
 import { Transform, type System, type World } from '@engine';
 import {
   Creature,
@@ -75,6 +75,42 @@ const CROWD_EASE = 0.05;
  * inteiro do jogo deixaria de acontecer.
  */
 const CROWD_FLOOR = 0.25;
+
+/**
+ * A INÉRCIA DA CURIOSIDADE.
+ *
+ * Nem instantânea nem lenta: a criatura leva uns vinte segundos para se dar
+ * conta de que aquele canto já não tem nada de novo. Instantâneo faria a
+ * vontade piscar a cada passo entre duas casas do mapa.
+ */
+const CURIOSITY_TURN = 0.05;
+/**
+ * Quanto do temperamento sobra num lugar que ela nunca viu: ali ela fica.
+ *
+ * Oito décimos, e não metade. Meio foi a primeira tentativa, e o efeito colateral
+ * apareceu num teste de história: um bicho faminto levava 187 segundos para
+ * roubar a fruta do vizinho a quarenta pixels, contra menos de noventa antes.
+ * O mundo inteiro começa desconhecido — cortar a curiosidade pela metade ali é
+ * deixar o jardim todo lerdo justamente na abertura. A novidade tem de fazer a
+ * criatura DEMORAR num lugar, não ficar apática.
+ */
+const FAMILIAR_FLOOR = 0.8;
+/** E quanto ele passa do normal no quintal de sempre: dali ela quer sair. */
+const FAMILIAR_ITCH = 0.35;
+/**
+ * E O QUANTO UM LUGAR VIRA CONHECIDO, por segundo de permanência.
+ *
+ * Uns cinquenta segundos até um canto virar quintal. É devagar de propósito:
+ * a oito centésimos, que foi a primeira tentativa, um lugar desconhecido
+ * deixava de ser desconhecido em doze segundos, e aí "novidade" não durava o
+ * suficiente para mudar o comportamento de ninguém — medido, um canto novo e um
+ * canto de sempre davam exatamente a mesma inquietação.
+ *
+ * O que faz o traço sobreviver não é a velocidade e sim o `FIRST_VISIT` da
+ * memória: antes dele, um lugar novo nascia abaixo do piso do esquecimento e
+ * era apagado no mesmo quadro em que nascia.
+ */
+const FAMILIARITY_RATE = 0.02;
 
 /** Quantos vizinhos ela tem ao redor agora. */
 const around: number[] = [];
@@ -207,12 +243,53 @@ export const emotionSystem: System = {
           : emotions.loneliness + LONELINESS_RATE * traits.sociability * dt,
       );
 
+      // A CURIOSIDADE VEM DE JÁ CONHECER O LUGAR ONDE SE ESTÁ.
+      //
+      // Antes ela era um espelho do temperamento: um valor que perseguia
+      // `traits.curiosity` e ficava lá a vida inteira. Uma criatura curiosa era
+      // permanentemente curiosa e nada do que acontecia no mundo mexia nisso —
+      // não é uma emoção, é uma segunda cópia de um gene.
+      //
+      // A primeira tentativa foi um tanque: enche sozinho, esvazia no
+      // desconhecido. Medido no jardim, ficou preso em zero — andar já é estar
+      // em lugar pouco conhecido, então o dreno vencia o enchimento o tempo
+      // todo e a criatura nunca ficava curiosa. Um tanque que nunca enche é
+      // pior que a versão anterior: apaga a exploração em vez de causá-la.
+      //
+      // O que funciona é ler o mundo em vez de contar o tempo: ela fica
+      // inquieta onde JÁ CONHECE, e se aquieta onde é novidade. No quintal de
+      // sempre a curiosidade sobe até o teto do temperamento dela e a empurra
+      // para fora; chegando a um canto que nunca viu, cai — e ela fica ali,
+      // olhando em volta, até aquilo também virar quintal.
+      const here = world.store(Transform).get(entity);
+      const memory = memories.get(entity);
+      const spot = here ? subjects.place(here.x, here.y) : null;
+      const familiar = spot && memory ? memory.familiarityOf(spot) : 1;
       emotions.curiosity = approach(
         emotions.curiosity,
-        clamp01(traits.curiosity * (1 - emotions.fear) * (1 - needs.hunger * 0.6)),
-        0.05,
+        // Medo e barriga vazia fecham a cabeça: ninguém explora fugindo.
+        // A FAMILIARIDADE MODULA, NÃO ZERA. A primeira versão multiplicava o
+        // gene pela familiaridade direto, e a medição mostrou o estrago: o gene
+        // de curiosidade do jardim está em 0,22 na média, a familiaridade típica
+        // em 0,3, e o produto dava 0,05 — menos que a versão antiga, que era
+        // 0,15. Uma mudança que se propunha a causar exploração estava
+        // apagando-a. Aqui ela vira um balanço em volta do temperamento: no
+        // canto desconhecido, meio; no quintal de sempre, um terço a mais.
+        clamp01(
+          traits.curiosity *
+            (FAMILIAR_FLOOR + (1 - FAMILIAR_FLOOR + FAMILIAR_ITCH) * familiar) *
+            (1 - emotions.fear) *
+            (1 - needs.hunger * 0.6),
+        ),
+        CURIOSITY_TURN,
         dt,
       );
+
+      // E O MAPA SE DESENHA ANDANDO. Estar num lugar torna aquele lugar
+      // conhecido, depressa. Não é uma opinião sobre ele — é só saber que
+      // existe, que é o que separa o quintal do mundo lá fora, e é o que faz o
+      // território aparecer sem ninguém desenhar território.
+      if (spot && memory && !sleeping) memory.visit(spot, FAMILIARITY_RATE * dt);
 
       // Felicidade: síntese do bem-estar, mas com inércia — não pula de valor.
       const comfort =

@@ -340,10 +340,14 @@ const FIGHT_FILLERS: readonly string[] = ['discutir', 'empurrarOutro', 'irritado
  */
 const TENDING_FILLERS: readonly string[] = [
   'limparFilhote',
-  'carinhoso',
+  // `carinhoso` e `olharOutro` NÃO entram aqui: são os dois laços do estado, e
+  // uma tira que é laço e microanimação ao mesmo tempo se emenda consigo mesma
+  // — treze segundos seguidos na medida de vivacidade.
   'olharBaixo',
   'piscar',
   'farejar',
+  'bocejar',
+  'espreguicar',
 ];
 
 /**
@@ -711,7 +715,11 @@ export const STATES: readonly StateRule[] = [
     // cheirar entram por cima, de vez em quando, que é como cuidado acontece.
     state: 'Tending',
     when: (s) => !s.moving && !s.isBaby && s.company === COMPANY.baby,
-    clip: () => 'olharOutro',
+    // DOIS LAÇOS, e não um. Com `olharOutro` sozinho a tira chegou a 39% da
+    // vida da criatura na medida de vivacidade — e ela ainda é filler do estado
+    // social, então aparecia por dois caminhos ao mesmo tempo. Quem está
+    // contente ao lado de um filhote não fica só olhando: fica derretido.
+    clip: (s) => (s.happiness > 0.55 ? 'carinhoso' : 'olharOutro'),
     priority: PRIORITY.gesture,
     withProp: true,
     fillers: TENDING_FILLERS,
