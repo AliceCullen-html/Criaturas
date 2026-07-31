@@ -6,7 +6,10 @@ import {
   TerrainResource,
   findNearestWater,
   makeMainlandTest,
+  SceneryResource,
+  tileAt,
   type Blocker,
+  type SceneryPiece,
 } from '@world';
 import { Transform } from '@engine';
 import { solids } from './solids';
@@ -31,6 +34,46 @@ import { Chatter } from './systems/teachingSystem';
  * todo mundo se encontra.
  */
 const WATER_REACH = 200;
+
+/**
+ * O QUE TAPA O PRIMEIRO OVO.
+ *
+ * O jogo abre com uma casca parada no chão e a câmera apontada para ela. Só que
+ * a conta de "esse chão serve?" olhava a água e as pedras grandes e ignorava as
+ * árvores — que são a coisa mais alta e mais larga do jardim. Medido nas oito
+ * sementes de teste: em CINCO delas, a do jogo inclusive, havia uma árvore na
+ * casa da frente. O jogo abria com o ovo atrás de uma copa, e a primeira coisa
+ * que o jogador tinha de fazer era arrastar uma árvore para achar o começo do
+ * próprio jogo.
+ *
+ * A conta não é um círculo em volta: é a PROFUNDIDADE. Nesta projeção o que
+ * está desenhado por cima é o que tem `x + y` maior — o que está à frente. Uma
+ * árvore atrás do ovo não atrapalha nada, e exigir clareira lá só empurraria a
+ * casca para os cantos vazios do mapa. O que se cobra é o caminho entre o ovo e
+ * a câmera.
+ */
+const COVER_SPREAD = 2;
+
+/** Alguma peça de cenário está desenhada por cima deste ponto? */
+function underCover(scenery: readonly SceneryPiece[], x: number, y: number): boolean {
+  const { col, row } = tileAt(x, y);
+  for (const piece of scenery) {
+    const dc = piece.col - col;
+    const dr = piece.row - row;
+    if (Math.abs(dc) > COVER_SPREAD || Math.abs(dr) > COVER_SPREAD) continue;
+    // Só o que vem depois na ordem de desenho pode esconder alguma coisa.
+    if (dc + dr >= 0) return true;
+  }
+  return false;
+}
+
+/**
+ * E NEM COLADO NA BORDA DO MUNDO.
+ *
+ * Medido junto: uma das sementes punha o ovo a dois pixels do topo, com metade
+ * da casca fora da tela. Também não é um começo de jogo.
+ */
+const EDGE_MARGIN = 90;
 
 /** Registra os componentes de criatura e povoa o mundo com `count` criaturas em solo. */
 export interface SpawnGroup {
@@ -67,9 +110,19 @@ export function spawnCreatures(world: World, count: number, group: SpawnGroup = 
   });
   const onMainland = makeMainlandTest(terrain, blockers, world.config.width, world.config.height);
 
+  // O cenário só entra na conta para o OVO que abre o jogo: é ele que o
+  // jogador precisa enxergar. Um jardim já povoado pode ter bicho embaixo de
+  // árvore à vontade — aliás é onde eles gostam de ficar, na sombra.
+  const scenery = world.hasResource(SceneryResource) ? world.getResource(SceneryResource) : [];
+  const needsClearing = group.asEgg === true && scenery.length > 0;
+
   let placed = 0;
   let attempts = 0;
-  const maxAttempts = count * 40;
+  // O PRIMEIRO OVO GANHA MUITAS TENTATIVAS. É um só, acontece uma vez na
+  // abertura do mundo, e a clareira que ele exige é rara: com um pouco mais de
+  // um quarto do tabuleiro ocupado, a chance de um ponto qualquer servir é de
+  // uns poucos por cento. Quarenta tentativas não achariam nunca.
+  const maxAttempts = group.asEgg === true ? 4000 : count * 40;
   while (placed < count && attempts < maxAttempts) {
     attempts++;
     const x = world.rng.range(0, world.config.width);
@@ -80,6 +133,20 @@ export function spawnCreatures(world: World, count: number, group: SpawnGroup = 
     // firme, para um mundo de lago pequeno não ficar sem população.
     const demanding = attempts < maxAttempts * 0.7;
     if (demanding && !findNearestWater(terrain, x, y, WATER_REACH)) continue;
+    // A clareira é exigida enquanto houver tentativas de sobra. No aperto ela
+    // cede — um mundo pequeno e muito arborizado pode não ter clareira nenhuma,
+    // e é melhor um ovo na sombra do que um jardim sem ovo.
+    if (needsClearing && demanding) {
+      if (underCover(scenery, x, y)) continue;
+      if (
+        x < EDGE_MARGIN ||
+        y < EDGE_MARGIN ||
+        x > world.config.width - EDGE_MARGIN ||
+        y > world.config.height - EDGE_MARGIN
+      ) {
+        continue;
+      }
+    }
     spawnCreature(world, x, y, group);
     placed++;
   }

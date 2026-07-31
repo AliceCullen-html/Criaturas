@@ -1797,7 +1797,14 @@ export function createRenderer(options: RendererOptions): Renderer {
         const spanX = (options.worldWidth + options.worldHeight) * 1;
         const spanY = (options.worldWidth + options.worldHeight) * ISO_SQUASH;
         fitZoom = Math.min(screenWidth / spanX, screenHeight / spanY);
-        camera.zoom = fitZoom * 2.4;
+        // A ABERTURA É UM RETRATO DO OVO, não um mapa do jardim.
+        //
+        // Era 2,4, e a casca saía do tamanho de uma unha no meio de novecentos
+        // por novecentos: a câmera já estava centrada nela, e mesmo assim o
+        // jogador não tinha como saber que aquilo era o começo do jogo. Em 3,8
+        // o ovo é o assunto da tela, o lago aparece atrás dele e as árvores
+        // emolduram — e o resto do jardim continua a um arrastar de distância.
+        camera.zoom = fitZoom * 3.8;
         cameraReady = true;
       }
 
