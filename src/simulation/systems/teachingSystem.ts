@@ -100,7 +100,18 @@ const SPREAD_GIFT = 0.1;
  */
 const SPEAK_RANGE = 70;
 /** Segundos entre duas falas da mesma criatura. */
-const SPEAK_EVERY = 5;
+/**
+ * DE QUANTO EM QUANTO TEMPO UMA CRIATURA ENSINA UMA PALAVRA A OUTRA.
+ *
+ * Eram cinco segundos, e este é o SEGUNDO canal de fala — o outro, o de falar
+ * sozinha, já foi para vinte e oito pelo mesmo motivo. Cinco segundos por
+ * criatura, num grupo reunido diante da máquina, é uma tempestade de balões
+ * sobre as mesmas três cabeças: o jogador não consegue ler nenhum.
+ *
+ * Dezoito segundos ainda espalham a língua pelo jardim inteiro em poucos
+ * minutos — o ensino continua funcionando, ele só para de gritar.
+ */
+const SPEAK_EVERY = 18;
 /** Acima disto ela tem problema próprio e não está aprendendo nada. */
 const BUSY_HUNGER = 0.6;
 const BUSY_THIRST = 0.6;

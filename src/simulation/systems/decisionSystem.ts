@@ -34,7 +34,7 @@ import { goalSpot } from './goalSystem';
 
 /** A experiência de quem ainda não tem componente de experiência: nenhuma. */
 const VAZIO: readonly number[] = [];
-import { isBaby } from '../age';
+import { growthScale, isBaby } from '../age';
 
 const candidates: number[] = [];
 const perceivedCreatures: PerceivedCreature[] = [];
@@ -544,7 +544,19 @@ export const decisionSystem: System = {
               ? 1.15
               : 1;
       const tired = needs.energy < 0.25 ? 0.55 : 1;
-      const speed = attributes.speed * haste * tired * limp;
+      // PERNA DE FILHOTE É PERNA CURTA.
+      //
+      // A idade não entrava nesta conta em lugar nenhum: um bicho recém-saído
+      // do ovo corria exatamente como um adulto. O jogador viu assim — "ela
+      // nasce e anda aleatoriamente bem rápido, nem dá para interagir direito"
+      // —, e a queixa é dupla: parece errado, porque filhote não corre como
+      // gente grande, e atrapalha, porque a primeira criatura do jardim é
+      // justamente aquela com quem o jogador quer brincar.
+      //
+      // `growthScale` já existia e já dizia isto: um recém-nascido é 55% do
+      // tamanho adulto e vai crescendo. O corpo pequeno já usava a conta; as
+      // pernas não. Agora usam.
+      const speed = attributes.speed * growthScale(bio) * haste * tired * limp;
       velocity.x = (dx / distance) * speed;
       velocity.y = (dy / distance) * speed;
     });

@@ -401,13 +401,26 @@ const keepGift: Step[] = [
   },
 ];
 
-/** Como cada presente se chama, para a lembrança e para o livro. */
+/**
+ * Como cada coisa guardada se chama, para a lembrança e para o livro.
+ *
+ * As cinco de cima vieram da mão do jogador; as cinco de baixo são as bugigangas
+ * do chão, que passaram a valer tesouro e não tinham nome. Sem nome, três
+ * páginas diferentes do livro diziam a MESMA frase — "guardou uma coisa no canto
+ * dela" —, e uma primeira vez que se repete deixa de ser a primeira. O teste do
+ * livro pegou isso contando frases repetidas entre os marcos.
+ */
 const THING_NAMES: Record<number, string> = {
   [VARIANT.bear]: 'um ursinho',
   [VARIANT.giftFlower]: 'uma flor',
   [VARIANT.pillow]: 'uma almofada',
   [VARIANT.shinyRock]: 'uma pedra bonita',
   [VARIANT.giftFeather]: 'uma pena',
+  [VARIANT.stick]: 'um graveto',
+  [VARIANT.seed]: 'uma semente',
+  [VARIANT.feather]: 'uma peninha',
+  [VARIANT.stone]: 'uma pedrinha',
+  [VARIANT.shell]: 'uma concha',
 };
 
 export const ROUTINE_STEPS: Record<number, Step[]> = {

@@ -364,9 +364,15 @@ const TENDING_FILLERS: readonly string[] = [
 const PLAY_FILLERS: readonly string[] = [
   'muitoFeliz',
   'feliz',
-  'comemorar',
+  // `comemorar` NÃO entra: virou o laço da euforia, e uma tira que é laço e
+  // microanimação ao mesmo tempo se emenda consigo mesma — a mesma armadilha
+  // que `olharOutro` armou em `Tending`.
   'acenar',
   'olharOutro',
+  // Rolar no chão e se assustar com o que o outro fez são brincadeira; sem elas
+  // o repertório do estado encolhia ao tirar `comemorar` daqui.
+  'rolar',
+  'surpreso',
 ];
 
 /**
@@ -847,7 +853,22 @@ export const STATES: readonly StateRule[] = [
     // e com companhia é isto; sem bola e sozinha cai nas regras de baixo.
     state: 'PlayTogether',
     when: (s) => s.intent === 'play' && !s.ball && !s.moving && s.company !== COMPANY.alone,
-    clip: () => 'brincarJunto',
+    // TRÊS LAÇOS, pelo mesmo motivo de `Tending`. Com `brincarJunto` sozinho a
+    // tira chegou a 36% da vida da criatura assim que o filhote passou a andar
+    // devagar: filhote lento fica ao lado do adulto, e um adulto parado ao lado
+    // de um filhote com vontade de brincar é este estado — quarenta por cento de
+    // cinco minutos numa medida, com a MESMA tira.
+    //
+    // Brincar não é um humor só. Medido no jardim, a felicidade de quem está
+    // brincando vai de 0,65 a 1,00: há a brincadeira contente e há a euforia, e
+    // o artista desenhou as duas. E brincar com o desafeto é empurrão — cena de
+    // dois corpos, recortada como as outras.
+    clip: (s) =>
+      s.company === COMPANY.rival
+        ? 'empurrarOutro'
+        : s.happiness > 0.8
+          ? 'comemorar'
+          : 'brincarJunto',
     priority: PRIORITY.gesture,
     withProp: true,
     fillers: PLAY_FILLERS,
