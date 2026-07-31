@@ -33,6 +33,32 @@ const PANIC = 0.55;
 const CATCH_RATE = 0.09;
 /** O filhote aprende muito mais depressa. */
 const BABY_FACTOR = 2.6;
+/**
+ * O TETO DO MEDO DE SEGUNDA MÃO.
+ *
+ * Ver alguém apavorado assusta menos do que estar no lugar dele. Abaixo de um
+ * inteiro, e é isso que faz a onda decrescer em vez de se realimentar: cada
+ * salto de bicho para bicho perde força, como qualquer coisa que se propaga.
+ */
+const SECOND_HAND = 0.5;
+/** Abaixo deste medo, um bicho está visivelmente tranquilo. */
+const CALM_ENOUGH = 0.25;
+/** E esta é a quantidade de vizinhos tranquilos que já acalma de vez. */
+const CALM_ENOUGH_MANY = 3;
+/**
+ * O quanto a calma alheia tira de medo por segundo.
+ *
+ * Pequeno perto do contágio (0,09), e tem de ser: a primeira versão pôs os dois
+ * na mesma ordem de grandeza e o resultado foi pior do que a epidemia — num
+ * grupo de nove, com uma criatura em pânico absoluto no meio, NENHUMA pegou
+ * medo em noventa segundos. O contágio do medo é do briefing; amortecê-lo até
+ * sumir não é conserto, é apagar o recurso.
+ *
+ * Quem impede a epidemia é o teto de segunda mão, que é geométrico e não
+ * precisa de ajuda: 1 → 0,5 → 0,25 → 0,125, e a onda morre em três saltos. Isto
+ * aqui é só o que faz o bando descer junto DEPOIS que o susto passou.
+ */
+const CALM_RATE = 0.02;
 /** E leva junto um tiquinho de trauma — o medo aprendido também marca. */
 const CATCH_TRAUMA = 0.012;
 /** Até onde a mão do jogador precisa estar para levar a culpa. */
@@ -95,8 +121,47 @@ export const fearLearningSystem: System = {
       const baby = isBaby(bio);
       const brave = world.store(Personality).get(watcher)?.bravery ?? 0.5;
       const catching = worst * CATCH_RATE * (baby ? BABY_FACTOR : 1) * (1.4 - brave) * dt;
-      emotions.fear = clamp01(emotions.fear + catching);
-      emotions.trauma = clamp01(emotions.trauma + catching * CATCH_TRAUMA);
+
+      // O MEDO SE ESPALHA, MAS NÃO SE MULTIPLICA.
+      //
+      // Aqui morava uma epidemia. A conta somava medo sem teto nenhum, então
+      // quem via um bicho a 0,6 de pavor podia acabar a 0,7 — e aí infectava de
+      // volta quem o infectou, mais forte. Numa clareira cheia isso vira uma
+      // onda que se realimenta e nunca desce.
+      //
+      // Medido no jardim de verdade, com a semente do jogo: aos trinta minutos,
+      // NOVENTA E QUATRO POR CENTO das criaturas estavam com medo, a felicidade
+      // média era 0,31, e só três por cento viviam bem o bastante para brotar.
+      // A população desabou de trinta e quatro para quinze. Desligando só este
+      // sistema, na mesma semente: 35% com medo e cinquenta e cinco vivas.
+      //
+      // O conserto é uma linha de física, não de equilíbrio: ninguém fica mais
+      // apavorado do que aquilo que está vendo. O medo atravessa o jardim
+      // inteiro — só que decrescendo, como qualquer coisa que se propaga.
+      const ceiling = worst * SECOND_HAND;
+      if (emotions.fear < ceiling) {
+        emotions.fear = Math.min(ceiling, emotions.fear + catching);
+        emotions.trauma = clamp01(emotions.trauma + catching * CATCH_TRAUMA);
+      }
+
+      // E A CALMA TAMBÉM É CONTAGIOSA.
+      //
+      // Faltava o outro lado. Um bando em que só o pânico atravessa é um bando
+      // que nunca se acalma junto — e é isso que um bando faz: um repara que
+      // não há nada ali, os outros reparam nele. Sem isto, o único freio da
+      // onda era o tempo de cada uma se acalmar sozinha.
+      let calmos = 0;
+      for (const other of nearby) {
+        if (other === watcher) continue;
+        const theirs = emotionsStore.get(other);
+        if (theirs && theirs.fear < CALM_ENOUGH) calmos += 1;
+      }
+      if (calmos > 0 && emotions.fear > 0) {
+        emotions.fear = Math.max(
+          0,
+          emotions.fear - CALM_RATE * Math.min(1, calmos / CALM_ENOUGH_MANY) * dt,
+        );
+      }
 
       // DE QUEM É O MEDO.
       //

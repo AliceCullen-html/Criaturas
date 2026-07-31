@@ -1,5 +1,5 @@
 import { approach, clamp01 } from '@core';
-import { type System } from '@engine';
+import { Transform, type System, type World } from '@engine';
 import {
   Creature,
   Emotions,
@@ -10,6 +10,7 @@ import {
   type Intent,
   type Mood,
 } from '@creatures';
+import { CreatureIndexResource } from '../creatureIndex';
 
 /**
  * Inércia emocional.
@@ -52,6 +53,41 @@ const PAIN_HEAL = 0.009;
 const SLEEP_RATE = 0.012;
 const WAKE_RATE = 0.16;
 const LONELINESS_RATE = 0.02;
+
+/**
+ * DE QUÃO PERTO A COMPANHIA CONTA.
+ *
+ * Perto de verdade: dois bichos ao alcance da vista não estão juntos, estão no
+ * mesmo jardim. Este raio é o de um grupo — quem está aqui dentro divide a
+ * sombra da mesma árvore.
+ */
+const CROWD_RANGE = 110;
+/** Quantos vizinhos já são companhia suficiente. */
+const CROWD_ENOUGH = 3;
+/** O quanto a solidão cede por segundo, cercada. */
+const CROWD_EASE = 0.05;
+/**
+ * E até onde ela cede só de ter gente por perto.
+ *
+ * Não até zero. Estar no meio de um grupo tira o desespero; o resto — deixar de
+ * estar só — vem de conversar, dividir comida, brincar junto. Se a presença
+ * zerasse a solidão, a criatura nunca mais procuraria ninguém, e o convívio
+ * inteiro do jogo deixaria de acontecer.
+ */
+const CROWD_FLOOR = 0.25;
+
+/** Quantos vizinhos ela tem ao redor agora. */
+const around: number[] = [];
+function companyNear(world: World, self: number): number {
+  if (!world.hasResource(CreatureIndexResource)) return 0;
+  const here = world.store(Transform).get(self);
+  if (!here) return 0;
+  around.length = 0;
+  world.getResource(CreatureIndexResource).query(here.x, here.y, CROWD_RANGE, around);
+  let count = 0;
+  for (const other of around) if (other !== self) count += 1;
+  return count;
+}
 
 export const emotionSystem: System = {
   name: 'emotion',
@@ -149,8 +185,26 @@ export const emotionSystem: System = {
           (sleeping ? -WAKE_RATE * restQuality : SLEEP_RATE * (1.3 - traits.activity * 0.6)) * dt,
       );
 
+      // A SOLIDÃO CEDE COM COMPANHIA — e não só com um ato de socializar.
+      //
+      // Antes ela só subia aqui, e só descia quando a criatura executava alguma
+      // coisa: conversar, dividir comida, receber carinho, fazer as pazes. O
+      // resultado era um bicho cercado de quinze vizinhos, encostando neles,
+      // dormindo do lado deles, e SOZINHO — o jogador viu isso e perguntou por
+      // quê. Estar acompanhado não é uma ação: é um estado, e é assim que a
+      // solidão funciona em qualquer bicho social.
+      //
+      // Não zera: companhia sem convívio alivia, não preenche. A criatura ainda
+      // precisa conversar, brincar e dividir para chegar ao fundo — o que muda
+      // é que ela deixa de estar desesperada de solidão no meio de um grupo.
+      const perto = companyNear(world, entity);
       emotions.loneliness = clamp01(
-        emotions.loneliness + LONELINESS_RATE * traits.sociability * dt,
+        perto > 0
+          ? Math.max(
+              CROWD_FLOOR,
+              emotions.loneliness - CROWD_EASE * Math.min(1, perto / CROWD_ENOUGH) * dt,
+            )
+          : emotions.loneliness + LONELINESS_RATE * traits.sociability * dt,
       );
 
       emotions.curiosity = approach(

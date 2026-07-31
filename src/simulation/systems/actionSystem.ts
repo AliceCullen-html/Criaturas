@@ -1,5 +1,5 @@
 import { POSE, POSE_DURATION, clamp01, subjects } from '@core';
-import { Transform, type System } from '@engine';
+import { Transform, type System, type World } from '@engine';
 import {
   Attributes,
   Behavior,
@@ -22,6 +22,7 @@ import {
   radiusForBiomass,
 } from '@world';
 import { isBaby } from '../age';
+import { CreatureIndexResource } from '../creatureIndex';
 
 const EAT_RATE = 3.2;
 const NUTRITION = 0.21;
@@ -56,6 +57,28 @@ const WATCH_REACH = 36;
 const EDGE = 60;
 
 const eaten: number[] = [];
+
+/** De quão longe um adulto já basta para o filhote se sentir seguro. */
+const GROWNUP_RANGE = 120;
+/** O medo que o abandono acrescenta por segundo. */
+const BABY_ALONE_FEAR = 0.01;
+const grownUps: number[] = [];
+
+/** Há um adulto por perto deste filhote? */
+function grownUpNear(world: World, baby: number): boolean {
+  if (!world.hasResource(CreatureIndexResource)) return true;
+  const here = world.store(Transform).get(baby);
+  if (!here) return true;
+  grownUps.length = 0;
+  world.getResource(CreatureIndexResource).query(here.x, here.y, GROWNUP_RANGE, grownUps);
+  const bios = world.store(Bio);
+  for (const other of grownUps) {
+    if (other === baby) continue;
+    const bio = bios.get(other);
+    if (bio && !isBaby(bio)) return true;
+  }
+  return false;
+}
 
 /**
  * Executa a intenção quando a criatura chega ao alvo, e — o mais importante —
@@ -419,10 +442,18 @@ export const actionSystem: System = {
           break;
       }
 
-      // Filhotes ficam perto: sofrem mais solidão longe dos adultos.
+      // FILHOTE SOZINHO FICA COM MEDO — e só o sozinho.
+      //
+      // O comentário aqui já dizia "longe dos adultos", e o código não conferia
+      // nada: TODO filhote ganhava medo o tempo todo, estivesse ele encostado na
+      // mãe ou perdido no mato. Medido, o efeito era um piso permanente de 0,26
+      // de medo em todo filhote do jardim — logo acima do ponto em que um bicho
+      // deixa de parecer tranquilo aos olhos dos outros. Num jardim que se
+      // duplica, e que por isso vive cheio de filhotes, isso é uma fonte de
+      // medo que nunca desliga e que apagava a calma do bando inteiro.
       const bio = bios.get(entity);
-      if (bio && isBaby(bio)) {
-        emotions.fear = clamp01(emotions.fear + 0.01 * dt);
+      if (bio && isBaby(bio) && !grownUpNear(world, entity)) {
+        emotions.fear = clamp01(emotions.fear + BABY_ALONE_FEAR * dt);
       }
     });
 
