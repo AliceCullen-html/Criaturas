@@ -76,6 +76,25 @@ export const itemSystem: System = {
         if (Math.hypot(item.vx, item.vy) < REST_SPEED) {
           item.vx = 0;
           item.vy = 0;
+          // E O PASSADO ALCANÇA O PRESENTE.
+          //
+          // Aqui morava um tremor eterno. O render desenha entre `prev` e a
+          // posição atual, interpolando pelo `alpha` do quadro — é o que faz o
+          // movimento ser liso a sessenta quadros com a simulação a vinte. Mas
+          // `prev` só era atualizado ENQUANTO o objeto se movia: parando, ele
+          // ficava congelado no ponto anterior, e o desenho passava o resto da
+          // partida oscilando entre dois lugares, vinte vezes por segundo.
+          //
+          // O jogador viu isso como "alguns itens ficam tremendo no chão e
+          // travados" — e travados é a palavra certa: eles não estavam presos,
+          // estavam vibrando entre o penúltimo e o último passo, para sempre.
+          //
+          // Só acontece com quem foi arremessado ou empurrado; o que nasce
+          // parado já nasce com `prev` igual à posição, e por isso era "alguns".
+          if (transform) {
+            transform.prevX = transform.x;
+            transform.prevY = transform.y;
+          }
         }
       }
 
