@@ -572,7 +572,12 @@ export function createApp(rootElement: HTMLElement): AppInstance {
         if (tool() === TOOL.food && !isEgg(world, id)) {
           const [fx, fy] = creaturePoint(id);
           activeRenderer?.emit(
-            feedCreature(world, id) === 'given' ? 'star' : 'question',
+            // A recusa tem sinal próprio: virar a cara não é o mesmo que o
+            // jardim estar cheio. Um coração partido seria melhor; por ora, a
+            // raiva diz "não" sem dizer "deu erro".
+            ((r) => (r === 'given' ? 'star' : r === 'refused' ? 'anger' : 'question'))(
+              feedCreature(world, id),
+            ),
             fx,
             fy - 14,
           );

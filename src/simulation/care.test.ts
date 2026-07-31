@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { POSE } from '@core';
+import { POSE, subjects } from '@core';
 import { SystemScheduler, Transform, type World } from '@engine';
 import { createUtilityBrain } from '@ai';
-import { Attributes, Behavior, Creature, Emotions, Mind, Needs } from '@creatures';
-import { createWorld, spawnFruit } from '@world';
+import { Attributes, Behavior, Creature, Emotions, Memory, Mind, Needs } from '@creatures';
+import { Item, createWorld, spawnFruit } from '@world';
 import { spawnCreatures } from './spawnCreatures';
 import { foodIndexSystem } from './foodIndex';
 import { creatureIndexSystem } from './creatureIndex';
@@ -11,6 +11,7 @@ import { decisionSystem } from './systems/decisionSystem';
 import { movementSystem } from './systems/movementSystem';
 import { actionSystem } from './systems/actionSystem';
 import { idleSystem } from './systems/idleSystem';
+import { feedCreature } from './toolActions';
 import { BrainResource } from './brainResource';
 import { PlayerResource } from './player';
 import { scrub } from './toolActions';
@@ -139,5 +140,49 @@ describe('quem está com fome procura comida', () => {
 
     expect(passos(0.95)).toBe('seekFood');
     expect(passos(0.1)).not.toBe('seekFood');
+  });
+});
+
+/**
+ * A RECUSA.
+ *
+ * O momento que faltava no jogo inteiro. Oferecer comida a uma criatura que
+ * passou mal com aquela fruta e a uma criatura sem fome dava exatamente a mesma
+ * coisa: a fruta caía no chão e ela ia embora. O jogador não tinha como
+ * distinguir "não quero agora" de "isso me fez mal".
+ *
+ * E sem esse instante o artista tinha duas tiras — recusar comida e negar
+ * comida — sem lugar nenhum onde caber, porque não existia recusa no mundo para
+ * elas desenharem. É a ordem certa: primeiro o mundo passa a fazer a coisa,
+ * depois o desenho pode mostrá-la.
+ */
+describe('ela pode dizer não', () => {
+  it('quem passou mal com aquela fruta vira a cara em vez de aceitar', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    world.store(Memory).get(id)!.record(subjects.food(0), -0.9, 1);
+
+    const antes = world.store(Item).size;
+    expect(feedCreature(world, id), 'aceitou a fruta que a fez passar mal').toBe('refused');
+    expect(world.store(Item).size, 'largou a fruta mesmo recusando').toBe(antes);
+    expect(world.store(Behavior).get(id)!.pose, 'recusou sem virar a cara').toBe(POSE.refuse);
+  });
+
+  it('e quem tem medo de você também', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    world.store(Memory).get(id)!.record(subjects.player(), -0.9, 1);
+    expect(feedCreature(world, id), 'aceitou comida de quem ela teme').toBe('refused');
+  });
+
+  it('mas sem motivo nenhum ela aceita — a recusa custa alguma coisa', () => {
+    const world = makeWorld();
+    spawnCreatures(world, 1);
+    const id = someone(world);
+    const antes = world.store(Item).size;
+    expect(feedCreature(world, id), 'recusou sem ter por quê').toBe('given');
+    expect(world.store(Item).size, 'aceitou e a fruta não apareceu').toBe(antes + 1);
   });
 });

@@ -135,6 +135,7 @@ export type StateName =
   | 'Trauma'
   | 'Bath'
   | 'Pet'
+  | 'Refuse'
   | 'Eat'
   | 'Drink'
   | 'Sleep'
@@ -714,6 +715,20 @@ export const STATES: readonly StateRule[] = [
     // a boca é dela: quem está com a fruta na boca está com a fruta na boca.
     // Filhote com fome não procura comida — ele PEDE, que é a diferença entre um
     // bicho crescido e um filhote.
+    // VIRAR A CARA PARA A COMIDA.
+    //
+    // A pose vem do mundo — é a sua mão oferecendo, e a fruta está ali na
+    // frente dela. Por isso as duas tiras cabem aqui e não caberiam em lugar
+    // nenhum: `recusarComida` tem a fruta desenhada e `negarComida` tem a mão.
+    // Quem carrega cicatriz nega a MÃO; quem só não gosta daquilo recusa a
+    // COMIDA. É a mesma recusa e são duas coisas diferentes.
+    state: 'Refuse',
+    when: (s) => s.pose === POSE.refuse,
+    clip: (s) => (s.scar > 0.2 ? 'negarComida' : 'recusarComida'),
+    priority: PRIORITY.interaction,
+    withProp: true,
+  },
+  {
     state: 'Eat',
     when: (s) => s.pose === POSE.eat || (s.intent === 'seekFood' && !s.moving),
     clip: (s) => (s.pose === POSE.eat ? 'mastigar' : s.isBaby ? 'pedirComida' : 'procurarComida'),

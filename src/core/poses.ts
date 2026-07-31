@@ -56,11 +56,21 @@ export const POSE = {
   bathe: 19,
   /** Comendo: a boca abre e fecha na fruta. */
   eat: 20,
+  /**
+   * RECUSANDO A COMIDA — vira a cara para a fruta que está na frente dela.
+   *
+   * O momento que faltava no jogo inteiro. A criatura comia ou não comia, e a
+   * diferença entre "não estou com fome" e "isso me fez mal da última vez" era
+   * invisível: nos dois casos ela simplesmente ia embora. Sem este instante, o
+   * artista tinha duas tiras — recusar comida e negar comida — sem lugar nenhum
+   * onde caber, porque não existia recusa no mundo para elas desenharem.
+   */
+  refuse: 21,
 } as const;
 
 export type PoseId = (typeof POSE)[keyof typeof POSE];
 
-export const POSE_COUNT = 21;
+export const POSE_COUNT = 22;
 
 /** Quanto tempo cada pose dura, em segundos. */
 export const POSE_DURATION: readonly number[] = [
@@ -85,6 +95,7 @@ export const POSE_DURATION: readonly number[] = [
   3, // hurt
   0.5, // bathe — enquanto a esponja passa, e nem um segundo a mais
   0.8, // eat
+  1.4, // refuse — vira a cara e mantém, tempo de o jogador entender
 ];
 
 /** Nome legível — usado nos relatórios de observação, não na tela. */
@@ -110,6 +121,7 @@ export const POSE_NAMES: readonly string[] = [
   'encolhida de dor',
   'tomando banho',
   'comendo',
+  'recusando a comida',
 ];
 
 /**
@@ -120,4 +132,4 @@ export const POSE_NAMES: readonly string[] = [
  * na mão do jogador e a fruta na boca dela — e por isso o ócio não pode
  * sorteá-las nem interrompê-las.
  */
-export const FORCED_POSES: readonly number[] = [POSE.bathe, POSE.eat];
+export const FORCED_POSES: readonly number[] = [POSE.bathe, POSE.eat, POSE.refuse];

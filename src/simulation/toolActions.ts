@@ -55,7 +55,7 @@ export function shakeFruitFrom(world: World, piece: SceneryPiece): number {
   return spawnFruit(world, x, y);
 }
 
-export type FeedReply = 'given' | 'full';
+export type FeedReply = 'given' | 'full' | 'refused';
 
 /**
  * A MAÇÃ ATÉ A BOCA DELA.
@@ -75,6 +75,33 @@ export function feedCreature(world: World, id: number): FeedReply {
   if (loose(world) >= maxItems(world.config)) return 'full';
   const spot = world.store(Transform).get(id);
   if (!spot) return 'full';
+
+  // A RECUSA — o momento que faltava.
+  //
+  // Antes, oferecer comida a uma criatura que passou mal com aquela fruta e a
+  // uma criatura sem fome dava exatamente a mesma coisa: a fruta caía no chão e
+  // ela ia embora. O jogador não tinha como distinguir "não quero agora" de
+  // "isso me fez mal" — e o artista tinha duas tiras desenhadas, recusar comida
+  // e negar comida, sem lugar nenhum onde caber, porque não existia recusa no
+  // mundo para elas desenharem.
+  //
+  // Dois motivos para virar a cara, e são os dois que a criatura já carregava:
+  // a lembrança daquela fruta, e a lembrança de QUEM está oferecendo.
+  const memory = world.store(Memory).get(id);
+  const emotions = world.store(Emotions).get(id);
+  const behavior = world.store(Behavior).get(id);
+  const aboutFood = memory?.valenceOf(subjects.food(0)) ?? 0;
+  const aboutYou = memory?.valenceOf(subjects.player()) ?? 0;
+  const refuses = aboutFood < -0.25 || aboutYou < -0.4 || (emotions?.fear ?? 0) > 0.6;
+  if (refuses && behavior) {
+    behavior.pose = POSE.refuse;
+    behavior.elapsed = 0;
+    behavior.duration = POSE_DURATION[POSE.refuse] ?? 1.4;
+    // E ela repara em você — é para a sua mão que ela está virando a cara.
+    const mind = world.store(Mind).get(id);
+    if (mind) mind.attention = Math.max(mind.attention, 2.5);
+    return 'refused';
+  }
   // À frente e um pouco para baixo: na projeção isométrica é onde ela enxerga,
   // e é onde a fruta não fica escondida atrás do próprio corpo dela.
   spawnFruit(world, spot.x + 9, spot.y + 9, { toxic: false, variant: 0 });

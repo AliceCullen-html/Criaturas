@@ -10,6 +10,9 @@ import {
   type StateName,
 } from './states';
 
+/** `POSE.refuse`, repetido aqui porque o teste não importa o núcleo. */
+const POSE_REFUSE = 21;
+
 /**
  * QUANTAS DAS TIRAS DO ARTISTA ESTÃO REALMENTE NA TELA.
  *
@@ -125,6 +128,11 @@ function reachable(): Set<string> {
   for (let mood = 0; mood <= 12; mood++)
     for (const happiness of [0.05, 0.5, 0.95]) push({ ...base, mood, happiness });
   for (const pose of Object.keys(POSE_CLIP).map(Number)) push({ ...base, pose });
+  // A recusa não é um maneirismo do ócio: é uma pose que o mundo impõe, e não
+  // está em POSE_CLIP. Sem estas duas linhas a varredura não chega às tiras de
+  // virar a cara para a comida.
+  push({ ...base, pose: POSE_REFUSE });
+  push({ ...base, pose: POSE_REFUSE, scar: 0.6 });
   for (let routine = 0; routine <= 5; routine++)
     for (let company = 0; company <= 4; company++) push({ ...base, routine, company });
   for (const extra of [
@@ -176,7 +184,7 @@ describe('o inventário das animações', () => {
     // O PISO. Não é uma meta: é uma catraca. Ele sobe quando alguém liga uma
     // tira nova e nunca desce sozinho — se descer, é porque um estado foi
     // removido ou um nome foi trocado, e isso tem de doer aqui e não no jardim.
-    expect(usadas, 'alguma tira que já aparecia parou de aparecer').toBeGreaterThanOrEqual(130);
+    expect(usadas, 'alguma tira que já aparecia parou de aparecer').toBeGreaterThanOrEqual(134);
   });
 
   it('e o convívio é a metade que mais importa: ninguém brinca sozinho num jardim cheio', () => {
