@@ -372,7 +372,14 @@ const keepGift: Step[] = [
       // O gosto por AQUELE tipo de coisa, que é o que vai fazer ela escolher
       // igual da próxima vez.
       const memory = world.store(Memory).get(self);
-      memory?.record(subjects.thing(treasure.variant), 0.8, 0.4);
+      // O GOSTO SAI DO HUMOR DO MOMENTO, e não de um número fixo. Com 0,8 para
+      // todo mundo, toda criatura acabava gostando de tudo igual — e opinião
+      // igual não é gosto, é tabela. Duas que guardaram a mesma pena em dias
+      // diferentes têm de ficar com opiniões diferentes sobre penas: é disso, e
+      // só disso, que se pode fazer tradição, porque numa fruta venenosa todo
+      // jardim acaba concordando e numa pena não há verdade a descobrir.
+      const humor = emotions?.happiness ?? 0.5;
+      memory?.record(subjects.thing(treasure.variant), 0.35 + humor * 0.75, 0.4);
       memory?.record(subjects.player(), 0.25, 0.1);
       memory?.addEpisode({
         text: `Achei ${THING_NAMES[treasure.variant] ?? 'uma coisa'} e guardei no meu canto`,

@@ -38,6 +38,41 @@ export const Plan = defineComponent<Plan>('Plan');
 
 const IDLE: Plan = { routine: ROUTINE.none, step: 0, elapsed: 0, other: -1, item: -1 };
 
+/**
+ * O QUE PODE VIRAR TESOURO.
+ *
+ * Era só `gift` — e presente só existe se o jogador largar um. Numa partida em
+ * que ninguém mexeu no jardim, a rotina do tesouro nunca disparava, e com ela
+ * ficava de fora a única coisa do jogo que produz GOSTO: a opinião sobre um
+ * objeto pelo objeto, que não tem verdade nenhuma por trás. Medido num jardim
+ * de cinquenta bichos rodando setenta minutos: ZERO criaturas tinham opinião
+ * sobre qualquer coisa do mundo.
+ *
+ * O mundo já espalha bugigangas sozinho desde sempre — graveto, semente, pena,
+ * pedrinha, concha — e elas estavam ali no chão, invisíveis para todo mundo. O
+ * comentário logo abaixo já prometia "duas criaturas do mesmo jardim
+ * colecionando coisas diferentes"; faltava deixá-las ver o que colecionar.
+ */
+/**
+ * O quanto uma bugiganga do chão atrai, comparada a um presente do jogador.
+ *
+ * Metade, e a janela é estreita — medida dos dois lados. Em 0,7 e em 1,
+ * NINGUÉM brota em vinte minutos de jardim: brotar exige quarenta e cinco
+ * segundos seguidos de vida boa, e a criatura não para de catar. Em 0,18 o
+ * gosto não chega a existir — zero opiniões sobre coisas em três jardins de
+ * setenta minutos. Em 0,5 a espécie vive e o gosto aparece em dois dos três.
+ */
+const TRINKET_WORTH = 0.5;
+
+const TREASURE: ReadonlySet<string> = new Set([
+  'gift',
+  'stick',
+  'seed',
+  'feather',
+  'stone',
+  'shell',
+]);
+
 /** Acima disto a criatura tem problema próprio e larga qualquer história. */
 const PANIC_HUNGER = 0.75;
 const PANIC_THIRST = 0.75;
@@ -263,13 +298,26 @@ function begin(world: World, self: number, plan: Plan): void {
       let treasure = -1;
       let bestScore = 0;
       items.forEach((item, entity) => {
-        if (item.kind !== 'gift' || item.held || item.carriedBy >= 0) return;
+        if (!TREASURE.has(item.kind) || item.held || item.carriedBy >= 0) return;
         const spot = transforms.get(entity);
         if (!spot) return;
         const distance = Math.hypot(spot.x - here.x, spot.y - here.y);
         if (distance > NOTICE) return;
         const taste = memory?.valenceOf(subjects.thing(item.variant)) ?? 0;
-        const score = wish * (0.45 + (1 - distance / NOTICE) * 0.55) * (1 + taste);
+        // UMA PENA NO CHÃO NÃO É UM PRESENTE, e a diferença tinha de estar
+        // aqui. Abrindo a rotina para as bugigangas do mundo sem pesar nada, o
+        // tesouro passou a dominar a vida das criaturas — o jardim está cheio
+        // de gravetos, e elas passaram a catar em vez de viver. Medido: com o
+        // peso igual, NINGUÉM brotou em vinte minutos de jardim, porque brotar
+        // exige quarenta e cinco segundos seguidos de vida boa e elas nunca
+        // paravam de colecionar.
+        //
+        // O presente que veio da sua mão continua valendo o que valia: é raro,
+        // foi escolhido, e é o gesto de alguém. A bugiganga do chão é um
+        // capricho de vez em quando — o bastante para deixar um gosto, e não
+        // para virar profissão.
+        const worth = item.kind === 'gift' ? 1 : TRINKET_WORTH;
+        const score = wish * worth * (0.45 + (1 - distance / NOTICE) * 0.55) * (1 + taste);
         if (score > bestScore) {
           bestScore = score;
           treasure = entity;
