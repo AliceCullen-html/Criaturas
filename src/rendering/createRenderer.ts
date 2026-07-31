@@ -505,6 +505,10 @@ export function createRenderer(options: RendererOptions): Renderer {
   let screenLabel: { text: Text; piece: ScenerySpot; width: number; showing: number } | null = null;
   /** Palavras ditas em voz alta, subindo e sumindo. */
   const bubbles: Array<{ text: Text; life: number }> = [];
+  /** Quanto tempo uma palavra dita fica na tela, em segundos de relógio. */
+  const BUBBLE_LIFE = 4;
+  /** E em quanto tempo ela some, no fim disso. */
+  const BUBBLE_FADE = 0.9;
   const ripples: Array<{ x: number; y: number; life: number }> = [];
   let groundPropLayer: Container | null = null;
   let tileCursorG: Graphics | null = null;
@@ -1763,7 +1767,11 @@ export function createRenderer(options: RendererOptions): Renderer {
       bubble.scale.set(0.5);
       bubble.position.set(spotX, spotY);
       particleLayer.addChild(bubble);
-      bubbles.push({ text: bubble, life: 2.2 });
+      // QUATRO SEGUNDOS, e não dois. Uma palavra existe para ser LIDA, e dois
+      // segundos é o tempo de reparar que algo apareceu — não o de ler. O
+      // desvanecimento também começa mais tarde: a palavra fica inteira quase
+      // até o fim, em vez de passar metade da vida sumindo.
+      bubbles.push({ text: bubble, life: BUBBLE_LIFE });
     },
 
     frame(input: FrameInput): void {
@@ -2388,8 +2396,8 @@ export function createRenderer(options: RendererOptions): Renderer {
           bubbles.splice(i, 1);
           continue;
         }
-        bubble.text.position.y -= 9 * dt;
-        bubble.text.alpha = Math.min(1, bubble.life * 1.6);
+        bubble.text.position.y -= 6 * dt;
+        bubble.text.alpha = Math.min(1, bubble.life / BUBBLE_FADE);
       }
 
       // A tela do computador. Ela só acende quando alguém está aprendendo:

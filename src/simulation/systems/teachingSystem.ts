@@ -111,7 +111,21 @@ const BABY_BONUS = 1.5;
 const HEARSAY = 0.35;
 
 /** Segundos entre duas falas espontâneas da mesma criatura. */
-const VOICE_EVERY = 9;
+/**
+ * DE QUANTO EM QUANTO TEMPO UMA CRIATURA FALA SOZINHA.
+ *
+ * Eram nove segundos, e o defeito é o mesmo da interrogação infinita: a
+ * cadência é POR CRIATURA, mas quem olha vê o jardim inteiro. Com cinquenta
+ * bichos, nove segundos cada dá cinco balões por segundo na tela — e como cada
+ * um vive pouco mais de dois, o jardim vira um pisca-pisca de palavras que
+ * ninguém consegue ler. O jogador descreveu exatamente isso: "aparecem e somem
+ * bem rápido, parece tudo acelerado".
+ *
+ * Vinte e oito segundos põem o jardim cheio em menos de dois balões por
+ * segundo, espalhados por cinquenta cabeças diferentes. Uma criatura sozinha
+ * continua falando o bastante para o jogador saber que ela fala.
+ */
+const VOICE_EVERY = 28;
 
 /**
  * A palavra que cada intenção pede.
