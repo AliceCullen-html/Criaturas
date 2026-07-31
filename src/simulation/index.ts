@@ -20,6 +20,7 @@ export { carrySystem } from './systems/carrySystem';
 export { fearLearningSystem } from './systems/fearLearningSystem';
 export { observationSystem } from './systems/observationSystem';
 export { goalSystem, Goal, goalSpot, goalText, hasGoal } from './systems/goalSystem';
+export { sagaSystem, SagaResource, createSaga } from './systems/sagaSystem';
 export { searchSystem, DiscoveryResource } from './systems/searchSystem';
 export { rewardSystem } from './systems/rewardSystem';
 export { idleSystem } from './systems/idleSystem';

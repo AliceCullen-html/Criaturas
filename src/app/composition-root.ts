@@ -48,6 +48,9 @@ import {
   fearLearningSystem,
   observationSystem,
   goalSystem,
+  sagaSystem,
+  SagaResource,
+  createSaga,
   metabolismSystem,
   moveHeldItem,
   moveCarried,
@@ -153,6 +156,9 @@ export function createApp(rootElement: HTMLElement): AppInstance {
   world.setResource(DeathsResource, []);
   world.setResource(SpeechResource, []);
   world.setResource(ChronicleResource, createChronicle());
+  // O historiador: olha o jardim de tempos em tempos e repara no que ninguém
+  // anunciou — um grupo que se formou, um recorde, um costume.
+  world.setResource(SagaResource, createSaga());
   world.setResource(WatchedResource, createWatched());
   world.setResource(SpeciesResource, {
     phase: PHASE.budding,
@@ -177,6 +183,7 @@ export function createApp(rootElement: HTMLElement): AppInstance {
     .add(fearLearningSystem)
     .add(observationSystem)
     .add(goalSystem)
+    .add(sagaSystem)
     .add(socialSystem)
     .add(teachingSystem)
     .add(orderSystem)
